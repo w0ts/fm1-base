@@ -34,6 +34,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   ble_stack_kb = 6           the Bluetooth tasks' stacks, KB each (default 8: three of them, in the pool; radio.c
                              logs each one's deepest, "stacks", 10 s after Bluetooth is ready and as they grow)
   ble_heap_kb = 16           its heap, KB (default 24, in RAM; the same log line's "heap": its most ever)
+  ram_text_kb = 48           the RAM code window (RAMTEXT: .ram_text, copied at boot), KiB: default 32 (24 with wifi),
+                             a bigger one taken from the pool (RAM moves up as much, its size kept; tools/ramsplit.py)
   ble_trim = true            Bluetooth as a MIDI peripheral only: JieLi's central, classic and test code cut (flash and
                              RAM: Melodee's measure ~18 KB and ~4 KB); not with ble_central
   ble_no_pairing = true      with ble_trim: no pairing or encryption either (~19 KB more flash; iOS and macOS connect)
@@ -100,9 +102,11 @@ SRC = Path(__file__).resolve().parents[1]        # fm1-base
 BSP = SRC / "bsp"                                 # felucca-bsp (git submodule)
 APP = OUT = GEN = LDR = ROOT = None               # set by main() from APP_DIR
 CONF = {}
+LAYOUT = {}                                       # the linked script's MEMORY regions: {name: (origin, length)}
 sys.path.insert(0, str(SRC / "tools"))
 import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
+import ramsplit  # noqa: E402
 
 APP_XIP = 0x02000120                # app.bin offset 0 in the XIP map; the SPL jumps here
 APP_SLOT = fm1pkg_make.APP_SLOT
@@ -610,7 +614,13 @@ def build_app():
     # bitcode: the linker needs the toolchain's LLVM plugin
     lto = ["--plugin", "/opt/jieli/pi32v2/bin/LLVMgold.so" if use_docker() else str(toolchain() / "pi32v2/bin/LLVMgold.so"),
            f"--plugin-opt=mcpu={CPU}", "--plugin-opt=-pi32v2-large-program=true"] if BLE or WIFI else []
+    global LAYOUT
     ld = SRC / "device" / ("app_wifi.ld" if WIFI else "app.ld")
+    script = ld.read_text()
+    split, LAYOUT = ramsplit.split(script, CONF.get("ram_text_kb"))
+    if split != script:                           # fm1.toml ram_text_kb: the script with its RAM split
+        ld = OUT / ld.name
+        ld.write_text(split)
     tc("pi32v2/bin/ld", *lto, "--gc-sections", "-e", "_start", "-T", ld, *objs, *b_objs,
        *b_libs, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
@@ -737,12 +747,14 @@ def check(img, syms, dis, rt):
     def sym(name):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
         return int(mm.group(1), 16) if mm else 0
-    bss = sym("_bss_end") - 0x01C08000
+    (ram_org, ram), (_, pool_max), (_, rt_max) = LAYOUT["RAM"], LAYOUT["POOL"], LAYOUT["RAMTEXT"]
+    bss = sym("_bss_end") - ram_org
     pool = sym("_pool_end") - sym("_pool_start")
-    ram, pool_max, spare = (128 * 1024, 0x4C000, 2048) if WIFI else (96 * 1024, 0x54000, 8192)   # (app_wifi.ld)
+    spare = 2048 if WIFI else 8192
     if os.environ.get("FM1B_POOL_SPARE", "").isdigit():   # an app's own build for itself (a demo build with mirror)
         spare = int(os.environ["FM1B_POOL_SPARE"])
-    notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of {ram}; pool {pool} B of {pool_max}")
+    notes.append(f"image {len(img)} B; RAM code .ram_text {sym('_rt_end') - sym('_rt_start')} B of {rt_max}; "
+                 f"RAM .data+.bss {bss} B of {ram}; pool {pool} B of {pool_max}")
     if bss > ram:
         errors.append("RAM region overflow")
     if pool_max - pool < spare:                   # keep some of the pool spare

@@ -69,26 +69,22 @@ static uint32_t opt_undo_cap(void)
 
 #include "core/core.h"
 /* HOT / HOT2 (core.h): Optimist's audio path in RAM code (its app.ld .ram_hot / .ram_hot2, copied at boot by its
- * main.c), out of the XIP cache's way. fm1-base's device/app.ld has no such sections (the linker would leave them
- * orphans after .text, in no image tools/build.py makes), and its .ram_text is for code that runs with the flash off:
- * no calls (tools/build.py check). Its RAM code window (RAMTEXT, 32 KiB, copied at boot with .ram_text) also takes
- * .c1_text, code that may call into the flash because it runs only inside the audio interrupt, and fm1-base turns the
- * flash off only with the interrupts off (tools/build.py's notes on .c1_text). The same holds for Optimist's audio
- * path, which could go there (a trial-local use of a section fm1-base made for its second core's loop; cpu2 is off).
- * It does not fit (measured, the dev profile): HOT 20,936 B + HOT2 21,574 B + fm1-base's own .ram_text 3,130 B =
- * 45,640 B of the 32,768. Nor does half of it: HOT and HOT2 call each other directly (both RAM code in Optimist's
- * image: mix_block -> mix_finish, fx_buses -> dly_run / rev_* / rs_*, drums_mix -> dins_of / dins_post ...), and a
- * direct call between RAM and XIP is out of the pi32v2's reach (R_PI32V2_LONG_JUMP_23M2). So the whole audio path runs
- * from XIP (OPT_HOT_RAM 0, core.h's own ASM_CHECK way; a gap: the cache's misses, unmeasured on an FM-1); OPT_HOT_RAM 1
- * puts both in .c1_text, for an fm1-base whose RAMTEXT has the room (calls from XIP into it: FAR, as core/audio.c) */
+ * main.c), out of the XIP cache's way. Here both are fm1-base's app RAM code (plat.h PLAT_RAM_CODE: section .app_ram
+ * in .ram_text, copied at boot, inside the guard's RAM code window) at the start of fm1-base's packed SRAM (device/
+ * app.ld: RAM code, .data/.bss and the pool one budget; HOT and HOT2 42,500 B with the dev profile, more than the old
+ * fixed 32 KiB RAMTEXT held). The same rules as Optimist's: HOT and HOT2 call each other directly, XIP code calls them
+ * through a pointer (FAR, as core/audio.c: a direct call between RAM and XIP is out of the pi32v2's reach,
+ * R_PI32V2_LONG_JUMP_23M2), and their calls into XIP go through a pointer too: tools/ramcode.py checks them, and
+ * fm1.toml ram_code_allow lists those Optimist makes from its own RAM code (the reasons there). OPT_HOT_RAM 0: the
+ * whole audio path from XIP instead (core.h's own ASM_CHECK way; the cache's misses, unmeasured on an FM-1) */
 #ifndef OPT_HOT_RAM
-#define OPT_HOT_RAM 0
+#define OPT_HOT_RAM 1
 #endif
 #undef HOT
 #undef HOT2
 #if OPT_HOT_RAM
-#define HOT __attribute__((section(".c1_text.opt_hot")))
-#define HOT2 __attribute__((section(".c1_text.opt_hot2")))
+#define HOT PLAT_RAM_CODE
+#define HOT2 PLAT_RAM_CODE
 #else
 #define HOT
 #define HOT2

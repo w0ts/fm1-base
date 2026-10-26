@@ -18,5 +18,25 @@ gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated h
 words = "words.tsv"
 font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
+# The audio path's calls out of RAM code through a pointer (tools/ramcode.py), every one of them Optimist's own: its
+# firmware runs the same functions from RAM (its .ram_hot / .ram_hot2: core.h HOT, HOT2, OVL as HOT without the
+# overlays) and makes the same calls into XIP (FAR, the engines' and effects' function tables), with its rule that HOT
+# code reaches XIP only that way. Safe here for the same reason as there: the XIP flash is on whenever audio renders.
+# The render runs in the audio interrupt, and fm1-base turns the flash off only inside its flash driver with the
+# interrupts off (its erases and writes); the trial saves only while stopped (LIVE_SAVE off in its profile copy). The
+# names are checked to be RAM functions at every build, and every build prints them.
+ram_code_allow = [
+    # the render's block (fx.c): the engines' and drums' hooks, the envelopes' and LFOs' cold parts, the sequencer's
+    # events, the resampler's block, the meters' and scope's taps (all XIP on Optimist, called through FAR or a table)
+    "mix_block",
+    # ANALOG / ANALOG 2 (eng_analog*.c): the float filter models (a2_models.c a2m_block, a float unit in XIP as on
+    # Optimist); a2_filter's table of SVF kernels (A2_FLT, A2_FLT_I) holds RAM code (OVL), here and on Optimist
+    "analog_render", "a2_fltb", "a2_filter",
+    # the effect buses (fx.c): the reverb's rare clear and parameters, the delay's block, the returns' zeroing, the
+    # distortion's gains, the drum inserts' rest
+    "rev_post", "rev_bus", "dly_run", "fx_ret_block", "dist_run", "dins_of",
+    # the insert effects (insfx/*.c): their marks and widths, the gater's block, the limiter's chorus, the drive's gains
+    "ifx_st", "ifx_part", "ifx_quiet_part", "ifx_bus", "ifx_gater", "ifx_lim_run", "ifx_drive",
+]
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"

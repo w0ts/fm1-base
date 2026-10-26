@@ -6,7 +6,7 @@
   core/opt_core.c   Optimist's own tools/size_fns.py (Optimist's tools/build.py does the same to felucca.c): the
                     main-loop functions of its UI, stores and editor files get LLVM's minsize, never what the sound
                     side reaches. Its roots of the sound side are the interrupts (*_irq) and the RAM code (.ram*):
-                    here the audio path's RAM code is .c1_text (core/opt_core.c HOT) and the audio interrupt enters
+                    here the audio path's RAM code is .app_ram (core/opt_core.c HOT) and the audio interrupt enters
                     the unit at ROOTS (app.c app_render): those are given to it as roots too. Then every function left
                     without minsize gets optsize, so the unit is built as Optimist builds felucca.c (-Os, the UI at
                     minsize) though fm1-base compiles o2 units at -O2 (OPT_IR_OS=0: the sound side at -O2 instead)
@@ -37,7 +37,7 @@ def size_pass(src, dst):
     side = size_fns.main_loop_side
 
     def trial_side(funcs, globs):              # the trial's roots beside Optimist's (see the top)
-        marked = {n: (head + RAM_ROOT if n in ROOTS or 'section ".c1_text' in head else head, body)
+        marked = {n: (head + RAM_ROOT if n in ROOTS or 'section ".app_ram' in head else head, body)
                   for n, (head, body) in funcs.items()}
         return side(marked, globs)
     size_fns.main_loop_side = trial_side

@@ -43,6 +43,8 @@ const char *opt_ui_msg(void);                                /* the header's las
 int opt_glob_erase(uint32_t off);
 int opt_glob_write(uint32_t off, const void *src, uint32_t n);
 const uint8_t *opt_glob_ptr(uint32_t off);
+/* the canvas, the app's unit's (app.c: gfx.c's cv_px, n pixels or more; 0 = smaller), shared with this unit's gfx.c */
+uint16_t *opt_canvas(uint32_t n);
 /* the LCD, from the app's unit (app.c: the platform's lcd_fill / lcd_blit / lcd_sync) */
 void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);

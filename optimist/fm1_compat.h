@@ -59,9 +59,34 @@
 #undef EN_K4
 #undef NE
 
-/* ---- interrupts: plat_lock / plat_unlock (the lock nests: unlock at depth 0 is the sti) */
-static inline void fm1_irq_off(void) { (void)plat_lock(); }
-static inline void fm1_irq_on(void) { plat_unlock(0); }
+/* ---- interrupts: Optimist's fm1_irq_off / fm1_irq_on are a bare cli / sti (hal/fm1_irq.h), and its IRQ_SAVE /
+ * IRQ_RESTORE (core/core.h) read the global enable first (fm1_icfg() bit 9) and turn them back on only if it was on.
+ * Here on plat_lock / plat_unlock, which nest (a depth: the sti when it falls to 0), with the same effect: the unit
+ * takes the lock once, only while the interrupts are on (so never inside an interrupt that runs with them off, nor
+ * inside the platform's own lock), and gives it back at the next fm1_irq_on. A lock per off would leave the depth
+ * up after an IRQ_SAVE that found them off (its IRQ_RESTORE does nothing): the main loop's interrupts off for good.
+ * The global enable on the FM-1: app.c opt_irq_enabled (felucca-bsp's fm1_icfg, in the app's unit); the host: on */
+#ifdef PLAT_HOST
+static inline uint32_t opt_irq_enabled(void) { return 1u; }
+#else
+uint32_t opt_irq_enabled(void);
+static inline uint32_t fm1_icfg(void) { return opt_irq_enabled() ? 0x200u : 0u; }   /* (core.h IRQ_IE_NOW: bit 9) */
+#endif
+static uint8_t opt_irq_held;                       /* this unit holds plat_lock (0 / 1) */
+static inline void fm1_irq_off(void)
+{
+    if (!opt_irq_held && opt_irq_enabled()) {
+        (void)plat_lock();
+        opt_irq_held = 1;
+    }
+}
+static inline void fm1_irq_on(void)
+{
+    if (opt_irq_held) {
+        opt_irq_held = 0;
+        plat_unlock(0);
+    }
+}
 
 /* ---- time: TIMER4's 24 MHz count is plat_ticks24 on both. The host simulator's plat_ticks24 is its machine's clock,
  * while its plat_ms is the simulated one (a script's "wait 80" is 80 ms of plat_ms and some microseconds of the

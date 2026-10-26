@@ -6,8 +6,10 @@
   gen_optimist.py
 
 1. build/optimist -> Optimist's tree (the env OPTIMIST, else ../../fm1base-on-sd from this directory: the worktree
-   beside the fm1-base clone): Optimist's source referenced by path, never copied, never written (its generators'
-   caches and outputs come here, OPTIMIST_BUILD_DIR).
+   beside the fm1-base clone): Optimist's source referenced by path, never written (its generators' caches and
+   outputs come here, OPTIMIST_BUILD_DIR). OPT_TREE_COPY=1: build/optimist a copy of Optimist's firmware/ instead
+   (src/ and hal/, the unit's sources), for the device build: fm1-base's tools/build.py gives the toolchain its
+   include paths relative to fm1-base's tree (inc(): the container mounts only that), and a link out of it fails.
 2. build/optgen: Optimist's generated headers for the audio core (tables, samples, drum kits, the 909 samples,
    wavetables), every sample set as Optimist's host tests have them (tools/build.py --host-headers' environment);
    made again only when Optimist's HEAD or its working tree changed (build/optgen/stamp)."""
@@ -37,14 +39,28 @@ def optimist_tree():
     return tree
 
 
+def copy(tree):
+    """build/optimist/firmware/src and hal: Optimist's (OPT_TREE_COPY=1), copied again at every build"""
+    import shutil
+    BUILD.mkdir(parents=True, exist_ok=True)
+    if LINK.is_symlink():
+        LINK.unlink()
+    if LINK.exists():
+        shutil.rmtree(LINK)
+    for d in ("src", "hal"):
+        shutil.copytree(tree / "firmware" / d, LINK / "firmware" / d, symlinks=True)
+
+
 def link(tree):
     BUILD.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("OPT_TREE_COPY") == "1":
+        return copy(tree)
     if LINK.is_symlink() and LINK.resolve() == tree:
         return
     if LINK.is_symlink():
         LINK.unlink()
     elif LINK.exists():
-        raise SystemExit(f"gen_optimist: {LINK} is not a link: remove it")
+        raise SystemExit(f"gen_optimist: {LINK} is not a link (a copy: OPT_TREE_COPY=1's): remove it")
     LINK.symlink_to(tree, target_is_directory=True)
 
 

@@ -19,7 +19,12 @@
 static void lcd_sync(void) { opt_lcd_sync(); }
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { opt_lcd_fill(x, y, w, h, c); }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { opt_lcd_blit(x, y, w, h, px); }
+/* one canvas for the two units: gfx.c's cv_px (69 KiB of the pool) is the app's unit's (app.c opt_canvas), this unit's
+ * gfx.c a pointer to it (set at power-on: opt_core_init, before anything draws). Both units' gfx.c are the same file
+ * with the same APP_CANVAS_PX (app.h gives none): opt_canvas answers 0 for a bigger one */
+#define cv_px (*opt_cv)
 #include "gfx.c"                           /* fm1-base's (device/gfx.c): its fonts from build/gen/felucca_font.h */
+static void opt_cv_init(void) { opt_cv = (uint16_t (*)[CV_MAX])opt_canvas(CV_MAX); }
 #include "opt_gfx.h"
 
 /* ---- the panel: Optimist's HAL (hal/fm1_input.h) on plat.h */
@@ -50,6 +55,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 void opt_core_init(void)
 {
     uint32_t i;
+    opt_cv_init();                               /* the canvas (the app's unit's), before anything draws */
     persist_boot();                              /* the settings record, the stores found (before settings_init) */
     fm6_boot();
 #if CZ_NUSER

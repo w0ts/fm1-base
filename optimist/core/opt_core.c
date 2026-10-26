@@ -6,8 +6,33 @@
  * fm1-base's never meet; the app sees only opt_core.h. The include list is tests/hostsim.c's (Optimist's host render):
  * the same subset of firmware/src/felucca.c; its UI follows (ui/opt_ui.c, the end of this file). */
 #define FELUCCA_ARRANGER 1               /* (felucca.c: always; SONG, the scenes and the chain are the UI's too) */
+/* Optimist's globals that fm1-base's unit has under the same names (device/main_fm1.c bootguard, device/panel.c panel,
+ * both in .noinit): this unit's under its own (Optimist's boot guard is fm1-base's job here; its panel state is its UI's) */
+#define bootguard opt_bootguard
+#define panel opt_ui_panel
+/* undo.c's ring (seq/undo.c, FELUCCA_UNDO_HISTORY) on the FM-1: Optimist's app.ld gives it the memory nothing is linked
+ * into as _undo_* (from the pool's end to the stacks less 8 KiB); fm1-base's device/app.ld has the same two ends,
+ * _pool_end and the stacks' first guard band _guard0, and its build keeps 8 KiB of the pool spare (tools/build.py
+ * check): the ring from _pool_end to _guard0 less those 8 KiB (FELUCCA_UNDO_CAP; never 0, which is "all there is").
+ * Main RAM's part: none (hi = lo), as Optimist's own build has it. The host: undo.c's own stand-in */
 #include <stdint.h>
-#include <string.h>
+#ifndef PLAT_HOST
+#define _undo_pool_lo _pool_end
+#define _undo_pool_hi _guard0
+#define _undo_ram_lo _pool_end
+#define _undo_ram_hi _pool_end
+extern uint8_t _pool_end[], _guard0[];     /* (device/app.ld) */
+#define OPT_POOL_SPARE 8192u
+static uint32_t opt_undo_cap(void)
+{
+    uint32_t room = (uint32_t)(_guard0 - _pool_end);
+    return room > OPT_POOL_SPARE ? room - OPT_POOL_SPARE : 1u;
+}
+#define FELUCCA_UNDO_CAP opt_undo_cap()
+#endif
+#ifdef PLAT_HOST
+#include <string.h>                      /* (the host's libc; the FM-1 has none: Optimist's own, below) */
+#endif
 #include "fm1_compat.h"
 #include "opt_core.h"
 
@@ -16,7 +41,9 @@
 #ifdef PLAT_HOST
 #define __attribute__(x)
 #endif
-/* Optimist's libc (memset & co. of its own, system/libc.c) under other names: the host's libc keeps its own */
+/* Optimist's libc (memset & co. of its own, system/libc.c) under other names: the host's libc keeps its own, and on
+ * the FM-1 felucca-bsp's chip/libc.c (the app's unit) has memset, memcpy and memcmp, for the compiler's own calls.
+ * The host: the names back to its libc after; the FM-1 (no string.h): this unit keeps Optimist's, by those names */
 #undef memset                            /* (the host's string.h may make them macros) */
 #undef memcpy
 #undef memcmp
@@ -27,12 +54,23 @@
 #define memmove felucca_memmove
 #include "felucca_tables.h"
 #include "system/libc.c"
+#ifdef PLAT_HOST
 #undef memset
 #undef memcpy
 #undef memcmp
 #undef memmove
+#endif
 
 #include "core/core.h"
+/* HOT / HOT2 (core.h): Optimist's audio path in RAM code (its app.ld .ram_hot / .ram_hot2, copied at boot by its
+ * main.c; calls between it and XIP through pointers). fm1-base's device/app.ld has no such sections: the linker would
+ * leave them orphans after .text, in no image tools/build.py makes (it copies .text, .ram_text and .data), and its RAM
+ * code (.ram_text, 32 KiB) is for what runs with the flash off: no calls (its check). Here the audio path runs from the
+ * XIP flash, as core.h's own ASM_CHECK builds have it (a gap: the cache's misses, unmeasured on an FM-1) */
+#undef HOT
+#undef HOT2
+#define HOT
+#define HOT2
 #include "engines/engines.c"
 #include "drums/drums.c"
 #include "core/params.c"

@@ -45,7 +45,9 @@ void app_init(void)
     opt_core_init();
 }
 
-/* the platform's screen, for Optimist's unit (its canvas is fm1-base's gfx.c, compiled there; the LCD is this unit's) */
+/* the platform's screen, for Optimist's unit (fm1-base's gfx.c is compiled there too, on this unit's canvas: opt_canvas;
+ * the LCD is this unit's) */
+uint16_t *opt_canvas(uint32_t n) { return n <= CV_MAX ? cv_px : 0; }
 void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { lcd_fill(x, y, w, h, c); }
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { lcd_blit(x, y, w, h, px); }
 void opt_lcd_sync(void) { lcd_sync(); }
@@ -58,6 +60,11 @@ void app_say(const char *a, const char *b)
     if (b)
         draw_text_box(0, 222, 240, &FONT_S, b, C_WHITE, 1);
 }
+
+/* the interrupts' global enable (icfg bit 9), for Optimist's unit (fm1_compat.h fm1_irq_off, core.h IRQ_IE_NOW) */
+#ifndef PLAT_HOST
+uint32_t opt_irq_enabled(void) { return (fm1_icfg() & 0x200u) != 0u; }
+#endif
 
 void app_ui_init(void) { opt_ui_init(); }
 void app_input_only(void) { opt_ui_input(); }

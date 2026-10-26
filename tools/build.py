@@ -49,7 +49,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   mirror = true              the screen and panel mirrored over USB (FM1B_MIRROR: device/mirror.c; web/mirror/,
                              tools/fm1_mirror.py), the panel played from the host; FM1B_MIRROR=1 in the environment
                              builds it in whatever fm1.toml says (an app's demo build), FM1B_POOL_SPARE=N the
-                             pool spare the build insists on (8192 B; a demo build may spend it)
+                             spare the build insists on (8192 B of the SRAM, device/app.ld; of the pool with WiFi;
+                             a demo build may spend it)
   backup = true              backup and restore of the app's saved objects over USB (FM1B_BACKUP: device/backup.c;
                              tools/fm1_backup.py); app.h gives APP_BACKUP_OBJS, _MAGIC, _VERSION and the app_backup_* hooks
   cpu2 = true                the second core (FM1B_CPU2: device/cpu2.c, plat_cpu2_* in plat.h, on felucca-bsp's
@@ -83,6 +84,13 @@ app.h); the build prints what it has.
                              `ir_pass IN.ll OUT.ll [UNIT]` (UNIT: an o2 unit's path relative to APP_DIR; none for
                              unity.c), then compiles OUT.ll at the unit's level (an app marking its cold code
                              minsize: Melodee's idea). Without changes the round trip makes the same code
+The app's own code that runs from RAM (out of the XIP cache's way: an audio path) goes in section .app_ram (plat.h
+PLAT_RAM_CODE): copied at boot with .ram_text, inside the guard's RAM code window (between _ar_start and _ar_end). It
+may call only RAM code, to any depth, and nothing through a pointer (tools/ramcode.py, over the disassembly). XIP code
+calls it through a pointer (PLAT_FAR: a direct call does not reach); a call from it into XIP, direct or through a
+pointer, the check refuses, unless:
+  ram_code_allow = ["fn"]    the app's RAM functions whose calls out of RAM or through a pointer it vouches for (a cold
+                             path; a pointer that only holds RAM code); printed by every build
 The second core's code that runs from RAM goes in section .c1_text: in .ram_text (copied at boot, inside the guard's
 RAM code window), between _c1_start and _c1_end; the check that RAM code calls nothing in the flash leaves it out
 (core 1 runs only while core 0 waits for it in the audio interrupt, and core 0 turns the flash off only with
@@ -107,6 +115,7 @@ SRC = Path(__file__).resolve().parents[1]        # fm1-base
 BSP = SRC / "bsp"                                 # felucca-bsp (git submodule)
 APP = OUT = GEN = LDR = ROOT = None               # set by main() from APP_DIR
 CONF = {}
+LAYOUT = {}                                       # the linked script's MEMORY regions: {name: (origin, length)}
 sys.path.insert(0, str(SRC / "tools"))
 import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
@@ -635,7 +644,9 @@ def build_app():
     # bitcode: the linker needs the toolchain's LLVM plugin
     lto = ["--plugin", "/opt/jieli/pi32v2/bin/LLVMgold.so" if use_docker() else str(toolchain() / "pi32v2/bin/LLVMgold.so"),
            f"--plugin-opt=mcpu={CPU}", "--plugin-opt=-pi32v2-large-program=true"] if jieli else []
+    global LAYOUT
     ld = SRC / "device" / ("app_wifi.ld" if WIFI else "app.ld")
+    LAYOUT = memory_regions(ld.read_text())
     tc("pi32v2/bin/ld", *lto, "--gc-sections", "-e", "_start", "-T", ld, *objs, *b_objs,
        *b_libs, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
@@ -665,6 +676,18 @@ def build_app():
     img += b"\xff" * (-len(img) % 4)
     (OUT / (NAME + ".bin")).write_bytes(img)
     return bytes(img), syms, dis, rt
+
+
+def memory_regions(script):
+    """a linker script's MEMORY regions: {name: (origin, length)} (lengths in hex, decimal or K)"""
+    block = re.search(r"\bMEMORY\s*\{(.*?)\}", script, re.S)
+    if not block:
+        raise SystemExit("build: the linker script has no MEMORY block")
+
+    def num(v):
+        return int(v[:-1]) * 1024 if v.endswith("K") else int(v, 0)
+    return {m.group(1): (num(m.group(2)), num(m.group(3))) for m in re.finditer(
+        r"^\s*(\w+)\s*\([a-z]+\)\s*:\s*ORIGIN\s*=\s*(\w+)\s*,\s*LENGTH\s*=\s*(\w+)", block.group(1), re.M)}
 
 
 def mul64_near_loads(dis, window=4):
@@ -705,6 +728,7 @@ def mul64_near_loads(dis, window=4):
 
 
 def check(img, syms, dis, rt):
+    import ramcode                                # (tools/, on the path above)
     errors, notes = [], []
     m = re.search(r"^([0-9a-f]+) .*\s_start$", syms, re.M)
     if not m or int(m.group(1), 16) != APP_XIP:
@@ -715,14 +739,21 @@ def check(img, syms, dis, rt):
           for m2 in [re.search(r"^([0-9a-f]+) .*\s" + n + r"$", syms, re.M)] if m2]
     in_c1 = (lambda ln: (mm2 := LINE.match(ln)) is not None and c1[0] <= int(mm2.group(1), 16) < c1[1]) \
         if len(c1) == 2 else (lambda ln: False)   # (the second core's loop: it may call into the flash, see the top)
-    rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln) and not in_c1(ln)]
+    ar = [symv for n in ("_ar_start", "_ar_end") for symv in [ramcode.symbol(syms, n)] if symv is not None]
+    in_ar = (lambda ln: (mm2 := LINE.match(ln)) is not None and ar[0] <= int(mm2.group(1), 16) < ar[1]) \
+        if len(ar) == 2 else (lambda ln: False)   # (the app's RAM code: checked apart, tools/ramcode.py)
+    rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln) and not in_c1(ln) and not in_ar(ln)]
     jieli = (BLE and not OWN) or WIFI
     if rt_calls and jieli:          # JieLi's .volatile_ram_code calls out; it runs with the flash on
         notes.append(f"the radio: .ram_text contains calls (JieLi's .volatile_ram_code): {rt_calls[:3]}")
     elif rt_calls:                  # RAM code runs with the flash off: no calls into XIP
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
-        notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
+        insns = [ln for ln in rt.splitlines() if LINE.match(ln) and not in_ar(ln)]
+        notes.append(f".ram_text: {len(insns)} insns, no calls")
+    ar_errors, ar_notes = ramcode.check(syms, dis, CONF.get("ram_code_allow", []))
+    errors += ar_errors
+    notes += ar_notes
     skip_fns, fn = set(CONF.get("rom_check_skip", [])), ""
     for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM
         mm = LINE.match(ln)
@@ -749,7 +780,8 @@ def check(img, syms, dis, rt):
         if bt:
             errors.append(f"ble_stack = own links JieLi's Bluetooth code: {bt}")
         rf = re.search(r"^([0-9a-f]+) .*\sfm1_rf_burst_run$", syms, re.M)
-        if not rf or not 0x01C00000 <= int(rf.group(1), 16) < 0x01C08000:
+        rt_run = ramcode.symbol(syms, "_rt_start") or 0, ramcode.symbol(syms, "_rt_end") or 0   # (the RAM code run)
+        if not rf or not rt_run[0] <= int(rf.group(1), 16) < rt_run[1]:
             errors.append("fm1_rf_burst_run is not in .ram_text (the radio's crystal ramp must run from RAM)")
         else:
             notes.append("own Bluetooth stack: nothing of JieLi's linked, the radio's ramp in RAM")
@@ -772,12 +804,22 @@ def check(img, syms, dis, rt):
     def sym(name):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
         return int(mm.group(1), 16) if mm else 0
-    bss = sym("_bss_end") - 0x01C08000
-    pool = sym("_pool_end") - sym("_pool_start")
-    ram, pool_max, spare = (128 * 1024, 0x4C000, 2048) if WIFI else (96 * 1024, 0x54000, 8192)   # (app_wifi.ld)
+    rt, bss, pool = (sym("_rt_end") - sym("_rt_start"), sym("_bss_end") - sym("_data_start"),
+                     sym("_pool_end") - sym("_pool_start"))
+    spare = 2048 if WIFI else 8192
     if os.environ.get("FM1B_POOL_SPARE", "").isdigit():   # an app's own build for itself (a demo build with mirror)
         spare = int(os.environ["FM1B_POOL_SPARE"])
-    notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of {ram}; pool {pool} B of {pool_max}")
+    if "SRAM" in LAYOUT:                          # device/app.ld: one packed region, one budget
+        org, size = LAYOUT["SRAM"]
+        used = sym("_pool_end") - org
+        notes.append(f"image {len(img)} B; SRAM {used} B of {size}: RAM code {rt} B, .data+.bss {bss} B, pool {pool} B; "
+                     f"free {size - used} B ({spare} kept spare)")
+        if size - used < spare:                   # keep some of the SRAM spare
+            errors.append(f"SRAM headroom {size - used} B < {spare} B")
+        return errors, notes
+    (_, rt_max), (_, ram), (_, pool_max) = LAYOUT["RAMTEXT"], LAYOUT["RAM"], LAYOUT["POOL"]   # (app_wifi.ld)
+    notes.append(f"image {len(img)} B; RAM code .ram_text {rt} B of {rt_max}; RAM .data+.bss {bss} B of {ram}; "
+                 f"pool {pool} B of {pool_max}")
     if bss > ram:
         errors.append("RAM region overflow")
     if pool_max - pool < spare:                   # keep some of the pool spare

@@ -22,11 +22,12 @@ LINK = BUILD / "optimist"
 GEN = BUILD / "optgen"
 # Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off
 HOST_ENV = {"FELUCCA_SAMPLES_SKIP": "", "FELUCCA_SLICE": "0"}
-# the audio core's headers (Optimist tools/build.py generate(); its fonts, icons, colours and the editor's help are the
-# UI's, not here: gen_param_help.py would also rewrite Optimist's web/editor.html)
+# the audio core's and the UI's headers (Optimist tools/build.py generate(): its colours for the UI; its fonts are not
+# used (fm1-base's canvas draws with fm1-base's), its icons nowhere, the help lines off (gen_param_help.py would also
+# rewrite Optimist's web/editor.html))
 GENERATORS = [("gen_tables.py", "felucca_tables.h"), ("gen_samples.py", "felucca_samples.h"),
               ("gen_drumkits.py", "felucca_drumkits.h"), ("gen_x0x_drums.py", "x0x_drum_samples.h"),
-              ("gen_wavetables.py", "felucca_wavetables.h")]
+              ("gen_wavetables.py", "felucca_wavetables.h"), ("gen_colors.py", "felucca_colors.h")]
 
 
 def optimist_tree():

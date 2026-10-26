@@ -1,14 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Optimist on fm1-base, the trial (milestone 1: the audio core in the host simulator). Optimist's code: GPL-3.0-only,
-# never offered upstream as MPL. tools/build.py optimist --host
+# Optimist on fm1-base, the trial (milestone 1: the audio core in the host simulator; milestone 2: its UI on fm1-base's
+# canvas and panel). Optimist's code: GPL-3.0-only,
+# never offered upstream as MPL. optimist/run.sh (tools/build.py optimist --host with Terminus, then the tests)
 name = "optimist"
 id_prefix = "FM-1_79"          # a trial identity (dev FM-1_7900), not Optimist's FM-1_700
 usb_manufacturer = "Optimist"
 usb_product = "Optimist trial FM-1"
-o2 = ["core/opt_core.c"]       # Optimist's audio core: a unit of its own (its names never meet fm1-base's)
+o2 = ["core/opt_core.c"]       # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
+                               # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it)
 include = ["build/optimist/firmware/src", "build/optgen"]   # Optimist's tree (gen_optimist.py links it), its headers
 gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)
 words = "words.tsv"
+font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"

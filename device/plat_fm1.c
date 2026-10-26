@@ -200,6 +200,25 @@ void plat_host_patience(uint32_t try_ms, uint32_t total_ms)
 /* USB audio full: the render at full level for the USB audio input, MASTER after it (main_fm1.c render_block) */
 static volatile uint8_t uac_full;
 void plat_usb_audio_full(int on) { uac_full = (uint8_t)(on != 0); }
+int plat_usb_audio_rec(void)
+{
+#if FELUCCA_UAC
+    return uac_capturing();
+#else
+    return 0;
+#endif
+}
+int plat_usb_audio_play(int32_t *lr, uint32_t n)
+{
+#if FELUCCA_UAC_OUT && defined APP_USB_PLAY
+    return uac_play_take(lr, n);
+#else
+    uint32_t i;                                 /* no USB audio output, or the platform mixes it at MASTER */
+    for (i = 0; i < 2u * n; i++)
+        lr[i] = 0;
+    return 0;
+#endif
+}
 void plat_yield(void)
 {
     ble_poll();                                   /* Bluetooth: its notifications go out while the screen draws */

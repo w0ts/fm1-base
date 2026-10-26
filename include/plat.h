@@ -202,7 +202,18 @@ static inline int plat_in(uint32_t off, uint32_t n, uint32_t lo, uint32_t hi)   
 const uint8_t *plat_data(uint32_t off);   /* read in place; 0 = outside the windows */
 int plat_data_erase(uint32_t off);        /* the 4 KiB sector at off (aligned); 0 = done */
 int plat_data_write(uint32_t off, const void *src, uint32_t n);   /* into erased flash, src in RAM; 0 = done */
-void plat_sysex_send(const uint8_t *frame, uint32_t n);   /* a whole SysEx frame (F0 .. F7) out over USB */
+/* SysEx to the computer over USB (main loop): whole frames, F0 .. F7, into felucca-bsp's SysEx ring (sent before
+ * the notes), which the USB interrupt empties as the computer reads. plat_sysex_room, plat_sysex_queued and
+ * plat_usb_session (and plat_sysex_send's -1 without a computer) are built for an app with APP_SYSEX (below) */
+int plat_sysex_send(const uint8_t *frame, uint32_t n);   /* 0 = queued whole; -1 = not sent: no computer has set
+                                                         * the FM-1 up (plat_usb_session 0), or it stopped reading
+                                                         * (no room for 200 ms; what was queued goes out) */
+uint32_t plat_sysex_room(void);        /* the bytes of SysEx the ring takes now without a wait: 0 with no computer, the
+                                        * bus asleep, or a send under way. A send that must never wait checks it */
+uint32_t plat_sysex_queued(void);      /* the bytes still in the ring, not yet read (0: all out) */
+uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; else a number that changes at every new
+                                        * one (a bus reset, the cable out and in): what an app keeps for a connection
+                                        * (a client's session) it drops when this changes */
 
 /* the app's own commands in the update's SysEx framing (F0 pack7(00 59 cmd len24 body ~sum) F7: felucca-bsp ota.c),
  * an app with APP_USB_CMD: app_usb_cmd(d, n) gets each frame whose cmd the platform does not take (d: the decoded

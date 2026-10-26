@@ -4,7 +4,8 @@
 static uint32_t sx_frames, sx_other;
 static uint8_t sx_reply[700];
 
-void app_init(void) {}
+static uint32_t sx_boots;
+void app_init(void) { sx_boots++; }
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     uint32_t i;
@@ -32,6 +33,8 @@ int app_sysex(const uint8_t *p, uint32_t n)
             sx_reply[1u + i] = p[i];
         sx_reply[1u + n] = 0xF7;
         plat_sysex_send(sx_reply, n + 2u);
+    } else if (p[3] == 5u) {                         /* restart */
+        plat_restart();
     }
     return 1;
 }
@@ -41,6 +44,8 @@ int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "frames"))
         *got = (int)sx_frames;
+    else if (!strcmp(what, "boots"))
+        *got = (int)sx_boots;
     else if (!strcmp(what, "other"))
         *got = (int)sx_other;
     else

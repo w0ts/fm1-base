@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Henri David */
 /* The SysEx test app (tests/run_tests.sh): the platform's SysEx with the computer as an app sees it. It answers frames
- * F0 7D 53 58 cmd args F7 ("SX"); cmd 1 echo: the same frame back. Nothing else: no sound, a black screen. */
+ * F0 7D 53 58 cmd args F7 ("SX"); cmd 1 echo: the same frame back; 5 restart: plat_restart (expect boots: app_init's since the start). Nothing else: no sound, a black screen. */
 #pragma once
 #include <stdint.h>
 #include "plat.h"
@@ -23,6 +23,7 @@ void app_say(const char *a, const char *b);
 
 /* a SysEx frame from USB the platform does not take (p: the bytes between F0 and F7): 1 = the app's */
 #define APP_SYSEX
+#define APP_RESTART                      /* (plat_restart: cmd 5) */
 int app_sysex(const uint8_t *p, uint32_t n);
 
 /* the host simulator's checks: frames (taken by the app), other (offered, not the app's) */

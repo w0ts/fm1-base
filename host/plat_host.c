@@ -30,6 +30,7 @@
  *   expect_no_out PORT B0 B1 B2  check that it did not
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *   reboot                       re-run boot from the simulated flash (persistence test)
+ *                                (the app's plat_restart does the same, at the end of its millisecond; expect restarts)
  *   data FILE OFFSET             a file into the simulated data area (plat_data) at OFFSET (its windows: plat.h)
  *   fbdump FILE                  the screen's pixels raw (240 x 240 RGB565, high byte first) into FILE
  *   flash_fail 0|1               every store save fails (1) or works (0); expect store_tries counts the attempts
@@ -981,6 +982,10 @@ static void boot(void)
     app_ui_init();
 }
 
+static uint8_t restart_req;                         /* plat_restart: at the end of this millisecond */
+static uint32_t restarts;
+void plat_restart(void) { restart_req = 1; }
+
 /* one millisecond of the device, in three steps (run_ms; host/rfm1.c calls them on its host's clock): the clock and
  * what runs before the render (sim_ms_begin), the APP_BLOCK-frame renders that have fallen due (sim_render, each),
  * then the UI (sim_ms_end: a frame every 16 ms, else the input only) */
@@ -1071,6 +1076,15 @@ static void run_ms(uint32_t ms)
         } else {
             sim_ms_end(0);
         }
+        if (restart_req) {                          /* (as "reboot": the flash kept, the app's RAM forgotten) */
+            restart_req = 0;
+            restarts++;
+            printf("  restart (plat_restart) at %u ms\n", now_ms);
+#ifdef APP_HOST_REBOOT
+            app_host_reboot();
+#endif
+            boot();
+        }
     }
 }
 
@@ -1134,6 +1148,8 @@ static int expect(const char *what, const char *val)
 #endif
     if (!strcmp(what, "store_writes"))
         got = (int)store_writes;
+    else if (!strcmp(what, "restarts"))            /* plat_restart's since the start */
+        got = (int)restarts;
     else if (!strcmp(what, "store_tries"))
         got = (int)store_tries;
 #if FM1B_BACKUP

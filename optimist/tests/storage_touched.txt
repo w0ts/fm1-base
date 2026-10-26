@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial in the host simulator (milestone 3): a power-on with the flash Optimist's own simulator left after it
+# powered on with the trial's (trial-flash2.bin: the work's newest copy B at 0xFE000, BPM 120), moved the tempo 4 up
+# and autosaved (optsim.py touch: into copy A, 0x9F000, its seq above B's): Optimist read the trial's copy B (BPM 124,
+# not 116 + 4 from copy A), the trial reads Optimist's copy A; the stores and the setting as they were. run.sh runs it:
+#   OPT_FLASH=optimist/build/host/touched-flash.bin optimist/build/host/optimist_host optimist/tests/storage_touched.txt optimist/build/host
+wait 1500
+expect bpm 124
+expect proj.3 1
+expect up.1 1
+expect up.2 0
+expect w.0x9F000 0x554C4546
+expect w.0xFE000 0x554C4546
+tap ENV
+wait 100
+expect gv2 116
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 2
+wait 100
+expect gv2 1

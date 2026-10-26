@@ -8,8 +8,11 @@
  *               (Terminus: run.sh sets X0X_FONTSET), Optimist's extras (opt_gfx.h)
  *   the panel   fm1-base's plat_buttons / plat_keys / plat_enc as Optimist's HAL gives them (opt_in.h: the matrix ids,
  *               the edges, the press times); the LEDs onto plat_lights / plat_lights_mid
- *   the stores  stand-ins (opt_stores.h): storage, the user presets, the projects are a later step; the rest left
- *               out (opt_stubs.h, and the builds' switches off: Bluetooth, the mirror, the editor, USB audio, CPU1)
+ *   the stores  Optimist's own storage (opt_storage.h: its formats, its addresses) on fm1-base's plat_data windows and,
+ *               for its globals 0xFC000..0xFEFFF, the app's unit (app.c opt_glob_*); its power-on (persist_boot,
+ *               autosave_resume) and its main loop's saves (autosave_tick, settings_poll, sections_flush, sec_service)
+ *               here; the rest left out (opt_stubs.h, and the builds' switches off: Bluetooth, the mirror, the editor,
+ *               USB audio, CPU1)
  * The composition follows Optimist's host UI test (tests/ui_optimist_test.c) and its main loop (system/main.c). */
 
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
@@ -41,12 +44,17 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 #define scale h
 #include "ui/optimist/optimist.c"
 #undef scale
-#include "opt_stores.h"                          /* the stores the UI calls (after it: they answer with ui_message) */
+#include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
 
 /* ---- power-on (system/main.c: settings_init, panel_init, felucca_init without a stored project) */
 void opt_core_init(void)
 {
     uint32_t i;
+    persist_boot();                              /* the settings record, the stores found (before settings_init) */
+    fm6_boot();
+#if CZ_NUSER
+    czb_find();
+#endif
     settings_init();
     panel_init();
     for (i = 0; i < G_COUNT; i++)
@@ -78,7 +86,9 @@ void opt_core_init(void)
 #endif
     song.sel = 0;
     song.master_q12 = 2048;
+    autosave_resume();                           /* the project as it was left (project.c) */
     song.g[G_VIEW] = (int16_t)settings.view;
+    song.g[G_SYNC] = sync_boot;
     layers_init();
     go_home();
     ui.force = 1;
@@ -108,6 +118,14 @@ void opt_ui_frame(void)
     ui_leds();
     opt_leds_out();
     ui_draw();
+    autosave_tick();                             /* the working project into flash, when quiet */
+#if BP23_SET
+    settings_poll();                             /* a setting changed from a page */
+#endif
+    sections_flush();                            /* live sections / the recorded song, when quiet */
+#if SEC_LOGGED
+    sec_service();                               /* the next section staged for the audio (sections.c) */
+#endif
     meter_tap();
 #if FELUCCA_ENG_WAVE
     wt_service();
@@ -133,3 +151,17 @@ int32_t opt_ui_cell(uint32_t k, const char **label, char *val, uint32_t n)
     return c.gv;
 }
 void opt_ui_row_name(char *b) { SCREENS[ui.scr].name(ui.row[ui.scr], b); }   /* (9 characters and the 0) */
+
+/* ---- the stores, for the host simulator's checks (app.c: expect up.K, proj.S, w.ADDR, panel_hits; "msg") */
+int opt_st_up_used(uint32_t k) { return (int)prj_slot_used(PR_USER, k); }        /* (as PROJECT's keys light them) */
+int opt_st_proj_used(uint32_t s) { return (int)prj_slot_used(PR_PROJECT, s); }
+uint32_t opt_st_panel_hits(void) { return opt_storage_hits_panel(); }
+int opt_st_word(uint32_t off, uint32_t *w)       /* the 32-bit little-endian word at off, as Optimist reads it */
+{
+    uint8_t b[4];
+    if (st_read(off, b, 4u))
+        return -1;
+    *w = b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24;
+    return 0;
+}
+const char *opt_ui_msg(void) { return ui.msg; }   /* the header's last message */

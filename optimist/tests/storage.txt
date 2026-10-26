@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial in the host simulator (milestone 3): Optimist's own storage on fm1-base's flash access. A sound and the
+# tempo changed, a setting (SYSTEM's KNOB COLORS), the project saved to slot 3 and the sound to user preset U01 through
+# the UI; the bytes at Optimist's addresses in Optimist's formats; a restart ("reboot": the simulated flash kept) finds
+# the work again (the autosave resumed), the slots used; the flash dumped (optimist/build/host/trial-flash.bin) for
+# tests/storage_restart.txt, a power-on with it in a new process (all RAM fresh: the UI too, which "reboot" keeps).
+# optimist/run.sh runs them:
+#   optimist/build/host/optimist_host optimist/tests/storage.txt optimist/build/host
+# Flash words are little-endian: 0x554C4546 "FELU" (storage.c's object header), 0x34425055 "UPB4" (upreset.c's bank),
+# 0x31474C53 "SLG1" (sec_log.c's section log, format 1), -1 an erased word.
+wait 600
+# a blank FM-1: nothing stored but the section log Optimist makes at its first start (at 0x97000); nothing of
+# Optimist's on the platform's OBJ_PANEL (0xD8000 / 0xD9000)
+expect panel_hits 0
+expect proj.3 0
+expect up.1 0
+expect w.0xFC000 -1
+expect w.0x97000 0x31474C53
+expect w.0x9F000 -1
+expect w.0xDC000 -1
+# a sound: track 1's ENV, DEC 112 -> 116; the tempo: GLOBAL's BPM 111 -> 116
+tap ENV
+wait 100
+turn K2 4
+wait 100
+expect gv2 116
+tap GLO
+wait 100
+turn K1 5
+wait 100
+expect bpm 116
+# a setting: SYSTEM (GLO again), GENERAL's KNOB COLORS OFF -> ON (the settings word's bit 25; BRIGHT is never stored,
+# bright.c); the settings record saved: copy A, 0xFC000 (outside plat.h's windows: the app's unit writes it, app.c
+# opt_glob_*)
+tap GLO
+wait 100
+spin SELECT 2
+wait 100
+expect gv2 0
+turn K2 1
+wait 100
+expect gv2 1
+tap HOME
+wait 300
+expect w.0xFC000 0x554C4546
+expect w.0xFD000 -1
+# the project to slot 3: SAVE (PROJECT), ACTION SAVE, key 3, YES, the NAME page's SAVE; the section log at 0x97000
+tap SAVE
+wait 200
+expect scr 3
+turn K2 1
+wait 100
+key w2 down
+wait 50
+key w2 up
+wait 100
+tap SAVE
+wait 300
+tap SAVE
+wait 300
+msg SAVED
+expect proj.3 1
+expect w.0x97000 0x31474C53
+# the sound to U01: PROJECT's USER row, ACTION SAVE, key 1, YES, the NAME page's SAVE; bank A's copy A at 0xDC000
+spin SELECT 2
+wait 100
+expect row 2
+turn K2 1
+wait 100
+key w0 down
+wait 50
+key w0 up
+wait 100
+tap SAVE
+wait 300
+tap SAVE
+wait 300
+msg SAVED U01
+expect up.1 1
+expect up.2 0
+expect w.0xDC000 0x554C4546
+expect w.0xDC100 0x34425055
+expect w.0xDE000 -1
+# hands off for the autosave's 10 s: the working project's copy A at 0x9F000, its drum record at 0xE5000 (XDATA1)
+wait 12000
+expect w.0x9F000 0x554C4546
+expect w.0xE5000 0x554C4546
+expect w.0xFE000 -1
+expect panel_hits 0
+shot st-saved.png
+flash_dump optimist/build/host/trial-flash.bin
+# a restart in this process: the flash kept, Optimist's power-on (opt_core_init: the defaults, BPM 111, DEC 112, then
+# the stores); the work comes back as it was left (the UI's own RAM is the one thing "reboot" keeps: storage_restart.txt)
+reboot
+wait 1500
+expect bpm 116
+expect proj.3 1
+expect up.1 1
+expect up.2 0
+tap ENV
+wait 100
+expect gv2 116

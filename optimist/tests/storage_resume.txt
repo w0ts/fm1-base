@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial in the host simulator (milestone 3): a power-on with the flash tests/storage_restart.txt left
+# (OPT_FLASH=optimist/build/host/trial-flash2.bin): the work resumed from the autosave's newer copy, B at 0xFE000
+# (the app's unit's globals: app.c opt_glob_*), BPM 120; the stores as they were. optimist/run.sh runs it:
+#   OPT_FLASH=optimist/build/host/trial-flash2.bin optimist/build/host/optimist_host optimist/tests/storage_resume.txt optimist/build/host
+wait 1500
+expect bpm 120
+expect proj.3 1
+expect up.1 1
+tap ENV
+wait 100
+expect gv2 116

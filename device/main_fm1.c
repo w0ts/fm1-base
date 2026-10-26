@@ -63,12 +63,17 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
             }
             if (radio_quiet)
                 continue;
-#if FELUCCA_UAC_OUT
+#if FELUCCA_UAC_OUT && !defined APP_USB_PLAY
             uac_play(o + 2u * k, REND_FRAMES, full ? 4096u : master_pos * master_pos >> 12);   /* the computer's audio,
                                                                                          * at MASTER */
 #endif
 #if FELUCCA_UAC
+#ifdef APP_USB_CAPTURE
+            if (uac_capturing())                    /* the USB audio input: the app's channels (0: silence) */
+                uac_tap(app_usb_capture(o + 2u * k, REND_FRAMES), REND_FRAMES);
+#else
             uac_tap(o + 2u * k, REND_FRAMES);       /* the USB audio input: the same master output */
+#endif
 #endif
             if (full) {                             /* the speaker and headphones: MASTER after the tap */
                 const float g = (float)gain * (1.0f / 4096.0f);

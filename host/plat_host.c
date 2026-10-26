@@ -507,6 +507,14 @@ int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)
 void plat_host_patience(uint32_t try_ms, uint32_t total_ms) { (void)try_ms, (void)total_ms; }
 static int uac_full;                            /* plat_usb_audio_full: the render at full level, MASTER after it */
 void plat_usb_audio_full(int on) { uac_full = on != 0; }
+int plat_usb_audio_rec(void) { return 0; }      /* the simulator has no USB audio: nobody records, nothing plays */
+int plat_usb_audio_play(int32_t *lr, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < 2u * n; i++)
+        lr[i] = 0;
+    return 0;
+}
 
 /* flash: one buffer per object, kept across a simulated reboot */
 static uint8_t store[OBJ_NOBJ][PLAT_STORE_MAX];

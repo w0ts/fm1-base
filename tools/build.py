@@ -40,6 +40,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   ble_central = true         and the FM-1 connects to Bluetooth MIDI devices too (FM1B_BLE_CENTRAL), beside a computer
   usb_audio_in = true        the FM-1 recordable over USB (FM1B_UAC; the default: true)
   usb_audio_out = true       a computer plays through the FM-1 over USB (FM1B_UAC_OUT; the default: true)
+  usb_audio_in_channels = 4  the USB audio input's channels, 1..8 (FM1B_UAC_CH; default 2, the master): the app gives
+                             them (app.h APP_USB_CAPTURE, plat.h)
+  usb_audio_in_24bit = true  the USB audio input in 24-bit too (FM1B_UAC_24: a second alt setting, 16-bit stays)
   usb_host = true            the USB port as a MIDI host when the app asks (FM1B_USB_HOST: felucca-bsp's
                              FELUCCA_USB_HOST, docs/USB_HOST.md; plat_usb_host in plat.h): a USB-MIDI controller or
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
@@ -550,6 +553,13 @@ def build_app():
     for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
         if key in CONF and flag not in os.environ:
             flags.append(f"-D{flag}={int(bool(CONF[key]))}")
+    if "usb_audio_in_channels" in CONF:
+        ch = CONF["usb_audio_in_channels"]
+        if isinstance(ch, bool) or not isinstance(ch, int) or not 1 <= ch <= 8:
+            raise SystemExit(f"build: usb_audio_in_channels is 1..8, not {ch!r}")
+        flags.append(f"-DFM1B_UAC_CH={ch}")
+    if "usb_audio_in_24bit" in CONF:
+        flags.append(f"-DFM1B_UAC_24={int(bool(CONF['usb_audio_in_24bit']))}")
     for flag in ("FM1B_CDC", "FM1B_UAC", "FM1B_UAC_OUT", "FM1B_TRS"):
         v = os.environ.get(flag)    # unset: fm1.toml's, the app's (app.h) or the platform's default (device/unity.c)
         if v in ("0", "1"):

@@ -20,6 +20,10 @@
  *                           their time (its 4 KB ring in the app's pool; 5.8 ms more latency)
  *   FM1B_UAC_RING_POOL 0    1: the USB audio input's 2 KB ring in the pool, its RAM left to the app
  *   FM1B_UAC_OUT 1          USB audio output: the computer plays through the FM-1, mixed after the app, at MASTER
+ *                           (an app with APP_USB_PLAY mixes it itself: plat_usb_audio_play)
+ *   FM1B_UAC_CH 2           the USB audio input's channels (fm1.toml usb_audio_in_channels, 1..8): 2 the master; any
+ *                           other count the app's own (APP_USB_CAPTURE: app_usb_capture), 2 may be too
+ *   FM1B_UAC_24 0           1: the USB audio input in 24-bit too (fm1.toml usb_audio_in_24bit: its alt setting 2)
  *   FM1B_TRS 1              MIDI in on the TRS jack
  *   APP_TOUCH               velocity and pressure from the keys (lib/touch.h)
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
@@ -86,6 +90,17 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #define FM1B_UAC_OUT 1            /* the computer plays through the FM-1 (USB audio output) */
 #endif
 #define FELUCCA_UAC_OUT FM1B_UAC_OUT
+#ifndef FM1B_UAC_CH
+#define FM1B_UAC_CH 2             /* the USB audio input's channels: 2 the master, else the app's (APP_USB_CAPTURE) */
+#endif
+#define FELUCCA_UAC_CH FM1B_UAC_CH
+#ifndef FM1B_UAC_24
+#define FM1B_UAC_24 0             /* 1: 24-bit too (the input's alt setting 2; alt 1 stays 16-bit) */
+#endif
+#define FELUCCA_UAC_24 FM1B_UAC_24
+#if FM1B_UAC && FM1B_UAC_CH != 2 && !defined APP_USB_CAPTURE
+#error "usb_audio_in_channels other than 2: the app gives them (app.h APP_USB_CAPTURE, app_usb_capture)"
+#endif
 #ifndef FM1B_UAC_DEEP
 #define FM1B_UAC_DEEP 0           /* 1: the USB audio input holds a half more (renders past ~40 % of their time
                                    * otherwise run its ring dry: holds in the recording); its 4 KB ring in the pool */

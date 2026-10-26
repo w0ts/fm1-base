@@ -194,6 +194,14 @@ void plat_host_patience(uint32_t try_ms, uint32_t total_ms);   /* each try's wai
 /* USB audio full (FM1B_UAC): 1, the USB audio input at full level (the app's render at gain 4096), MASTER for the
  * speaker and headphones only; 0, both at MASTER (the default) */
 void plat_usb_audio_full(int on);
+/* USB audio, an app's own channels and mixing (fm1.toml usb_audio_in_channels / usb_audio_in_24bit; app.h
+ * APP_USB_CAPTURE, APP_USB_PLAY, below). plat_usb_audio_rec: 1, the computer takes the USB audio input this render
+ * (read at the render's start: an app makes its stems only then); 0 without FM1B_UAC and in the simulator.
+ * plat_usb_audio_play (an app with APP_USB_PLAY, from app_render, once a render with its n): the computer's audio, n
+ * stereo frames into lr at unity (24-bit as the render's: a 16-bit sample << 8), resampled to the FM-1's clock; 1 =
+ * there is some, 0 = none (lr silent). Without APP_USB_PLAY (the platform mixes it at MASTER) it is always 0 */
+int plat_usb_audio_rec(void);
+int plat_usb_audio_play(int32_t *lr, uint32_t n);
 
 /* the keys' velocity and pressure (an app with APP_KEY_SENSE): on, the scan reads the keys on the analog rows and
  * hands each reading to the app (app_key_sample, app_key_probe); off by default */
@@ -273,6 +281,13 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  *   APP_CSTART      void app_cstart(void)         first thing at a start, before the RAM is cleared and with nothing
  *                   set up (registers only, no RAM): an app's own second core that a reset left running, held
  *                   (fm1-base's own, cpu2 = true, needs none of these)
+ *   APP_USB_CAPTURE const int32_t *app_usb_capture(const int32_t *lr, uint32_t n)   the USB audio input's frames
+ *                   (FM1B_UAC): n frames of FM1B_UAC_CH samples side by side, 24-bit as the render's, kept by the
+ *                   app until the call returns (lr: the block as the output has it, the master, MASTER not yet
+ *                   applied with plat_usb_audio_full); 0 = silence. Audio interrupt, after each render, only while
+ *                   the computer records (plat_usb_audio_rec). Without it the input is the master (2 channels)
+ *   APP_USB_PLAY    (no function) the app mixes the computer's audio itself (plat_usb_audio_play in its render: a
+ *                   mixer track) instead of the platform adding it at MASTER after the render
  *   APP_FAULT       void app_fault(const fm1_crash_t *c)   a crash, before the crash screen (c: the record): an app's
  *                   own second core given up; or the crash is on that core (c->sp on its stacks): it stops there
  *

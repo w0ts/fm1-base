@@ -36,6 +36,7 @@ int app_sysex(const uint8_t *p, uint32_t n);
 void app_sysex_byte(uint8_t b);
 #define APP_LOOP
 void app_loop(void);
+#define APP_RESTART                      /* plat_restart: a restore done, the mirror's test session */
 
 /* the host simulator's checks (host/plat_host.c "expect"): voices (sounding), blocks (rendered), keys (held, as the
  * render saw them); the UI's: scr (Optimist's SCR_*: 0 the mixer, 1 SOUND, 2 FX, 5 STEP, 7 TEMPO, 9 GLOBAL), row (its

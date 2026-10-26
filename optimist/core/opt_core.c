@@ -52,6 +52,12 @@ static uint32_t opt_undo_cap(void)
 #define memcpy felucca_memcpy
 #define memcmp felucca_memcmp
 #define memmove felucca_memmove
+/* the smooth tables (felucca_tables.h TAB_CODED): on the FM-1 Optimist keeps them delta-coded and expands them into RAM
+ * at boot, from a block of its boot stream (main.c tab_expand(s), TAB_STREAM: tools/build.py appends the blobs), which
+ * fm1-base's image does not have. TAB_CODED_FORCE (the generator's own test switch, tests/tab_coded_test.c): the blobs
+ * as arrays in flash, expanded by tab_expand() at power-on (ui/opt_ui.c opt_core_init, before anything reads them).
+ * The host too, so the host runs the FM-1's path */
+#define TAB_CODED_FORCE 1
 #include "felucca_tables.h"
 #include "system/libc.c"
 #ifdef PLAT_HOST
@@ -63,14 +69,30 @@ static uint32_t opt_undo_cap(void)
 
 #include "core/core.h"
 /* HOT / HOT2 (core.h): Optimist's audio path in RAM code (its app.ld .ram_hot / .ram_hot2, copied at boot by its
- * main.c; calls between it and XIP through pointers). fm1-base's device/app.ld has no such sections: the linker would
- * leave them orphans after .text, in no image tools/build.py makes (it copies .text, .ram_text and .data), and its RAM
- * code (.ram_text, 32 KiB) is for what runs with the flash off: no calls (its check). Here the audio path runs from the
- * XIP flash, as core.h's own ASM_CHECK builds have it (a gap: the cache's misses, unmeasured on an FM-1) */
+ * main.c), out of the XIP cache's way. fm1-base's device/app.ld has no such sections (the linker would leave them
+ * orphans after .text, in no image tools/build.py makes), and its .ram_text is for code that runs with the flash off:
+ * no calls (tools/build.py check). Its RAM code window (RAMTEXT, 32 KiB, copied at boot with .ram_text) also takes
+ * .c1_text, code that may call into the flash because it runs only inside the audio interrupt, and fm1-base turns the
+ * flash off only with the interrupts off (tools/build.py's notes on .c1_text). The same holds for Optimist's audio
+ * path, which could go there (a trial-local use of a section fm1-base made for its second core's loop; cpu2 is off).
+ * It does not fit (measured, the dev profile): HOT 20,936 B + HOT2 21,574 B + fm1-base's own .ram_text 3,130 B =
+ * 45,640 B of the 32,768. Nor does half of it: HOT and HOT2 call each other directly (both RAM code in Optimist's
+ * image: mix_block -> mix_finish, fx_buses -> dly_run / rev_* / rs_*, drums_mix -> dins_of / dins_post ...), and a
+ * direct call between RAM and XIP is out of the pi32v2's reach (R_PI32V2_LONG_JUMP_23M2). So the whole audio path runs
+ * from XIP (OPT_HOT_RAM 0, core.h's own ASM_CHECK way; a gap: the cache's misses, unmeasured on an FM-1); OPT_HOT_RAM 1
+ * puts both in .c1_text, for an fm1-base whose RAMTEXT has the room (calls from XIP into it: FAR, as core/audio.c) */
+#ifndef OPT_HOT_RAM
+#define OPT_HOT_RAM 0
+#endif
 #undef HOT
 #undef HOT2
+#if OPT_HOT_RAM
+#define HOT __attribute__((section(".c1_text.opt_hot")))
+#define HOT2 __attribute__((section(".c1_text.opt_hot2")))
+#else
 #define HOT
 #define HOT2
+#endif
 #include "engines/engines.c"
 #include "drums/drums.c"
 #include "core/params.c"
@@ -113,7 +135,7 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
     song.master_q12 = master_q12 > 4096u ? 4096u : master_q12;
     for (f = 0; f + CTL <= n; f += CTL) {
         int32_t *o = lr + 2u * f;
-        mix_block(o, CTL);
+        FAR(mix_block)(o, CTL);                     /* (HOT: RAM code with OPT_HOT_RAM; called as core/audio.c does) */
         for (i = 0; i < 2u * CTL; i++)
             o[i] <<= OUT_SHIFT;
     }

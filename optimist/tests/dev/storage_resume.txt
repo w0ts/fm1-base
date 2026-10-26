@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/storage_resume.txt for the dev profile's build: a power-on with the flash tests/dev/storage_restart.txt left
+# (OPT_FLASH=optimist/build/host/trial-flash2.bin): the work resumed from the autosave's newer copy, B at 0xFE000, BPM
+# 120; the stores as they were.
+wait 1500
+expect bpm 120
+expect proj.3 1
+expect up.1 1
+expect w.0xA0000 0x32474C53
+tap ENV
+wait 100
+expect gv2 116

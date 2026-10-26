@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/storage_restart.txt for the dev profile's build (tests/dev/storage.txt): a power-on in a new process with the
+# flash tests/dev/storage.txt left (OPT_FLASH=optimist/build/host/trial-flash.bin), or the one Optimist's own simulator
+# wrote with the same profile doing the same (optimist-flash.bin: optsim.py write, Optimist's firmware on a blank flash,
+# as a user's FM-1 has it). Everything saved is found again through the UI: the work as it was left (the autosave: BPM
+# 116, DEC 116), the setting (KNOB COLORS ON, the settings record at 0xFC000), project 3 opened over a NEW project, U01
+# loaded over a changed sound. Then a second autosave (copy B, 0xFE000) with BPM 120, and the flash dumped again
+# (OPT_DUMP) for tests/dev/storage_resume.txt.
+wait 1500
+expect bpm 116
+expect proj.3 1
+expect up.1 1
+expect up.2 0
+expect panel_hits 0
+expect w.0xA0000 0x32474C53
+tap ENV
+wait 100
+expect gv2 116
+# the setting: SYSTEM, GENERAL's KNOB COLORS
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+expect gv1 1
+tap HOME
+wait 100
+# a NEW project (PROJECT, card 4, SAVE, SAVE): the defaults, BPM 111, DEC 112
+tap SAVE
+wait 200
+expect scr 3
+expect row 0
+turn K4 1
+wait 100
+tap SAVE
+wait 200
+tap SAVE
+wait 500
+expect bpm 111
+tap ENV
+wait 100
+expect gv2 112
+# project 3 opened (PROJECT, ACTION LOAD, key 3, SAVE): BPM 116, DEC 116
+tap SAVE
+wait 200
+key w2 down
+wait 50
+key w2 up
+wait 100
+tap SAVE
+wait 500
+expect bpm 116
+tap ENV
+wait 100
+expect gv2 116
+# the sound changed (DEC 110), then U01 loaded (PROJECT's USER row, ACTION LOAD, key 1, SAVE): DEC 116
+turn K2 -6
+wait 100
+expect gv2 110
+tap SAVE
+wait 200
+spin SELECT 1
+wait 100
+expect row 1
+key w0 down
+wait 50
+key w0 up
+wait 100
+tap SAVE
+wait 500
+tap ENV
+wait 100
+expect gv2 116
+shot st-loaded.png
+# the tempo 120, hands off: the autosave's second copy, B at 0xFE000 (copy A, 0x9F000, stays the older)
+tap GLO
+wait 100
+turn K1 4
+wait 100
+expect bpm 120
+tap HOME
+wait 12000
+expect w.0xFE000 0x554C4546
+expect w.0x9F000 0x554C4546
+flash_dump $OPT_DUMP

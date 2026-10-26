@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/ui.txt for the dev profile's build (the default): Optimist's UI on fm1-base's canvas and panel. It boots into the
+# mixer, the knobs and the buttons move it as on an FM-1, and the keys still play. optimist/run.sh builds and runs it:
+#   optimist/build/host/optimist_host optimist/tests/dev/ui.txt optimist/build/host
+# (the screens: optimist/build/host/ui-*.png). "cells" prints the screen, its cursor row and its four cards.
+wait 600
+# the mixer (SCR_HOME 0), track 1, its MIX row: VOLUME -4.0 dB
+expect scr 0
+expect track 0
+expect row 1
+expect gv1 104
+cells
+shot ui-mix.png
+# KNOB 1 three detents down: VOLUME -5.5 dB (its value 101) (the card's value)
+turn K1 -3
+wait 100
+expect gv1 101
+cells
+shot ui-mix-volume.png
+# SELECT one detent: the cursor to the next row, INSERT (its cards S1 DIST, S2 FILTER: the third card 6, the dev
+# profile's inserts before it in the list)
+turn SELECT 1
+wait 100
+expect gv3 6
+cells
+# ENV tapped: SOUND (1), its ENV row; KNOB 2 turns DEC up
+tap ENV
+wait 100
+expect scr 1
+expect row 0
+expect gv2 112
+turn K2 4
+wait 100
+expect gv2 116
+cells
+shot ui-env.png
+# ALGORITHM one detent: track 2 (DIGITAL RHODES), its ENV
+turn ALGO 1
+wait 100
+expect track 1
+cells
+shot ui-env-t2.png
+# GLO tapped: GLOBAL (9), its TEMPO line: BPM 111; KNOB 1 up five: 116
+tap GLO
+wait 100
+expect scr 9
+expect bpm 111
+turn K1 5
+wait 100
+expect bpm 116
+cells
+shot ui-global.png
+# SEQ tapped: STEP (5), track 2's piano roll
+tap SEQ
+wait 100
+expect scr 5
+cells
+shot ui-step.png
+# HOME tapped: back to the mixer; PLAY tapped: playing (its LEDs: "leds"), again: stopped
+tap HOME
+wait 100
+expect scr 0
+tap PLAY
+wait 600
+expect playing 1
+leds
+shot ui-playing.png
+tap PLAY
+wait 100
+expect playing 0
+# a key still plays through Optimist's engine (track 2, the selected one), the UI on
+peakreset
+key 7 down
+wait 300
+expect voices >0
+expect peak_db_min -40
+leds
+shot ui-key.png
+key 7 up
+wait 1500
+expect voices 0

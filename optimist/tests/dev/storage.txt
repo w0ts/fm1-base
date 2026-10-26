@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/storage.txt for the trial built with its copy of Optimist's dev profile (profiles/dev-171e96a3.config, the
+# default build): the same steps in that build's UI (PATTERNS: PROJECT's rows PROJECT, USER, TOOLS, MEMORY; SYSTEM's
+# GENERAL right after INFO, KNOB COLORS its first card) and at that build's addresses, the reference profile's: the
+# section log in format 2 ("SLG2", the projects' log) at 0xA0000..0xBFFFF (32 sectors: no sample slots built), nothing
+# at 0x97000. A sound and the tempo changed, KNOB COLORS on, the project saved to project 3 and the sound to U01; a
+# restart finds it all; the flash dumped (optimist/build/host/trial-flash.bin) for tests/dev/storage_restart.txt.
+#   optimist/build/host/optimist_host optimist/tests/dev/storage.txt optimist/build/host
+# Flash words are little-endian: 0x554C4546 "FELU" (storage.c's object header), 0x34425055 "UPB4" (upreset.c's bank),
+# 0x32474C53 "SLG2" (sec_log.c's section log, format 2), -1 an erased word.
+wait 600
+# a blank FM-1: the section log Optimist makes at its first start (format 2, at 0xA0000), nothing in the old slots'
+# 0x97000 (format 1's place) and nothing of Optimist's on the platform's OBJ_PANEL (0xD8000 / 0xD9000)
+expect panel_hits 0
+expect proj.3 0
+expect up.1 0
+expect w.0xFC000 -1
+expect w.0x97000 -1
+expect w.0xA0000 0x32474C53
+expect w.0x9F000 -1
+expect w.0xDC000 -1
+expect w.0xC0000 -1
+# a sound: track 1's ENV, DEC 112 -> 116; the tempo: GLOBAL's BPM 111 -> 116
+tap ENV
+wait 100
+turn K2 4
+wait 100
+expect gv2 116
+tap GLO
+wait 100
+turn K1 5
+wait 100
+expect bpm 116
+# a setting: SYSTEM (GLO again), GENERAL's KNOB COLORS OFF -> ON; the settings record saved: copy A, 0xFC000
+# (outside plat.h's windows: the app's unit writes it, app.c opt_glob_*)
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+expect gv1 0
+turn K1 1
+wait 100
+expect gv1 1
+tap HOME
+wait 300
+expect w.0xFC000 0x554C4546
+expect w.0xFD000 -1
+# the project to project 3: SAVE (PROJECT), ACTION SAVE, key 3, SAVE, the NAME page's SAVE; its records in the log
+tap SAVE
+wait 200
+expect scr 3
+expect row 0
+turn K2 1
+wait 100
+key w2 down
+wait 50
+key w2 up
+wait 100
+tap SAVE
+wait 300
+tap SAVE
+wait 300
+msg SAVED
+expect proj.3 1
+expect w.0xA0000 0x32474C53
+expect w.0x97000 -1
+# the sound to U01: PROJECT's USER row, ACTION SAVE, key 1, SAVE, the NAME page's SAVE; bank A's copy A at 0xDC000
+spin SELECT 1
+wait 100
+expect row 1
+turn K2 1
+wait 100
+key w0 down
+wait 50
+key w0 up
+wait 100
+tap SAVE
+wait 300
+tap SAVE
+wait 300
+msg SAVED U01
+expect up.1 1
+expect up.2 0
+expect w.0xDC000 0x554C4546
+expect w.0xDC100 0x34425055
+expect w.0xDE000 -1
+# hands off for the autosave's 10 s: the working project's copy A at 0x9F000, its drum record at 0xE5000 (XDATA1)
+wait 12000
+expect w.0x9F000 0x554C4546
+expect w.0xE5000 0x554C4546
+expect w.0xFE000 -1
+expect panel_hits 0
+shot st-saved.png
+flash_dump optimist/build/host/trial-flash.bin
+# a restart in this process: the flash kept, Optimist's power-on; the work comes back as it was left
+reboot
+wait 1500
+expect bpm 116
+expect proj.3 1
+expect up.1 1
+expect up.2 0
+tap ENV
+wait 100
+expect gv2 116

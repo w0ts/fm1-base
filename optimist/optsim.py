@@ -2,24 +2,29 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Henri David
 """Optimist's own simulator (its whole firmware, firmware/sim/sim.c on firmware/sim/hal: the flash a 1 MiB RAM image
-at the FM-1's offsets), built from Optimist's tree with the switches the trial's unit has (none: Optimist's source
-defaults, core/registry.h), for the trial's storage checks (optimist/run.sh):
+at the FM-1's offsets), built from Optimist's tree with the profile the trial's copy holds as an FM-1 runs it
+(build/optgen/felucca_config_profile.h, gen_optimist.py: Optimist's dev profile, its lines down to the trial's marker;
+OPT_PROFILE=none: empty, Optimist's source defaults), for the trial's storage checks (optimist/run.sh):
 
   optsim.py build                  build/optsim/sim.wasm (emcc), its headers in build/optsim/gen
   optsim.py write OUT.bin          Optimist's firmware on a blank flash: the steps of tests/storage.txt (a sound, the
                                    tempo, KNOB COLORS, project slot 3, user preset U01, the autosave), its flash to OUT
   optsim.py touch IN.bin OUT.bin   Optimist's firmware powered on with IN (the trial's flash): the tempo 4 up, the
                                    autosave; its flash to OUT
+  optsim.py idle IN.bin OUT.bin    Optimist's firmware powered on with IN, hands off for 15 s: what a power-on writes
+                                   by itself (the autosave of the work resumed), to OUT
   optsim.py same OPT.bin TRIAL.bin the two flashes after the same steps: every 4 KiB sector the same byte for byte, but
-                                   the two that hold what this build has and the trial's lacks (felucca.c's own
-                                   defaults: FELUCCA_USB_AUDIO 1): the section log's (0x97000: the project's FX
-                                   record, id 107) and the settings record's (0xFC000: its "UAR3" USB routing)
+                                   what this build has and the trial's lacks (Optimist's USB audio): in the section
+                                   log (0x97000 format 1, 0xA0000 format 2) the FX records (their USB input track),
+                                   the other records compared one by one; in the settings record (0xFC000) the USB
+                                   routing ("UAR3") and the header's CRCs
 
 The build uses Optimist's tools/sim.py (its flags, its compile) without its generate step (that writes Optimist's
-tree: gen_param_help.py's copy into web/editor.html): an empty felucca_config.h (the source defaults, as the trial),
-the trial's generated headers (build/optgen, gen_optimist.py) and Optimist's font and icon generators into
-build/optsim/gen. Nothing is written in Optimist's tree (no bytecode either). The driving: tests/optsim.mjs (node)."""
+tree: gen_param_help.py's copy into web/editor.html): felucca_config.h the profile's (above), the trial's generated
+headers (build/optgen, gen_optimist.py) and Optimist's font and icon generators into build/optsim/gen. Nothing is
+written in Optimist's tree (no bytecode either). The driving: tests/optsim.mjs (node)."""
 import os
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -46,7 +51,10 @@ def tree():
 
 def gen_headers(t):
     GEN.mkdir(parents=True, exist_ok=True)
-    (GEN / "felucca_config.h").write_text("/* empty: Optimist's source defaults (core/registry.h), as the trial's unit */\n")
+    prof = BUILD / "optgen" / "felucca_config_profile.h"   # (gen_optimist.py: the profile as an FM-1 runs it)
+    if not prof.exists():
+        raise SystemExit(f"optsim: {prof} missing (tools/build.py optimist --host first)")
+    (GEN / "felucca_config.h").write_text(prof.read_text())
     for h in SHARED:
         link = GEN / h
         if link.is_symlink() or link.exists():
@@ -72,28 +80,53 @@ def build():
 def drive(*args):
     if not WASM.exists():
         raise SystemExit(f"optsim: {WASM} missing (optsim.py build)")
-    r = subprocess.run(["node", str(DRIVER), str(WASM), *args])
+    ui = "defaults" if os.environ.get("OPT_PROFILE") == "none" else "dev"   # (tests/optsim.mjs: the UI's layout)
+    r = subprocess.run(["node", str(DRIVER), str(WASM), *args], env={**os.environ, "OPTSIM_UI": ui})
     if r.returncode:
         raise SystemExit(f"optsim: {' '.join(args)} failed")
 
 
-# the sectors the simulator's build writes more into (see the docstring): their differences shown, not failed
-BUILD_DIFF = {0x97000: "the section log (the simulator's build: the project's FX record, id 107)",
-              0xFC000: "the settings record (the simulator's build: its USB audio routing, UAR3)"}
+# what the simulator's build writes and the trial's does not (Optimist's switches the trial has off: USB audio), by name:
+#   the section log  the FX records (fx_rec.c: the USB input track's UT_TLV, ids 105..121 the scenes' and the autosave's,
+#                    140 the project's): the other records the same, in the same order (id, project, bytes)
+#   the settings     its header's CRCs and the USB audio routing (persist_rec.c PER4: ua_src .. ua_mark3, "UAR3")
+LOG = {"none": (0x97000, 8), "dev": (0xA0000, 32)}  # (sec_log.c: format 1 / format 2 with no sample slots built)
+FX_IDS = set(range(105, 122)) | {140}
+SET_OK = set(range(16, 20)) | set(range(28, 32)) | set(range(0x2B6, 0x2DC))
+
+
+def log_records(img, base, n):
+    """(id, project, dead, bytes) of every record in the log's sectors, in their order (sec_log.c sec_rhead_t)"""
+    out = []
+    for s in range(base, base + n * 0x1000, 0x1000):
+        off = 16
+        while off + 16 <= 0x1000:
+            m, rid, _, _, ln, proj, dead, _ = struct.unpack_from("<HBBIHBBI", img, s + off)
+            if m == 0xFFFF:
+                break
+            out.append((rid, proj, dead, img[s + off + 16:s + off + 16 + ln]))
+            off += 16 + ((ln + 3) & ~3)
+    return out
 
 
 def same(a, b):
     x, y = Path(a).read_bytes(), Path(b).read_bytes()
     if len(x) != 0x100000 or len(y) != 0x100000:
         raise SystemExit("optsim: same: two 1 MiB images")
-    bad = 0
+    base, n = LOG["none" if os.environ.get("OPT_PROFILE") == "none" else "dev"]
+    rx, ry = log_records(x, base, n), log_records(y, base, n)
+    fx = [r for r in rx if r[0] in FX_IDS] + [r for r in ry if r[0] in FX_IDS]
+    log_ok = [r for r in rx if r[0] not in FX_IDS] == [r for r in ry if r[0] not in FX_IDS]
+    print(f"  {'ok  ' if log_ok else 'FAIL'} the section log {base:#07x}: {len(rx)} / {len(ry)} records, the same but the "
+          f"FX records ({len(fx)}: ids {sorted({r[0] for r in fx})})")
+    bad = 0 if log_ok else 1
     used = sum(1 for s in range(0, len(x), 0x1000) if x[s:s + 0x1000] != b"\xff" * 0x1000)
     for s in range(0, len(x), 0x1000):
-        n = sum(1 for i in range(s, s + 0x1000) if x[i] != y[i])
-        if not n:
+        d = [i - s for i in range(s, s + 0x1000) if x[i] != y[i]]
+        if not d or base <= s < base + n * 0x1000:
             continue
-        why = BUILD_DIFF.get(s)
-        print(f"  {'ok  ' if why else 'FAIL'} sector {s:#07x}: {n} bytes differ" + (f" ({why})" if why else ""))
+        why = "the settings record: its CRCs and the USB audio routing" if s == 0xFC000 and set(d) <= SET_OK else ""
+        print(f"  {'ok  ' if why else 'FAIL'} sector {s:#07x}: {len(d)} bytes differ" + (f" ({why})" if why else ""))
         bad += not why
     print(f"{'FAIL' if bad else '  ok'} optsim same: {used} sectors written by Optimist, {bad} differ unexplained")
     if bad:
@@ -107,6 +140,8 @@ def main(argv):
         drive("write", argv[1])
     elif argv[:1] == ["touch"] and len(argv) == 3:
         drive("touch", argv[1], argv[2])
+    elif argv[:1] == ["idle"] and len(argv) == 3:
+        drive("idle", argv[1], argv[2])
     elif argv[:1] == ["same"] and len(argv) == 3:
         same(argv[1], argv[2])
     else:

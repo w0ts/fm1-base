@@ -23,7 +23,17 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
  * gfx.c a pointer to it (set at power-on: opt_core_init, before anything draws). Both units' gfx.c are the same file
  * with the same APP_CANVAS_PX (app.h gives none): opt_canvas answers 0 for a bigger one */
 #define cv_px (*opt_cv)
+/* one copy of the fonts: the faces this unit draws with (FONT_L, FONT_S) are the app's unit's (app.c opt_font_*: its
+ * own splash and messages use the same two), reached through pointers. build/gen/felucca_font.h's own copies here go
+ * by other names that nothing reads (static: the compiler leaves them out), like the faces neither unit uses */
+#define FONT_L opt_font_L_unused
+#define FONT_S opt_font_S_unused
 #include "gfx.c"                           /* fm1-base's (device/gfx.c): its fonts from build/gen/felucca_font.h */
+#undef FONT_L
+#undef FONT_S
+extern const felucca_font_t *const opt_font_l, *const opt_font_s;   /* (app.c) */
+#define FONT_L (*opt_font_l)
+#define FONT_S (*opt_font_s)
 static void opt_cv_init(void) { opt_cv = (uint16_t (*)[CV_MAX])opt_canvas(CV_MAX); }
 #include "opt_gfx.h"
 
@@ -55,6 +65,7 @@ static void opt_cv_init(void) { opt_cv = (uint16_t (*)[CV_MAX])opt_canvas(CV_MAX
 void opt_core_init(void)
 {
     uint32_t i;
+    tab_expand();                                /* the smooth tables into RAM (core/opt_core.c TAB_CODED_FORCE), first */
     opt_cv_init();                               /* the canvas (the app's unit's), before anything draws */
     persist_boot();                              /* the settings record, the stores found (before settings_init) */
     fm6_boot();

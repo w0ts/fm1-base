@@ -6,9 +6,14 @@ name = "optimist"
 id_prefix = "FM-1_79"          # a trial identity (dev FM-1_7900), not Optimist's FM-1_700
 usb_manufacturer = "Optimist"
 usb_product = "Optimist trial FM-1"
-o2 = ["core/opt_core.c"]       # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
-                               # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it)
+o2 = ["core/opt_core.c", "core/opt_fpu_*.c"]
+                               # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
+                               # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it); opt_fpu_*: ACID, ANALOG
+                               # 2's filter models and the X0X kits, float units of their own on the FM-1 (as Optimist
+                               # builds them), empty on the host (inside opt_core.c there)
+o2_include = ["build/optgen/felucca_config.h"]   # the build's switches (gen_optimist.py: the profile copy through Optimist's builder)
 include = ["build/optimist/firmware/src", "build/optgen"]   # Optimist's tree (gen_optimist.py links it), its headers
+ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI at minsize, the rest -Os: as Optimist builds felucca.c)
 gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)
 words = "words.tsv"
 font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)

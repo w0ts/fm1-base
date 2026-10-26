@@ -10,9 +10,16 @@
    outputs come here, OPTIMIST_BUILD_DIR). OPT_TREE_COPY=1: build/optimist a copy of Optimist's firmware/ instead
    (src/ and hal/, the unit's sources), for the device build: fm1-base's tools/build.py gives the toolchain its
    include paths relative to fm1-base's tree (inc(): the container mounts only that), and a link out of it fails.
-2. build/optgen: Optimist's generated headers for the audio core (tables, samples, drum kits, the 909 samples,
-   wavetables), every sample set as Optimist's host tests have them (tools/build.py --host-headers' environment);
-   made again only when Optimist's HEAD or its working tree changed (build/optgen/stamp)."""
+2. build/optgen/felucca_config.h: the build's switches, from the trial's copy of an Optimist profile (OPT_PROFILE, a
+   path relative to this directory; default PROFILE: Optimist's dev) through Optimist's own builder
+   (tools/builder/configure.py of the tree: parse, validate, the header, the generators' environment), as Optimist's
+   tools/build.py setup_config makes it; every unit includes it first (fm1.toml o2_include). The copy's lines down to
+   its trial marker are the profile as an FM-1 runs it: build/optgen/felucca_config_profile.h (optsim.py: Optimist's
+   own simulator). OPT_PROFILE=none: Optimist's source defaults (core/registry.h), both headers empty, every sample set
+   as Optimist's host tests have them.
+3. build/optgen: Optimist's generated headers for the audio core (tables, samples, drum kits, the 909 samples,
+   wavetables), in the profile's environment (its sample sets); made again only when Optimist's HEAD, its working
+   tree or the profile changed (build/optgen/stamp)."""
 import os
 import subprocess
 import sys
@@ -22,8 +29,10 @@ APP = Path(__file__).resolve().parent
 BUILD = APP / "build"
 LINK = BUILD / "optimist"
 GEN = BUILD / "optgen"
-# Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off
+# Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off (OPT_PROFILE=none)
 HOST_ENV = {"FELUCCA_SAMPLES_SKIP": "", "FELUCCA_SLICE": "0"}
+PROFILE = "profiles/dev-171e96a3.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after)
+MARKER = "# ---- the trial:"                   # (the copy's line where the trial's own changes start)
 # the audio core's and the UI's headers (Optimist tools/build.py generate(): its colours for the UI; its fonts are not
 # used (fm1-base's canvas draws with fm1-base's), its icons nowhere, the help lines off (gen_param_help.py would also
 # rewrite Optimist's web/editor.html))
@@ -64,6 +73,43 @@ def link(tree):
     LINK.symlink_to(tree, target_is_directory=True)
 
 
+def profile():
+    """-> the profile copy's path, or None (OPT_PROFILE=none: the source defaults)"""
+    v = os.environ.get("OPT_PROFILE", PROFILE)
+    if v == "none":
+        return None
+    p = (APP / v).resolve()
+    if not p.is_file():
+        raise SystemExit(f"gen_optimist: no profile {p} (OPT_PROFILE)")
+    return p
+
+
+def config(tree, prof):
+    """the two headers and the generators' environment (Optimist's tools/build.py setup_config, its configure.py)"""
+    if prof is None:
+        for h in ("felucca_config.h", "felucca_config_profile.h"):
+            (GEN / h).write_text("/* empty: Optimist's source defaults (core/registry.h), OPT_PROFILE=none */\n#pragma once\n")
+        return dict(HOST_ENV)
+    sys.dont_write_bytecode = True             # (no __pycache__ in Optimist's tree)
+    sys.path.insert(0, str(tree / "tools" / "builder"))
+    import configure
+    text = prof.read_text()
+    if MARKER not in text:
+        raise SystemExit(f"gen_optimist: {prof} has no line {MARKER!r}")
+    env = None
+    for part, out in ((text, "felucca_config.h"), (text.split(MARKER)[0], "felucca_config_profile.h")):
+        cfg, name = configure.parse(part)
+        err, warn, _ = configure.validate(cfg)
+        for w in warn:
+            print(f"  warn  {out}: {w}")
+        if err:
+            raise SystemExit(f"gen_optimist: {prof.name} ({out}): " + "; ".join(err))
+        configure.write_header(cfg, name, GEN / out)
+        if env is None:
+            env = configure.flags(cfg)[1]       # (the trial's: its sample sets, SLICE)
+    return env
+
+
 def stamp(tree):
     """Optimist's HEAD and its working tree's changes (a tree with edits gets new headers)"""
     def git(*a):
@@ -74,11 +120,15 @@ def stamp(tree):
 
 def generate(tree):
     GEN.mkdir(parents=True, exist_ok=True)
-    key = stamp(tree)
+    prof = profile()
+    key = stamp(tree) + (f"profile {prof}\n" + prof.read_text() if prof else "profile none\n")
     st = GEN / "stamp"
-    if st.exists() and st.read_text() == key and all((GEN / out).exists() for _, out in GENERATORS):
+    outs = [out for _, out in GENERATORS] + ["felucca_config.h", "felucca_config_profile.h"]
+    if st.exists() and st.read_text() == key and all((GEN / out).exists() for out in outs):
         return
-    env = {**os.environ, **HOST_ENV, "OPTIMIST_BUILD_DIR": str(GEN)}   # (gen_samples.py's cache: here, not in Optimist's tree)
+    st.unlink(missing_ok=True)
+    genv = config(tree, prof)
+    env = {**os.environ, **genv, "OPTIMIST_BUILD_DIR": str(GEN)}   # (gen_samples.py's cache: here, not in Optimist's tree)
     for tool, out in GENERATORS:
         cmd = [sys.executable, str(tree / "tools" / tool), str(GEN / out)]
         if tool == "gen_samples.py":
@@ -92,7 +142,7 @@ def generate(tree):
             sys.stderr.write(r.stdout + r.stderr)
             raise SystemExit(f"gen_optimist: Optimist's {tool} failed")
     st.write_text(key)
-    print(f"optimist {tree} (headers: {GEN})")
+    print(f"optimist {tree} (headers: {GEN}; profile {prof.name if prof else 'none: the source defaults'})")
 
 
 def main():

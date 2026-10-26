@@ -26,11 +26,14 @@ run() {
 run encoder sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -o $OUT/encoder_test tests/encoder_test.c && $OUT/encoder_test"
 run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test tests/trs_test.c && $OUT/trs_test"
 # USB audio (felucca-bsp's chip/usb.c, tests/uac_test.c) as fm1-base builds it: the default (its descriptors byte for
-# byte as before an app's own channels), and an app's 4 channels in 24-bit with the output
+# byte as before an app's own channels), an app's 4 channels in 24-bit with the output, and the input on the
+# computer's clock (usb_audio_in_host_clock: minutes of a model host and crystal)
 run usb-audio sh -c "$CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable \
-    -Wno-missing-field-initializers -Ibsp/chip -o $OUT/uac_test bsp/tests/uac_test.c && $OUT/uac_test && \
+    -Wno-missing-field-initializers -Ibsp/chip -o $OUT/uac_test bsp/tests/uac_test.c -lm && $OUT/uac_test && \
     $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
-    -Ibsp/chip -DTEST_CH=4 -DTEST_24=1 -o $OUT/uac_test4 bsp/tests/uac_test.c && $OUT/uac_test4"
+    -Ibsp/chip -DTEST_CH=4 -DTEST_24=1 -o $OUT/uac_test4 bsp/tests/uac_test.c -lm && $OUT/uac_test4 && \
+    $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
+    -Ibsp/chip -DTEST_HC=1 -o $OUT/uac_test_hc bsp/tests/uac_test.c -lm && $OUT/uac_test_hc"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

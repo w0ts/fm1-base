@@ -43,6 +43,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_audio_in_channels = 4  the USB audio input's channels, 1..8 (FM1B_UAC_CH; default 2, the master): the app gives
                              them (app.h APP_USB_CAPTURE, plat.h)
   usb_audio_in_24bit = true  the USB audio input in 24-bit too (FM1B_UAC_24: a second alt setting, 16-bit stays)
+  usb_audio_in_host_clock = true   the USB audio input on the computer's clock (FM1B_UAC_HOST_CLOCK: felucca-bsp's
+                             FELUCCA_UAC_HOST_CLOCK): resampled to exactly 44.1 kHz, the plain packet pattern, a
+                             synchronous endpoint, for a computer that monitors the input to its output (one clock)
   usb_host = true            the USB port as a MIDI host when the app asks (FM1B_USB_HOST: felucca-bsp's
                              FELUCCA_USB_HOST, docs/USB_HOST.md; plat_usb_host in plat.h): a USB-MIDI controller or
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
@@ -560,6 +563,8 @@ def build_app():
         flags.append(f"-DFM1B_UAC_CH={ch}")
     if "usb_audio_in_24bit" in CONF:
         flags.append(f"-DFM1B_UAC_24={int(bool(CONF['usb_audio_in_24bit']))}")
+    if "usb_audio_in_host_clock" in CONF:
+        flags.append(f"-DFM1B_UAC_HOST_CLOCK={int(bool(CONF['usb_audio_in_host_clock']))}")
     for flag in ("FM1B_CDC", "FM1B_UAC", "FM1B_UAC_OUT", "FM1B_TRS"):
         v = os.environ.get(flag)    # unset: fm1.toml's, the app's (app.h) or the platform's default (device/unity.c)
         if v in ("0", "1"):

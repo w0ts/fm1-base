@@ -7,6 +7,10 @@ at the FM-1's offsets), built from Optimist's tree with the profile the trial's 
 OPT_PROFILE=none: empty, Optimist's source defaults), for the trial's storage checks (optimist/run.sh):
 
   optsim.py build                  build/optsim/sim.wasm (emcc), its headers in build/optsim/gen
+  optsim.py build-trial            build/optsim-trial/sim.wasm: the same with the trial's own switches (the profile
+                                   copy whole, its trial block too: build/optgen/felucca_config.h), for the editor's
+                                   checks (edproof.py: the same build on both sides)
+  optsim.py ed SCRIPT [FLASH]      that one driven by a SysEx script (tests/optsim_ed.mjs), on FLASH (a 1 MiB image)
   optsim.py write OUT.bin          Optimist's firmware on a blank flash: the steps of tests/storage.txt (a sound, the
                                    tempo, KNOB COLORS, project slot 3, user preset U01, the autosave), its flash to OUT
   optsim.py touch IN.bin OUT.bin   Optimist's firmware powered on with IN (the trial's flash): the tempo 4 up, the
@@ -49,32 +53,45 @@ def tree():
     return t
 
 
-def gen_headers(t):
-    GEN.mkdir(parents=True, exist_ok=True)
-    prof = BUILD / "optgen" / "felucca_config_profile.h"   # (gen_optimist.py: the profile as an FM-1 runs it)
+def gen_headers(t, gen=GEN, config="felucca_config_profile.h"):
+    gen.mkdir(parents=True, exist_ok=True)
+    prof = BUILD / "optgen" / config         # (gen_optimist.py: the profile as an FM-1 runs it; or the trial's own)
     if not prof.exists():
         raise SystemExit(f"optsim: {prof} missing (tools/build.py optimist --host first)")
-    (GEN / "felucca_config.h").write_text(prof.read_text())
+    (gen / "felucca_config.h").write_text(prof.read_text())
     for h in SHARED:
-        link = GEN / h
+        link = gen / h
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(BUILD / "optgen" / h)
     for tool, out in (("gen_font.py", "felucca_font.h"), ("gen_icons.py", "felucca_icons.h")):
-        if not (GEN / out).exists():
-            subprocess.run([sys.executable, str(t / "tools" / tool), str(GEN / out)], cwd=t, check=True)
+        if not (gen / out).exists():
+            subprocess.run([sys.executable, str(t / "tools" / tool), str(gen / out)], cwd=t, check=True)
 
 
-def build():
+TRIAL_OUT = BUILD / "optsim-trial"
+TRIAL_WASM = TRIAL_OUT / "sim.wasm"
+
+
+def build(trial=False):
     t = tree()
     for h in SHARED:
         if not (BUILD / "optgen" / h).exists():
             raise SystemExit(f"optsim: build/optgen/{h} missing (tools/build.py optimist --host first)")
-    gen_headers(t)
+    gen, wasm = (TRIAL_OUT / "gen", TRIAL_WASM) if trial else (GEN, WASM)
+    gen_headers(t, gen, "felucca_config.h" if trial else "felucca_config_profile.h")
     sys.path.insert(0, str(t / "tools"))
     import sim                                 # Optimist's tools/sim.py: its flags and its compile
-    sim.compile_sim(GEN, WASM, True)
-    print(f"optsim   {WASM}")
+    sim.compile_sim(gen, wasm, True)
+    print(f"optsim   {wasm}")
+
+
+def ed(script, flash=None):
+    if not TRIAL_WASM.exists():
+        raise SystemExit(f"optsim: {TRIAL_WASM} missing (optsim.py build-trial)")
+    r = subprocess.run(["node", str(APP / "tests" / "optsim_ed.mjs"), str(TRIAL_WASM), script, *([flash] if flash else [])])
+    if r.returncode:
+        raise SystemExit(f"optsim: ed {script} failed")
 
 
 def drive(*args):
@@ -136,6 +153,10 @@ def same(a, b):
 def main(argv):
     if argv[:1] == ["build"]:
         build()
+    elif argv[:1] == ["build-trial"]:
+        build(True)
+    elif argv[:1] == ["ed"] and len(argv) in (2, 3):
+        ed(*argv[1:])
     elif argv[:1] == ["write"] and len(argv) == 2:
         drive("write", argv[1])
     elif argv[:1] == ["touch"] and len(argv) == 3:

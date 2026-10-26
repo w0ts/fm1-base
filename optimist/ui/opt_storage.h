@@ -18,7 +18,12 @@
 
 #include "../hal/fm1_flash_map.h"              /* (Optimist's hal/, beside its src/ on the include path: FL_STORE_OK, FL_NEVER) */
 #define FELUCCA_FLASH 1                         /* (felucca.c: the flash driver and storage.c) */
+#if FELUCCA_EDITOR && FELUCCA_ED_MIRROR
+static uint8_t st_blank;                        /* a test session (ed_mirror.c, 108 kind 5; opt_editor.h): Optimist's own
+                                                 * data reads erased (a blank FM-1), nothing is written (felucca.c's) */
+#else
 #define st_blank 0                              /* (felucca.c without the mirror's test sessions) */
+#endif
 static uint8_t flash_ok;                        /* (persist_boot: fl_jedec_ram) */
 
 /* the globals' sectors 0xFC000..0xFEFFF: the app's unit (app.c opt_glob_*, core/opt_core.h) */
@@ -48,7 +53,12 @@ static void irq_restore(uint32_t f) { if (f) fm1_irq_on(); }
 
 static int st_read(uint32_t off, void *dst, uint32_t n)
 {
-    const uint8_t *p = opt_flash_at(off, n);
+    const uint8_t *p;
+    if (st_blank && FL_STORE_OK(off, n)) {
+        memset(dst, 0xFF, n);                   /* (a test session: erased) */
+        return 0;
+    }
+    p = opt_flash_at(off, n);
     if (!p)
         return -8;
     memcpy(dst, p, n);
@@ -58,6 +68,8 @@ static int st_erase(uint32_t off)
 {
     if (!FL_STORE_OK(off, 0x1000u))
         return -8;
+    if (st_blank)
+        return 0;                               /* (a test session: done, nothing erased) */
     if (PLAT_DATA_OK(off, 0x1000u))
         return plat_data_erase(off);
     if (plat_in(off, 0x1000u, OPT_GLOB_LO, OPT_GLOB_HI))
@@ -71,12 +83,23 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 {
     if (!FL_STORE_OK(off, n))
         return -8;
+    if (st_blank)
+        return 0;                               /* (a test session: done, nothing written) */
     if (PLAT_DATA_OK(off, n))
         return plat_data_write(off, src, n);
     if (plat_in(off, n, OPT_GLOB_LO, OPT_GLOB_HI))
         return opt_glob_write(off, src, n);
     return -8;
 }
+
+/* the editor's sample slot writes (io/editor/ed_user.c: Optimist's driver, fl_erase4k_quiet / fl_write) on the same
+ * three: inside the store's allow-list and plat.h's windows only, nothing in a test session */
+static int fl_erase4k_quiet(uint32_t off, uint32_t *took)
+{
+    *took = 0;
+    return st_erase(off);
+}
+static int fl_write(uint32_t off, const void *src, uint32_t n) { return st_prog(off, src, n); }
 
 /* felucca.c's order from here */
 #include "storage/storage.c"

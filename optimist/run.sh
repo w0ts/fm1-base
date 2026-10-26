@@ -13,6 +13,8 @@
 # writes (optsim.py idle), and storage_keep.txt: a setting saved keeps the settings record's fields the trial does not
 # build) and the two flashes are compared (optsim.py same: sector by sector, the section log record by
 # record); it also goes over the trial's flash (optsim.py touch) and the trial reads the result (storage_touched.txt).
+# The dev run then checks the web editor (edproof.py): the same SysEx to the trial and to Optimist's simulator built with
+# the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
 # the first python3 on PATH. OPTSIM=0: without Optimist's simulator (no emcc / node). PROFILES: the runs (default
 # "none dev").
@@ -43,6 +45,10 @@ run_profile() {                     # $1: dev (the trial's profile copy) or none
         fi
         "$PY" optimist/optsim.py touch $H/trial-flash2.bin $H/touched-flash.bin
         OPT_FLASH=$H/touched-flash.bin $H/optimist_host $T/storage_touched.txt $H
+        if [ "$1" != none ]; then   # (the editor: the trial's switches on both sides, every reply compared)
+            "$PY" optimist/optsim.py build-trial
+            "$PY" optimist/edproof.py $H/optimist-flash.bin $H/edproof
+        fi
     fi
 }
 

@@ -10,7 +10,7 @@ static const uint8_t OIN_PANEL_ID[14] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
 /* the panel now: fm1-base's labels to Optimist's matrix ids (panel.btn: the default map, or a calibration's) */
 static void opt_in_scan(void)
 {
-    uint32_t b = plat_buttons(), k = plat_keys(), m = 0, l, now = fm1_ticks(), ch;
+    uint32_t b = plat_buttons(), k = plat_keys() | fm1_rem_note, m = fm1_rem_btn & 0x3FFFu, l, now = fm1_ticks(), ch;
     for (l = 0; l < 14u; l++)
         if ((b >> l) & 1u)
             m |= 1u << (panel.btn[l] < 14u ? panel.btn[l] : OIN_PANEL_ID[l]);

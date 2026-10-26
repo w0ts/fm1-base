@@ -28,6 +28,14 @@ void app_ui_init(void);
 void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
+/* Optimist's web editor (ui/opt_editor.h): its frames from USB (APP_SYSEX), every SysEx byte (APP_SYSEX_BYTE: DX7
+ * SysEx, as Optimist's usb.c hands them to FM6), each main loop pass (APP_LOOP: the mirror, a restore's restart) */
+#define APP_SYSEX
+int app_sysex(const uint8_t *p, uint32_t n);
+#define APP_SYSEX_BYTE
+void app_sysex_byte(uint8_t b);
+#define APP_LOOP
+void app_loop(void);
 
 /* the host simulator's checks (host/plat_host.c "expect"): voices (sounding), blocks (rendered), keys (held, as the
  * render saw them); the UI's: scr (Optimist's SCR_*: 0 the mixer, 1 SOUND, 2 FX, 5 STEP, 7 TEMPO, 9 GLOBAL), row (its

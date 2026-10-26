@@ -17,8 +17,36 @@
 
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
 static void lcd_sync(void) { opt_lcd_sync(); }
+#if FELUCCA_ED_MIRROR
+/* the screen mirrored (editor cmd 106, io/editor/ed_mirror.c, ui/opt_editor.h): what is drawn goes to the client too, as
+ * Optimist's display/lcd.c sends it */
+static uint8_t mir_mute;                /* 1: what is drawn now is not mirrored (a mixer meter not due: op_mixdraw.c) */
+static uint32_t mir_meters_due(void);
+static uint32_t mir_meters_off(void);
+static void mir_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
+static void mir_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);
+static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
+{
+    if (!w || !h || x >= 240u || y >= 240u)
+        return;
+    if (x + w > 240u)
+        w = 240u - x;                   /* (clipped as lcd.c clips it: the mirror gets what the panel shows) */
+    if (y + h > 240u)
+        h = 240u - y;
+    opt_lcd_fill(x, y, w, h, c);
+    mir_fill(x, y, w, h, c);
+}
+static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
+{
+    if (!w || !h)
+        return;
+    opt_lcd_blit(x, y, w, h, px);
+    mir_blit(x, y, w, h, px);
+}
+#else
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { opt_lcd_fill(x, y, w, h, c); }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { opt_lcd_blit(x, y, w, h, px); }
+#endif
 /* one canvas for the two units: gfx.c's cv_px (69 KiB of the pool) is the app's unit's (app.c opt_canvas), this unit's
  * gfx.c a pointer to it (set at power-on: opt_core_init, before anything draws). Both units' gfx.c are the same file
  * with the same APP_CANVAS_PX (app.h gives none): opt_canvas answers 0 for a bigger one */
@@ -35,6 +63,10 @@ extern const felucca_font_t *const opt_font_l, *const opt_font_s;   /* (app.c) *
 #define FONT_L (*opt_font_l)
 #define FONT_S (*opt_font_s)
 static void opt_cv_init(void) { opt_cv = (uint16_t (*)[CV_MAX])opt_canvas(CV_MAX); }
+#if FELUCCA_ED_MIRROR
+static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px); }   /* (display/gfx.c: the canvas to the
+                                                                                         * mirror's client alone) */
+#endif
 #include "opt_gfx.h"
 
 /* ---- the panel: Optimist's HAL (hal/fm1_input.h) on plat.h */
@@ -60,11 +92,17 @@ static void opt_cv_init(void) { opt_cv = (uint16_t (*)[CV_MAX])opt_canvas(CV_MAX
 #include "ui/optimist/optimist.c"
 #undef scale
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
+#include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
 
 /* ---- power-on (system/main.c: settings_init, panel_init, felucca_init without a stored project) */
 void opt_core_init(void)
 {
     uint32_t i;
+#if FELUCCA_EDITOR && FELUCCA_ED_MIRROR
+    st_blank = mir_test_boot == MIR_TEST_MAGIC;  /* the mirror's client asked for a test session (ed_mirror.c, 108 kind 5) */
+    mir_test_boot = 0;                           /* (once: a crash in the session, and the next start is the user's) */
+#endif
+    opt_ed_forget();                             /* (the host's restart: what an FM-1's clears) */
     tab_expand();                                /* the smooth tables into RAM (core/opt_core.c TAB_CODED_FORCE), first */
     opt_cv_init();                               /* the canvas (the app's unit's), before anything draws */
     persist_boot();                              /* the settings record, the stores found (before settings_init) */
@@ -128,7 +166,11 @@ void opt_ui_input(void)
 
 void opt_ui_frame(void)
 {
+#if FELUCCA_EDITOR
+    opt_ed_usb();                                /* (opt_stubs.h: a computer has set the FM-1 up, plat_usb_session) */
+#else
     usb.config = plat_battery() == 4;            /* (opt_stubs.h: a USB host powers the FM-1) */
+#endif
     opt_in_scan();
     fm1_ms = plat_ms();
     ui_input();

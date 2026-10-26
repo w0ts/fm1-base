@@ -18,6 +18,11 @@ const char *opt_core_engine(uint32_t part);                  /* the part's engin
 /* the UI (ui/opt_ui.c): a main loop pass of Optimist's (system/main.c) is opt_ui_frame; between frames opt_ui_input */
 void opt_ui_init(void);                                      /* the screen cleared, everything drawn at the next frame */
 void opt_ui_frame(void);                                     /* the panel, the LEDs, the screen */
+/* the web editor (ui/opt_editor.h): a SysEx frame from USB (the bytes between F0 and F7; 1 = the editor's), each main
+ * loop pass (the mirror, DX7 SysEx, a restore's restart), every SysEx byte from USB (the USB interrupt: DX7 SysEx) */
+int opt_ed_frame(const uint8_t *p, uint32_t n);
+void opt_ed_poll(void);
+void opt_sysex_byte(uint8_t b);
 void opt_ui_input(void);                                     /* the panel only (and the meters) */
 
 /* the host simulator's checks (app.c app_expect) */

@@ -8,4 +8,5 @@
  * that, every frame (opt_ui.c) */
 static struct {
     uint8_t config, suspended;
+    uint32_t resets;                            /* (the editor's sessions: plat_usb_session, ui/opt_editor.h) */
 } usb;

@@ -54,10 +54,27 @@ static uint32_t fm1_input_note_edges(void)
     oin_notes_pressed = 0;
     return p;
 }
+#define FM1_NENC 7u
+#if FELUCCA_ED_MIRROR
+static int16_t fm1_turned[FM1_NENC];      /* the steps taken since the mirror's last STATE (ed_mirror.c mir_state) */
+/* the mirror's client (hal/fm1_input.h, ED_MIRROR): its key id (0..40) down or up, its knob e turned s detents, all
+ * of its keys up */
+static void fm1_remote_key(uint32_t id, uint32_t down)
+{
+    uint32_t bit = id >= 14u ? 1u << (id - 14u) : 1u << id;
+    volatile uint32_t *m = id >= 14u ? &fm1_rem_note : &fm1_rem_btn;
+    *m = down ? *m | bit : *m & ~bit;
+}
+static void fm1_remote_enc(uint32_t e, int32_t s) { oin_enc[e % 7u] += s; }
+static void fm1_remote_clear(void) { fm1_rem_btn = fm1_rem_note = 0; }
+#endif
 static int32_t fm1_enc_take(uint32_t e)
 {
     int32_t s = oin_enc[e % 7u];
     oin_enc[e % 7u] = 0;
+#if FELUCCA_ED_MIRROR
+    fm1_turned[e % 7u] = (int16_t)(fm1_turned[e % 7u] + s);
+#endif
     return s;
 }
 /* a wait inside the UI (SYSTEM > CALIBRATE, ui/optimist/op_input.c panel_setup: it loops on fm1_ms and the panel until a

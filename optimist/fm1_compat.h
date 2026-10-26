@@ -116,6 +116,10 @@ static inline void fm1_delay_ms(uint32_t ms)       /* (a wait on plat_ms: the ma
 static struct {
     volatile uint32_t notes, buttons;
 } fm1_in;
+/* the mirror's client's keys (hal/fm1_input.h fm1_remote_key: editor cmd 108 PANEL, ED_MIRROR), held as a finger
+ * holds them: its buttons by matrix id (bit n: button n 0..13), its note keys (bit n: key n); ORed into the panel as
+ * the UI reads it (ui/opt_panel.h) and into the keys the render plays (core/opt_core.c) */
+static volatile uint32_t fm1_rem_btn, fm1_rem_note;
 
 /* ---- the user sample slots (USR1..3, flash 0xA0000, eng_sample.c): read in place from fm1-base's data window */
 #define SMP_USER_XIP(k) plat_data(SMP_USER_BASE + (k) * SMP_USER_SIZE)

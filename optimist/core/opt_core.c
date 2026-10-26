@@ -119,6 +119,9 @@ uint32_t opt_core_block(void) { return CTL; }
 /* the output as Optimist's main loop reads it (core/audio.c): the two I2S halves (abuf, 24 bit), the one rendered last
  * (fm1_audio_free_half) and a count of them (audio_halves): the mixer's meters (ui/meters.c). A copy here: fm1-base's
  * render writes its own buffer (APP_BLOCK = HALF_FRAMES frames a call) */
+/* MASTER as the mirror's client sets it (editor cmd 108 kind 3, ed_mirror.c mir_master): its q12 + 1, 0 the pot's
+ * (fm1-base's master_q12). Set by the main loop (ui/opt_editor.h opt_ed_master), read by the render */
+static volatile uint32_t opt_master_q12;
 #define HALF_WORDS (HALF_FRAMES * 2u)
 static int32_t abuf[2u * HALF_WORDS];
 static volatile uint32_t audio_halves;
@@ -127,8 +130,10 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
 {
     uint32_t i, f;
     fm1_ms = plat_ms();
-    fm1_in.notes = keys;
+    fm1_in.notes = keys | fm1_rem_note;             /* (the mirror's client's keys too: fm1_compat.h) */
     song.master_q12 = master_q12 > 4096u ? 4096u : master_q12;
+    if (opt_master_q12)                              /* (the mirror's client plays MASTER: ui/opt_editor.h) */
+        song.master_q12 = opt_master_q12 - 1u;
     for (f = 0; f + CTL <= n; f += CTL) {
         int32_t *o = lr + 2u * f;
         FAR(mix_block)(o, CTL);                     /* (HOT: RAM code with OPT_HOT_RAM; called as core/audio.c does) */

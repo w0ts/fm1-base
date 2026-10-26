@@ -144,6 +144,7 @@ Before writing a feature into the app, look for it in fm1-base (`include/plat.h`
 | USB audio at full level, MASTER for the speaker only | `plat_usb_audio_full` |
 | USB audio input of the firmware's own channels (stems), 24-bit | `usb_audio_in_channels`, `usb_audio_in_24bit`; `APP_USB_CAPTURE`, `plat_usb_audio_rec` |
 | USB audio from the computer as the firmware's own mixer track | `APP_USB_PLAY`, `plat_usb_audio_play` |
+| USB audio input on the computer's clock (resampled, a synchronous endpoint) | `usb_audio_in_host_clock` |
 | lower case in the big fonts | `font_full = ["L"]` |
 | its own exports in the browser build | `APP_WEB` (the app's `web.c`), and its own page in `app/web/emu/` |
 | its own second core (hardware code that cannot go into felucca-bsp: another licence, not tried there yet) | `asm = [...]` (its entry assembled), `vendored = [...]` (the register check leaves it), its RAM loop in section `.c1_text` (copied and guarded with `.ram_text`, left out of the RAM-calls check), `APP_CSTART` (held first thing at a start), `APP_FAULT` (a crash on it, or beside it) |

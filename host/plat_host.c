@@ -45,6 +45,12 @@
  *                                checked whole, every object replaced, everything reloaded; refused while playing
  *                                (STOP FIRST) or when damaged: nothing changes (expect restore_rc: 0, 10 playing)
  *   backup_damage FILE           (FM1B_BACKUP) a byte of a backup file changed (at its middle)
+ *   sysex HEX..                  a SysEx frame from the computer (F0 .. F7, hex, spaces allowed), as the device takes
+ *                                it: to the app (APP_SYSEX: app_sysex gets the bytes between F0 and F7), or dropped (no
+ *                                app hook, the app's 0, a status byte inside, longer than the device's 640-byte buffer)
+ *   sysex_out                    print the app's SysEx frames (plat_sysex_send) since the last "sysex_out" (and forget them)
+ *   expect_sysex HEX..           check that this frame went out since the last "sysex_out" (F0 .. F7, hex)
+ *   sysex_log FILE|off           every frame the app sends from now on, appended to FILE as it went out (raw)
  * FILE "out:NAME" for backup, restore, backup_damage and mirror: NAME in OUTDIR (fbdump: always there).
  * NAME_host --serve [OUTDIR] (FM1B_MIRROR): driven over stdin by a tool, as an FM-1 over USB:
  *   sx HEX      one SysEx message from the host (F0 .. F7, hex): the mirror's requests (cmd 0x50, 0x54)
@@ -501,7 +507,23 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
         data_area[off - DATA_BASE + i] &= ((const uint8_t *)src)[i];
     return 0;
 }
-void plat_sysex_send(const uint8_t *frame, uint32_t n) { (void)frame, (void)n; }
+/* the app's SysEx to the computer (plat_sysex_send): the computer reads it at once; each frame is kept for the script
+ * ("sysex_out", "expect_sysex") and written to the "sysex_log" file */
+#define HSX_KEEP 65536u
+static uint8_t hsx_out[HSX_KEEP];               /* the frames sent since the last "sysex_out", one after another */
+static uint32_t hsx_n, hsx_lost;
+static FILE *hsx_log;
+void plat_sysex_send(const uint8_t *frame, uint32_t n)
+{
+    if (hsx_log)
+        fwrite(frame, 1, n, hsx_log);
+    if (n <= HSX_KEEP - hsx_n) {
+        memcpy(hsx_out + hsx_n, frame, n);
+        hsx_n += n;
+    } else {
+        hsx_lost += n;
+    }
+}
 /* no host to pull from (an app's transfer is tested on its own, or by writing the flash: "data") */
 int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)dst, (void)n; return -1; }
 void plat_host_patience(uint32_t try_ms, uint32_t total_ms) { (void)try_ms, (void)total_ms; }
@@ -1228,10 +1250,82 @@ static int serve(const char *dir)
 }
 #endif
 
+/* a frame's hex (spaces allowed between the bytes) into raw: its length, 0 = not hex */
+static uint32_t hsx_hex(const char *h, uint8_t *raw, uint32_t max)
+{
+    uint32_t n = 0;
+    unsigned v;
+    while (*h) {
+        if (*h == ' ' || *h == '\t' || *h == '\n' || *h == '\r') {
+            h++;
+            continue;
+        }
+        if (n >= max || sscanf(h, "%2x", &v) != 1 || !h[1] || h[1] == ' ')
+            return 0;
+        raw[n++] = (uint8_t)v;
+        h += 2;
+    }
+    return n;
+}
+/* "sysex": the frame as felucca-bsp's usb.c collects one (whole, 7-bit, HOST_SX_MAX at most between F0 and F7) and the
+ * main loop offers it (device/main_fm1.c: to the app after the platform's own) */
+#define HOST_SX_MAX 640u
+static int hsx_in(const char *hex)
+{
+    static uint8_t raw[2u * HOST_SX_MAX];
+    uint32_t n = hsx_hex(hex, raw, sizeof raw), i, ok;
+    if (n < 2u || raw[0] != 0xF0u || raw[n - 1u] != 0xF7u) {
+        printf("FAIL sysex: not a frame (F0 .. F7, hex)\n");
+        return 1;
+    }
+    for (i = 1, ok = 1; i + 1u < n; i++)
+        ok &= raw[i] < 0x80u;
+    if (!ok || n - 2u > HOST_SX_MAX)
+        return 0;                                 /* (a status byte inside, or too long: the device drops it) */
+#ifdef APP_SYSEX
+    (void)app_sysex(raw + 1, n - 2u);
+#endif
+    return 0;
+}
+static int hsx_frame_at(uint32_t at)              /* the length of the frame sent at hsx_out[at] (to its F7) */
+{
+    uint32_t k = at;
+    while (k < hsx_n && hsx_out[k] != 0xF7u)
+        k++;
+    return (int)(k < hsx_n ? k + 1u - at : hsx_n - at);
+}
+static int hsx_expect(const char *hex)            /* 0: this frame went out since the last "sysex_out" */
+{
+    static uint8_t want[HSX_KEEP];
+    uint32_t n = hsx_hex(hex, want, sizeof want), at;
+    for (at = 0; n && at < hsx_n; at += (uint32_t)hsx_frame_at(at))
+        if ((uint32_t)hsx_frame_at(at) == n && !memcmp(hsx_out + at, want, n)) {
+            printf("  ok sysex out (%u bytes)\n", n);
+            return 0;
+        }
+    printf("FAIL expect_sysex %s: not sent\n", hex);
+    return 1;
+}
+static void hsx_print(void)
+{
+    uint32_t at, k;
+    for (at = 0; at < hsx_n; at += k) {
+        k = (uint32_t)hsx_frame_at(at);
+        printf("  sysex<");
+        for (uint32_t i = 0; i < k; i++)
+            printf(" %02X", hsx_out[at + i]);
+        printf("\n");
+    }
+    if (hsx_lost)
+        printf("  sysex< (%u bytes more, not kept)\n", hsx_lost);
+    hsx_n = hsx_lost = 0;
+}
+
 int main(int argc, char **argv)
 {
     FILE *sc;
-    char line[512], out[400];
+    static char line[8192];
+    char out[400];
     const char *dir = argc > 2 ? argv[2] : ".";
     int lineno = 0, fails = 0;
     plat_host_dir = dir;
@@ -1544,6 +1638,24 @@ int main(int argc, char **argv)
                 fclose(bf);
             }
 #endif
+        } else if (!strcmp(cmd, "sysex")) {
+            fails += hsx_in(strstr(line, "sysex") + 5);
+            run_ms(1);
+        } else if (!strcmp(cmd, "sysex_out"))
+            hsx_print();
+        else if (!strcmp(cmd, "expect_sysex"))
+            fails += hsx_expect(strstr(line, "expect_sysex") + 12);
+        else if (!strcmp(cmd, "sysex_log")) {
+            if (hsx_log)
+                fclose(hsx_log);
+            hsx_log = 0;
+            if (strcmp(a, "off")) {
+                out_path(out, sizeof out, dir, a);
+                if (!(hsx_log = fopen(out, "wb"))) {
+                    printf("line %d: cannot write %s\n", lineno, out);
+                    return 2;
+                }
+            }
         } else if (!strcmp(cmd, "echo"))
             printf("%s", line + 5);
         else {
@@ -1552,6 +1664,8 @@ int main(int argc, char **argv)
         }
     }
     wav_close();
+    if (hsx_log)
+        fclose(hsx_log);
     if (midi_log)
         fclose(midi_log);
 #ifdef APP_HOST_FAILS

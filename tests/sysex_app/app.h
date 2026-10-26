@@ -23,6 +23,7 @@ void app_say(const char *a, const char *b);
 
 /* a SysEx frame from USB the platform does not take (p: the bytes between F0 and F7): 1 = the app's */
 #define APP_SYSEX
+#define APP_RESTART                      /* (plat_restart: cmd 5) */
 int app_sysex(const uint8_t *p, uint32_t n);
 
 /* the host simulator's checks: frames (taken by the app), other (offered, not the app's) */

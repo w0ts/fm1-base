@@ -8,6 +8,8 @@
  * Code + constants execute in place from XIP (app.bin offset 0 = 0x02000120).
  * 0x01C00000..0x01C06000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver); 0x01C06000..0x01C08000 stays for RAM-run debug.
+ * RAMTEXT's size is the app's: fm1.toml ram_text_kb (tools/ramsplit.py) moves RAM and the pool's start
+ * up, the pool ending where it does here.
  * RAM  : .data/.bss (128 KiB)
  * POOL : big zero-initialised buffers (FX lines, canvases), section .pool
  * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.

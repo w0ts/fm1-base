@@ -6,6 +6,8 @@
  * 0x01C00000..0x01C08000 holds .ram_text (code that must run while the flash
  * is busy: the flash driver; an app's audio code, out of the XIP cache's way). (It was 24 KB, the last 8 KB
  * kept for RAM-run debug; LOOM-8's note starts took them, 2026-10-19.)
+ * RAMTEXT's size is the app's: fm1.toml ram_text_kb (tools/ramsplit.py) moves RAM and the pool's start
+ * up, the pool ending where it does here.
  * RAM  : .data/.bss (96 KiB)
  * POOL : big zero-initialised buffers (FX lines, canvases), section .pool
  * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.

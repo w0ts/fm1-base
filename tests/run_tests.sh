@@ -113,5 +113,8 @@ run flash-image sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -
 run host-flash-load sh -c "$H/template_host tests/flash_load.txt $H && \
     FM1B_FLASH=$H/flash2.bin $H/template_host tests/flash_boot.txt $H && \
     cmp $H/flash.bin $H/flash3.bin"
+# SysEx between the computer and an app (APP_SYSEX, plat_sysex_send) in the host simulator: tests/sysex_app
+run sysex-app sh -c "$PY tools/build.py tests/sysex_app --host && \
+    tests/sysex_app/build/host/sxtest_host tests/sysex_app/tests/sysex.txt tests/sysex_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

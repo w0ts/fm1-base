@@ -550,7 +550,7 @@ def build_app():
     for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
         if key in CONF and flag not in os.environ:
             flags.append(f"-D{flag}={int(bool(CONF[key]))}")
-    for flag in ("FM1B_CDC", "FM1B_UAC", "FM1B_UAC_OUT", "FM1B_TRS"):
+    for flag in ("FM1B_CDC", "FM1B_UAC", "FM1B_UAC_OUT", "FM1B_TRS", "FM1B_ERASE_SLICED"):
         v = os.environ.get(flag)    # unset: fm1.toml's, the app's (app.h) or the platform's default (device/unity.c)
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

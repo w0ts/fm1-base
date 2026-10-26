@@ -25,7 +25,10 @@
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
  *   FM1B_MIRROR 0           the screen and panel mirrored over USB (fm1.toml mirror = true: mirror.c)
  *   FM1B_BACKUP 0           backup and restore of the app's objects over USB (fm1.toml backup = true: backup.c)
- *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h) */
+ *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h)
+ *   FM1B_ERASE_SLICED 1     the store's and plat_data's erases in windows of about 1 ms, the sound on (felucca-bsp's
+ *                           FL_ERASE_SLICED); 0: in one window, the sound silenced (the fm1-emulator: it has no
+ *                           erase suspend) */
 #include <stdint.h>
 #include "plat.h"
 #include "app.h"                  /* first: the scan's hooks below may call the app */
@@ -53,6 +56,12 @@
 #if FM1B_WIFI || FM1B_BLE
 #define FL_UID 1                          /* the flash's unique ID: the WiFi MAC, the Bluetooth name (plat_chip_uid) */
 #endif
+#ifndef FM1B_ERASE_SLICED
+#define FM1B_ERASE_SLICED 1
+#endif
+#define FL_ERASE_SLICED FM1B_ERASE_SLICED
+static uint32_t flash_held;               /* erases that held the sound for the whole erase (plat_flash_held) */
+#define FL_ERASE_HELD() (flash_held++)
 #include "fm1_flash.h"
 #include "fm1_xip.h"
 #include "fm1_perf.h"
@@ -129,6 +138,7 @@ static uint8_t flash_ok;          /* JEDEC id matched at boot */
 static uint8_t flash_uid[16];     /* the flash's factory unique ID (plat_chip_uid), read at boot */
 #endif
 static void audio_silence(void);
+static int data_erase(uint32_t off);   /* (main_fm1.c) */
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */
 {
     uint8_t *d = dst;
@@ -146,11 +156,9 @@ static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off wi
 }
 static int st_erase(uint32_t off)
 {
-    uint32_t took;
     if (!FL_STORE_OK(off, 0x1000u))
         return -8;
-    audio_silence();
-    return fl_erase4k(off, &took);
+    return data_erase(off);
 }
 static int st_prog(uint32_t off, const void *src, uint32_t n)
 {

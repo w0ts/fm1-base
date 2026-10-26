@@ -774,7 +774,8 @@ def check(img, syms, dis, rt):
         if bt:
             errors.append(f"ble_stack = own links JieLi's Bluetooth code: {bt}")
         rf = re.search(r"^([0-9a-f]+) .*\sfm1_rf_burst_run$", syms, re.M)
-        if not rf or not 0x01C00000 <= int(rf.group(1), 16) < 0x01C08000:
+        rt_org, rt_len = LAYOUT["RAMTEXT"]             # (fm1.toml ram_text_kb may size it)
+        if not rf or not rt_org <= int(rf.group(1), 16) < rt_org + rt_len:
             errors.append("fm1_rf_burst_run is not in .ram_text (the radio's crystal ramp must run from RAM)")
         else:
             notes.append("own Bluetooth stack: nothing of JieLi's linked, the radio's ramp in RAM")

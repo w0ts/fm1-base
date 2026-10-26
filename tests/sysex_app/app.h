@@ -27,6 +27,7 @@ void app_say(const char *a, const char *b);
 
 /* a SysEx frame from USB the platform does not take (p: the bytes between F0 and F7): 1 = the app's */
 #define APP_SYSEX
+#define APP_RESTART                      /* (plat_restart: cmd 5) */
 int app_sysex(const uint8_t *p, uint32_t n);
 
 /* every SysEx byte from USB as it comes (the USB interrupt): counted, for frames longer than app_sysex takes */

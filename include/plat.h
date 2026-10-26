@@ -234,7 +234,8 @@ const uint8_t *plat_data(uint32_t off);   /* read in place; 0 = outside the wind
 int plat_data_erase(uint32_t off);        /* the 4 KiB sector at off (aligned); 0 = done */
 int plat_data_write(uint32_t off, const void *src, uint32_t n);   /* into erased flash, src in RAM; 0 = done */
 /* SysEx to the computer over USB (main loop): whole frames, F0 .. F7, into felucca-bsp's SysEx ring (sent before
- * the notes), which the USB interrupt empties as the computer reads */
+ * the notes), which the USB interrupt empties as the computer reads. plat_sysex_room, plat_sysex_queued and
+ * plat_usb_session (and plat_sysex_send's -1 without a computer) are built for an app with APP_SYSEX (below) */
 int plat_sysex_send(const uint8_t *frame, uint32_t n);   /* 0 = queued whole; -1 = not sent: no computer has set
                                                          * the FM-1 up (plat_usb_session 0), or it stopped reading
                                                          * (no room for 200 ms; what was queued goes out) */
@@ -245,7 +246,8 @@ uint32_t plat_sysex_queued(void);      /* the bytes still in the ring, not yet r
  * F0 .. F7 in any number of puts, end. The ring is the stream's from begin to end (no other SysEx, no note out in
  * between: keep it short), each packet going in as soon as it is whole. A put waits while the ring is full and the
  * computer reads; one that waited PLAT_SYSEX_STALL_MS without a packet read gives up: the frame is cut there (the
- * computer drops a frame cut short at the next F0), the rest of its puts and its end return -1. Main loop */
+ * computer drops a frame cut short at the next F0), the rest of its puts and its end return -1. Main loop; built for
+ * an app with APP_SYSEX */
 #define PLAT_SYSEX_STALL_MS 30u
 int plat_sysex_begin(void);            /* 0 = the stream is open; -1 = no computer, or a send under way */
 int plat_sysex_put(const uint8_t *p, uint32_t n);   /* 0 = in the ring (the last bytes held until more or end) */

@@ -15,6 +15,8 @@ with the same switches (optsim.py build-trial: its usb.c, its main loop), every 
               COMMIT i 1 first, then BEGIN / DATA / COMMIT each, BK_END 1): the restart, then BK_LIST again (the CRCs the
               backup's), and the two flashes compared (optsim.py same)
   6 session   (the trial alone) the mirror's test session: a restart as a blank FM-1, the flash untouched, and back
+  7 slots     the sample slots' writes where the section log is: refused by the trial, its flash untouched (Optimist's
+              own erases there: reported, not compared)
   5 dx7       (the trial alone) a DX7 bank to FM6 over APP_SYSEX_BYTE, one with a bad checksum
   4 mirror    106 on (with STATE), a press over 108 PANEL, 109 NAV, MASTER from the client, 106 off: the replies compared;
               the pushed frames (the panel's pixels: each side's own drawing) written to OUTDIR/{trial,optimist}-mirror.syx
@@ -364,6 +366,27 @@ def session(out, flash):
     return not ok
 
 
+def slots(out, flash):
+    """the sample slots' writes (11 SMP_BEGIN, 14 SMP_ERASE) where the section log is (USR1, USR2's head): the trial
+    refuses them, its flash untouched; Optimist's own firmware erases those sectors (shown, its bug: not compared)"""
+    s = Script()
+    s.ask(fr(11, 0), wait=200)                  # SMP_BEGIN USR1 (room 0: the log's first sector)
+    s.ask(fr(11, 1), wait=200)                  # SMP_BEGIN USR2 (its header sector 0xB4000: in the log)
+    s.ask(fr(14, 1), wait=2000)                 # SMP_ERASE USR2 (the whole slot)
+    s.raw(f"flash_dump {out / 'edproof-slots-@SIDE@.bin'}")
+    t, o = run(out, "slots", s, flash)
+    a = flash.read_bytes()
+    def hit(side):
+        b = (out / f"edproof-slots-{side}.bin").read_bytes()
+        return [hex(x) for x in range(0, len(a), 0x1000) if a[x:x + 0x1000] != b[x:x + 0x1000]]
+    th, oh = hit("trial"), hit("optimist")
+    rc = [f[6] for f in t if f != "restart" and f[4] in (11, 14)]
+    ok = not th and len(rc) == 3 and all(rc)
+    print(f"  {'ok  ' if ok else 'FAIL'} edproof slots: SMP_BEGIN USR1, USR2, SMP_ERASE USR2 refused by the trial (rc "
+          f"{rc}), its flash untouched; Optimist's own erased {len(oh)} sectors there ({' '.join(oh[:4])}{' ..' if len(oh) > 4 else ''})")
+    return not ok
+
+
 def main(argv):
     if len(argv) != 2:
         raise SystemExit(__doc__)
@@ -378,6 +401,7 @@ def main(argv):
     bad += mirror(out, flash)
     bad += dx7(out, flash)
     bad += session(out, flash)
+    bad += slots(out, flash)
     print(f"{'FAIL' if bad else '  ok'} edproof: {'differences' if bad else 'the trial answers as Optimist does'}")
     return 1 if bad else 0
 

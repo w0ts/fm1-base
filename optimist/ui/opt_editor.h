@@ -104,6 +104,33 @@ static int ota_wire_send(const uint8_t *p, uint32_t n)   /* a whole reply (ed_se
     return plat_sysex_send(p, n);
 }
 
+/* ---- the editor's sample slot writes (io/editor/ed_user.c, cmds 11..14: Optimist's driver, fl_erase4k_quiet /
+ * fl_write; nothing else in the unit calls them) on st_erase / st_prog: the store's allow-list and plat.h's windows,
+ * nothing in a test session, and only inside a slot's own room (SMP_USER_CAP) off the section log. Optimist's ed_user.c
+ * erases a slot's header sector whatever its room: with the section log in the slots' flash (format 2, PATTERNS: here
+ * 0xA0000, 32 sectors, the samples not built) SMP_BEGIN of USR1 (room 0) erased the log's first sector and USR2's
+ * header (0xB4000) a sector of the log's last 12; refused here (rc 1 / 2), the log untouched */
+static int opt_smp_ok(uint32_t off, uint32_t n)
+{
+    uint32_t k, base;
+#if SEC_LOGGED
+    if (FL_HITS(off, n, SEC_LOG_BASE, SEC_LOG_BASE + SEC_LOG_SECTORS * ST_SECTOR))
+        return 0;
+#endif
+    for (k = 0; k < SMP_USER_SLOTS; k++) {
+        base = SMP_USER_BASE + k * SMP_USER_SIZE;
+        if (SMP_USER_CAP(k) && plat_in(off, n, base, base + SMP_USER_CAP(k)))
+            return 1;
+    }
+    return 0;
+}
+static int fl_erase4k_quiet(uint32_t off, uint32_t *took)
+{
+    *took = 0;
+    return opt_smp_ok(off, 0x1000u) ? st_erase(off) : -8;
+}
+static int fl_write(uint32_t off, const void *src, uint32_t n) { return opt_smp_ok(off, n) ? st_prog(off, src, n) : -8; }
+
 /* ---- the restarts (system/main.c fm1_reboot) and the test session's mark (felucca.c, ED_MIRROR) */
 static void fm1_reboot(void) { plat_restart(); }
 #if FELUCCA_ED_MIRROR

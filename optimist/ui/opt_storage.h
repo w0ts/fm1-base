@@ -92,15 +92,6 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
     return -8;
 }
 
-/* the editor's sample slot writes (io/editor/ed_user.c: Optimist's driver, fl_erase4k_quiet / fl_write) on the same
- * three: inside the store's allow-list and plat.h's windows only, nothing in a test session */
-static int fl_erase4k_quiet(uint32_t off, uint32_t *took)
-{
-    *took = 0;
-    return st_erase(off);
-}
-static int fl_write(uint32_t off, const void *src, uint32_t n) { return st_prog(off, src, n); }
-
 /* felucca.c's order from here */
 #include "storage/storage.c"
 #include "storage/upreset.c"                    /* user presets */

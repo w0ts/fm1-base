@@ -166,7 +166,71 @@ void plat_unlock(uint32_t f)
         fm1_irq_on();
     }
 }
-void plat_sysex_send(const uint8_t *frame, uint32_t n) { ota_wire_send(frame, n); }
+int plat_sysex_send(const uint8_t *frame, uint32_t n) { return usb.config ? ota_wire_send(frame, n) : -1; }
+uint32_t plat_sysex_room(void)
+{
+    return !usb.config || usb.suspended || sx_busy ? 0u : (SXQ - (so_w - so_r)) * 3u;   /* (3 bytes a USB-MIDI packet) */
+}
+uint32_t plat_sysex_queued(void) { return (so_w - so_r) * 3u; }
+uint32_t plat_usb_session(void) { return usb.config ? usb.resets + 1u : 0u; }   /* (usb.c counts the bus resets) */
+/* a stream: usb.c's SysEx ring held (sx_busy: ep1_tx sends no note, ann_wire_send waits) from begin to end, a USB-MIDI
+ * packet into it each 3 bytes (CIN 4: more follow; 5..7: the last, with F7) */
+static struct {
+    uint8_t on, cut, k, acc[3];
+} sxs;
+int plat_sysex_begin(void)
+{
+    if (!usb.config || sx_busy)
+        return -1;
+    sx_busy = 1;
+    sxs.on = 1, sxs.cut = 0, sxs.k = 0;
+    return 0;
+}
+static int sxs_pkt(uint32_t cin)               /* the packet in sxs.acc into the ring, waiting while the computer reads */
+{
+    uint32_t t0 = fm1_ms, r = so_r;
+    while (so_w - so_r >= SXQ) {
+        if (so_r != r)
+            t0 = fm1_ms, r = so_r;
+        if (!usb.config || fm1_ms - t0 > PLAT_SYSEX_STALL_MS)
+            return -1;
+        ota_idle();
+    }
+    sx_out_q[so_w % SXQ] = cin | (uint32_t)sxs.acc[0] << 8 | (uint32_t)sxs.acc[1] << 16 | (uint32_t)sxs.acc[2] << 24;
+    RING_PUBLISH();
+    so_w++;
+    sxs.k = 0;
+    return 0;
+}
+int plat_sysex_put(const uint8_t *p, uint32_t n)
+{
+    uint32_t i;
+    if (!sxs.on || sxs.cut)
+        return -1;
+    for (i = 0; i < n; i++) {
+        if (sxs.k == 3u && sxs_pkt(4u)) {       /* (a full packet goes when the next byte comes: the last carries F7) */
+            sxs.cut = 1;
+            return -1;
+        }
+        sxs.acc[sxs.k++] = p[i];
+    }
+    return 0;
+}
+int plat_sysex_end(void)
+{
+    int rc = -1;
+    if (sxs.on && !sxs.cut && sxs.k) {
+        if (sxs.k < 3u)
+            sxs.acc[2] = 0;
+        if (sxs.k < 2u)
+            sxs.acc[1] = 0;
+        rc = sxs_pkt(4u + sxs.k);
+    }
+    if (sxs.on)
+        sx_busy = 0;
+    sxs.on = 0, sxs.k = 0;
+    return rc;
+}
 
 /* the data area and its two more windows (plat.h): read through the unencrypted XIP window (main_fm1.c
  * fl_plain_window_init, from 0x93000 up); erased and written by felucca-bsp's RAM driver (FL_RANGE_OK: the store, its

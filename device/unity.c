@@ -29,6 +29,8 @@
  *   FM1B_UAC_OUT_FEEDBACK 0 1: the USB audio output asynchronous (fm1.toml usb_audio_out_feedback): the computer sends
  *                           at the FM-1's own rate (explicit feedback on EP3 IN), played as sent, nothing resampled;
  *                           0 adaptive (resampled to the FM-1's clock). Not with FM1B_CDC (EP3)
+ *   FM1B_UAC_OUT_24 0       1: the USB audio output in 24-bit too (fm1.toml usb_audio_out_24bit: its alt setting 2;
+ *                           alt 1 stays 16-bit): the computer's 24 bits reach the app whole (plat_usb_audio_play)
  *   FM1B_TRS 1              MIDI in on the TRS jack
  *   APP_TOUCH               velocity and pressure from the keys (lib/touch.h)
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
@@ -111,6 +113,10 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #define FM1B_UAC_OUT_FEEDBACK 0   /* 1: the output asynchronous, its rate the FM-1's (felucca-bsp's explicit feedback) */
 #endif
 #define FELUCCA_UAC_OUT_FEEDBACK FM1B_UAC_OUT_FEEDBACK
+#ifndef FM1B_UAC_OUT_24
+#define FM1B_UAC_OUT_24 0         /* 1: the output in 24-bit too (its alt setting 2; alt 1 stays 16-bit) */
+#endif
+#define FELUCCA_UAC_OUT_24 FM1B_UAC_OUT_24
 #if FM1B_UAC && FM1B_UAC_CH != 2 && !defined APP_USB_CAPTURE
 #error "usb_audio_in_channels other than 2: the app gives them (app.h APP_USB_CAPTURE, app_usb_capture)"
 #endif

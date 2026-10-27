@@ -84,5 +84,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# plat_core on both cores (cpu2 = true) in the host simulator: tests/core_app
+run core-app sh -c "$PY tools/build.py tests/core_app --host && \
+    tests/core_app/build/host/coretest_host tests/core_app/tests/core.txt tests/core_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

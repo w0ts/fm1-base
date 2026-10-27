@@ -290,7 +290,7 @@ const PB = (() => {
   // Never probe other gear: only ports with an FM-1's usual names, and the ones in allowed (the user's picks, web/fm1ota.js's
   // allow); with only, that one port
   const NAME_RE = new RegExp(NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const USUAL_RE = /fm-?1|felucca|composite|sinco|usb-midi/i;
+  const USUAL_RE = /fm-?1|felucca|composite|sinco|usb-midi|optimist|sloop|melodee|loom-?8/i;   // as fm1ota.js PORT_NAMES
   // never a Bluetooth MIDI port: an FM-1 paired over Bluetooth shows one beside its USB port and it never answers
   const BLUETOOTH_RE = /bluetooth/i;
   const askable = (name, allowed) => !BLUETOOTH_RE.test(name || "") &&

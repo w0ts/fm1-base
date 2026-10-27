@@ -33,7 +33,9 @@ FINISH_CHECK, FINISH_WRITE = 0xE0000000, 0xF0000000
 MAXDATA = 512
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
 LOADER_MARK = b"FELUCCA-LOADER-1"
-PORT_RE = re.compile(r"fm-?1|felucca|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
+# the ports probed without --port: the FM-1's usual names, and the names FM-1 firmwares give their own port (Optimist,
+# SLOOP, Melodee, LOOM-8: an FM-1 running one of them shows as that name alone); never other gear
+PORT_RE = re.compile(r"fm-?1|felucca|ota|composite|sinco|usb-midi|optimist|sloop|melodee|loom-?8", re.I)
 
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,

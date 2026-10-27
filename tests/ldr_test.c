@@ -16,7 +16,8 @@
 static uint8_t nor[0x100000], *logical;
 static size_t logical_len;
 static uint8_t rx[1024];
-static uint32_t rx_len, rx_full, now_ms, requests, erases, bad_range, record_cleared, f0_asked;
+static uint32_t rx_len, rx_full, now_ms, requests, erases, data_erases, bad_range, record_cleared, f0_asked;
+static int rec_prog_fails;
 
 static uint32_t pack7(const uint8_t *in, uint32_t n, uint8_t *out)
 {
@@ -84,6 +85,7 @@ static int ldr_erase(uint32_t off)
     if (off < 0x4000u || off >= 0xFC000u || (off & 0xFFFu)) bad_range++;
     if (off < 0x4000u) { printf("ERASE IN THE HEAD %#x\n", off); exit(1); }
     erases++;
+    data_erases += off >= 0x93000u;
     memset(nor + off, 0xFF, 0x1000);
     return 0;
 }
@@ -91,7 +93,10 @@ static int ldr_prog(uint32_t off, const void *p, uint32_t n)
 {
     const uint8_t *s = p;
     uint32_t i;
-    if (off < 0x4000u || off + n > 0x93000u || ((off & 0xFFu) + n) > 256u) bad_range++;
+    int rec = (off & 0xFFFu) == 0xF00u && n <= 80u && off >= 0x93000u && off < 0xFC000u &&
+              !(off >= 0x97000u && off < 0xE0000u);   /* an update record's slot, outside the store: made invalid */
+    if (!rec && (off < 0x4000u || off + n > 0x93000u || ((off & 0xFFu) + n) > 256u)) bad_range++;
+    if (rec && rec_prog_fails) return -1;      /* (the driver refusing: the loader falls back to the erase) */
     for (i = 0; i < n; i++) nor[off + i] &= s[i];
     return 0;
 }
@@ -131,6 +136,125 @@ static uint32_t flash_off(const uint8_t *lg)        /* flash.bin offset in the l
 }
 
 static int check(const char *what, int ok) { printf("%-56s %s\n", what, ok ? "ok" : "FAIL"); return ok ? 0 : 1; }
+
+/* an update record (UPDATA_PARM, update_mode_api_v2: ota.c's layout) at a 4 KiB boundary - 256 */
+static void put_record(uint32_t at, const char *ident)
+{
+    uint8_t r[112] = {0};
+    r[2] = 0x0D; r[3] = 0x5A; r[4] = 0x01; r[5] = 0x5A; r[6] = 0x41; r[7] = 0x54;
+    memcpy(r + 8, ident, strlen(ident) < 12 ? strlen(ident) : 12);
+    ota_wr32(r + 72, 0xE0000u);
+    ota_wr16(r, ota_crc16(r + 2, 78, 0));
+    memcpy(nor + at, r, sizeof r);
+}
+/* a record the SPL could still take, anywhere from the app area's end to the globals (4K boundary - 256): its CRC
+ * matching over the 78 bytes from 2 (a stored 0 too, should those bytes sum to 0) or "AT" still at 6 */
+static uint32_t record_left(void)
+{
+    uint32_t s;
+    for (s = 0x93F00u; s < 0xFC000u; s += 0x1000u)
+        if ((s < 0x97000u || s >= 0xE0000u) &&
+            (ota_rd16(nor + s) == ota_crc16(nor + s + 2, 78, 0) || ota_rd16(nor + s + 6) == 0x5441u))
+            return s;
+    return 0;
+}
+/* a sector's bytes as they were, but for the first n of its record slot (0xF00): 1 = kept */
+static int sector_kept(uint32_t sec, const uint8_t *was, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < 0x1000u; i++)
+        if (nor[sec + i] != was[i] && !(i >= 0xF00u && i < 0xF00u + n))
+            return 0;
+    return 1;
+}
+/* a record whose bytes 2..79 have a CRC of 0 once its first 8 are 0 (its last two chosen so): zeroing only those
+ * would leave a stored CRC 0 that matches, so the loader must zero more of it */
+static void put_record_crc0(uint32_t at)
+{
+    uint8_t z[78];
+    uint32_t c;
+    put_record(at, "crc0-case");
+    memcpy(z, nor + at + 2, sizeof z);
+    memset(z, 0, 6);
+    c = ota_crc16(z, 76, 0);
+    nor[at + 78] = (uint8_t)(c >> 8);
+    nor[at + 79] = (uint8_t)c;
+    ota_wr16(nor + at, ota_crc16(nor + at + 2, 78, 0));
+}
+static void fill(uint32_t sec, uint8_t seed)      /* an app's data (or the SDK's VM): not erased bytes */
+{
+    uint32_t i;
+    for (i = 0; i < 0x1000u; i++)
+        nor[sec + i] = (uint8_t)(seed + i * 7u + (i >> 8));
+}
+
+/* after an install the records go, nothing else: the loader's own (the staging area's 0xE4F00, the sector erased as
+ * ota.c's next staging does anyway) and any other found where a firmware keeps data (the stock firmware's 0xE8F00
+ * in the SDK's VM, an app's sector in XDATA0 / XDATA1 whose bytes read as one): made invalid where they are */
+static int records_test(const uint8_t *old, uint32_t ofo)
+{
+    static const uint32_t SEC[] = {0x95000u, 0xE5000u, 0xE6000u, 0xE8000u, 0xFB000u};
+    static uint8_t was[sizeof SEC / sizeof SEC[0]][0x1000], vm[0x1000], untouched[0x1000];
+    uint32_t i, k;
+    int bad = 0, rc;
+    memset(nor, 0xFF, sizeof nor);
+    memcpy(nor, old + ofo, 0x93000);
+    for (i = 0; i < sizeof SEC / sizeof SEC[0]; i++) {
+        fill(SEC[i], (uint8_t)(0x31u * i + 5u));
+        if (i == 2)
+            put_record_crc0(SEC[i] + 0xF00u);
+        else
+            put_record(SEC[i] + 0xF00u, i == 3 ? "ota-stock" : "app-data");
+        memcpy(was[i], nor + SEC[i], 0x1000);
+    }
+    fill(0xE7000u, 0x99u);                            /* a sector of data with no record: never touched */
+    memcpy(untouched, nor + 0xE7000u, 0x1000);
+    fill(0xA0000u, 0x42u);                            /* the store: never even looked at */
+    put_record(0xA0F00u, "in-the-store");
+    memcpy(vm, nor + 0xA0000u, 0x1000);
+    put_record(0xE4F00u, "ota-FM-1_015");             /* the loader's own, as ota.c stages it */
+    nor[0xE0000] = 0x12;                              /* (the staged loader's first byte: its staging is not erased) */
+    erases = 0; data_erases = 0; requests = 0; bad_range = 0;
+    rc = ldr_session();
+    bad += check("records: install completes", rc == 0);
+    bad += check("  the loader's own record: its staging sector erased", nor[0xE4F00] == 0xFF && nor[0xE4F06] == 0xFF &&
+                 !memcmp(nor + 0xE4000u, nor + 0xE4001u, 0xFFF));
+    bad += check("  the staged loader itself left (the app's boot clears it)", nor[0xE0000] == 0x12);
+    for (i = 0, k = 1; i < sizeof SEC / sizeof SEC[0]; i++)
+        k &= sector_kept(SEC[i], was[i], 80);
+    bad += check("  every other record's sector kept, but for its record", k);
+    bad += check("  the stock record in the SDK's VM (0xE8F00) kept its sector", sector_kept(0xE8000u, was[3], 80));
+    bad += check("  no record the SPL could take is left", record_left() == 0);
+    bad += check("  a sector without a record untouched", !memcmp(nor + 0xE7000u, untouched, 0x1000));
+    bad += check("  the store untouched, a record-like block in it too", !memcmp(nor + 0xA0000u, vm, 0x1000));
+    bad += check("  above the app area one erase only (the staging sector)", data_erases == 1 && bad_range == 0);
+    for (i = 0, k = 0; i < sizeof SEC / sizeof SEC[0]; i++)
+        k |= ota_rd16(nor + SEC[i] + 0xF00u) | ota_rd16(nor + SEC[i] + 0xF06u);
+    bad += check("  each record's CRC and \"AT\" now 0", k == 0);
+    {
+        uint32_t e = erases;
+        erases = 0;
+        rc = ldr_session();
+        bad += check("records: a second install changes nothing more", rc == 0 && erases == 0 && record_left() == 0);
+        erases = e;
+    }
+    {   /* the crafted one needed more than its first 8 bytes: still only its 80 at most */
+        uint8_t z[2] = {0, 0};
+        bad += check("  a record whose zeroed CRC would match: more of it zeroed",
+                     record_left() == 0 && !memcmp(nor + 0xE6F00u, z, 2) && nor[0xE6F08] == 0);
+    }
+    /* a record the driver will not program over: the loader erases its sector, as it always did (no record left
+     * to bring the SPL back into the loader) */
+    fill(0xE5000u, 0x77u);
+    put_record(0xE5F00u, "app-data");
+    rec_prog_fails = 1;
+    data_erases = 0;
+    rc = ldr_session();
+    rec_prog_fails = 0;
+    bad += check("records: one not made invalid in place: its sector erased", rc == 0 && data_erases == 1 &&
+                 nor[0xE5000] == 0xFF && nor[0xE5F06] == 0xFF && record_left() == 0);
+    return bad;
+}
 
 int main(int argc, char **argv)
 {
@@ -175,6 +299,7 @@ int main(int argc, char **argv)
         bad += check("foreign key / damaged app head refused, nothing erased", rc == -6 && erases == 0);
         logical[nfo + 0x4000 + 5] = save;
     }
+    bad += records_test(old, ofo);
     printf("%s\n", bad ? "LOADER TEST FAILED" : "loader test passed");
     return bad != 0;
 }

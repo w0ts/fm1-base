@@ -41,10 +41,22 @@ expect gv1 0
 turn K1 1
 wait 100
 expect gv1 1
+# and USB AUDIO's MASTER (its first line, the next row) NONE -> 1+2: the routing in the settings record ("UAR3"),
+# Optimist's simulator the same (tests/optsim.mjs write)
+spin SELECT 1
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+cells
 tap HOME
 wait 300
+# (two settings saved one after the other: copy A, then copy B with both)
 expect w.0xFC000 0x554C4546
-expect w.0xFD000 -1
+expect w.0xFD000 0x554C4546
 # the project to project 3: SAVE (PROJECT), ACTION SAVE, key 3, SAVE, the NAME page's SAVE; its records in the log
 tap SAVE
 wait 200

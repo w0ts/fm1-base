@@ -10,6 +10,8 @@ void opt_core_init(void);                                    /* power-on: the pa
 void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys);   /* n stereo frames (a multiple of
                                                               * opt_core_block()), 24-bit; keys: plat_keys() */
 uint32_t opt_core_block(void);                               /* Optimist's mix block (CTL frames) */
+const int32_t *opt_core_capture(uint32_t n);                 /* the last render's USB capture: n frames of Optimist's 4
+                                                              * channels, 24-bit; 0 = none (the computer not recording) */
 void opt_core_midi(uint32_t pkt, int port);                  /* a USB-MIDI packet in (channel messages, clock), from PORT_* */
 void opt_core_panic(void);                                   /* every voice off */
 uint32_t opt_core_voices(void);                              /* voices sounding (a check) */
@@ -42,6 +44,7 @@ int opt_st_proj_used(uint32_t s);                            /* project slot s (
 uint32_t opt_st_panel_hits(void);                            /* storage.c's object sectors inside 0xD8000..0xD9FFF (0) */
 int opt_st_word(uint32_t off, uint32_t *w);                  /* the flash word at off through st_read; 0 = read */
 const char *opt_ui_msg(void);                                /* the header's last message */
+int32_t opt_ui_uad(uint32_t s);                              /* USB AUDIO's source s (0 MASTER): its channels (3: 1+2); -1 none */
 /* the globals' sectors 0xFC000..0xFEFFF (app.c: felucca-bsp's driver; the host's model) */
 #define OPT_GLOB_LO 0xFC000u
 #define OPT_GLOB_HI 0xFF000u

@@ -17,6 +17,19 @@ ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI
 gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)
 words = "words.tsv"
 font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)
+# USB audio as Optimist's own presents it (io/usb, from Melodee): two devices, "Optimist Out" (the computer plays,
+# the USB input track: APP_USB_PLAY) and "Optimist In" (it records four channels, CH1..CH4, by SYSTEM > USB AUDIO's
+# routing: APP_USB_CAPTURE), 16- and 24-bit both ways; the input on the computer's clock, the output on the FM-1's
+# (its feedback): fm1-base's USB audio (felucca-bsp's UAC)
+usb_audio_in_channels = 4
+usb_audio_in_24bit = true
+usb_audio_in_host_clock = true
+usb_audio_out_feedback = true
+usb_audio_out_24bit = true
+usb_audio_split = true
+usb_audio_in_name = "Optimist In"
+usb_audio_out_name = "Optimist Out"
+usb_audio_in_channel_names = ["CH1", "CH2", "CH3", "CH4"]
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
 # The audio path's calls out of RAM code through a pointer (tools/ramcode.py), every one of them Optimist's own: its
 # firmware runs the same functions from RAM (its .ram_hot / .ram_hot2: core.h HOT, HOT2, OVL as HOT without the
@@ -37,6 +50,9 @@ ram_code_allow = [
     "rev_post", "rev_bus", "dly_run", "fx_ret_block", "dist_run", "dins_of",
     # the insert effects (insfx/*.c): their marks and widths, the gater's block, the limiter's chorus, the drive's gains
     "ifx_st", "ifx_part", "ifx_quiet_part", "ifx_bus", "ifx_gater", "ifx_lim_run", "ifx_drive",
+    # the USB input track (fx.c ut_mix): the computer's audio through FAR(ua_take), RAM code here (core/opt_core.c, HOT;
+    # usb_audio_stream.c's, XIP, on Optimist), so the call stays in RAM; the checker cannot see a pointer's target
+    "ut_mix",
 ]
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"

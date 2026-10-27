@@ -37,6 +37,12 @@ void app_sysex_byte(uint8_t b);
 #define APP_LOOP
 void app_loop(void);
 #define APP_RESTART                      /* plat_restart: a restore done, the mirror's test session */
+/* USB audio (fm1.toml usb_audio_*): the computer's audio is Optimist's USB input track (APP_USB_PLAY: the render takes
+ * it, plat_usb_audio_play), and the USB audio input is Optimist's four capture channels by SYSTEM > USB AUDIO's
+ * routing (APP_USB_CAPTURE: app_usb_capture, core/opt_core.c) */
+#define APP_USB_PLAY
+#define APP_USB_CAPTURE
+const int32_t *app_usb_capture(const int32_t *lr, uint32_t n);
 
 /* the host simulator's checks (host/plat_host.c "expect"): voices (sounding), blocks (rendered), keys (held, as the
  * render saw them); the UI's: scr (Optimist's SCR_*: 0 the mixer, 1 SOUND, 2 FX, 5 STEP, 7 TEMPO, 9 GLOBAL), row (its
@@ -45,7 +51,8 @@ void app_loop(void);
 #define APP_HOST_EXPECT
 int app_expect(const char *what, int *got);
 /* the stores' (milestone 3): up.K (user preset UK holds a sound), proj.S (project slot S holds a project), w.ADDR (the
- * flash word at ADDR, little-endian, as Optimist reads it), panel_hits (Optimist's object sectors on OBJ_PANEL: 0) */
+ * flash word at ADDR, little-endian, as Optimist reads it), panel_hits (Optimist's object sectors on OBJ_PANEL: 0);
+ * USB audio's: uad.S (SYSTEM > USB AUDIO's source S, 0 MASTER: its channels, Optimist's UAD_*: 3 = 1+2) */
 /* the app's script commands: "cells" prints the screen, its cursor row and its four cards (label, value); "msg [TEXT]"
  * the header's last message (without TEXT in it: a failure); "flash_dump FILE" / "flash_load FILE" the flash as a
  * 1 MiB image at the FM-1's offsets (Optimist's simulator's: firmware/sim), the data windows and Optimist's globals

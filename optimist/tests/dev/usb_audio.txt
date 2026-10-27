@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial's USB audio in fm1-base's host simulator (usbproof.py: the files, the checks). A computer records the four
+# channels while T1 plays a note (the stems, Optimist's default routing); SYSTEM > USB AUDIO's MASTER (its first line:
+# GENERAL's row, then the next) NONE -> 1+2; then it plays usb-in.wav through the USB input track while it records,
+# the FM-1's own output beside (wav)
+wait 1500
+master 4096
+wait 100
+usb_rec usb-stems.wav
+key w7 down
+wait 300
+key w7 up
+wait 300
+usb_recstop
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+spin SELECT 1
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+expect uad.0 3
+tap HOME
+wait 300
+usb_rec usb-master.wav
+wav usb-master-out.wav
+usb_play usb-in.wav
+wait 1200
+expect usb_play_frames 44100
+usb_recstop
+wavstop

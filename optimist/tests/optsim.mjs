@@ -34,13 +34,14 @@ run(1500);
 // the UI's layout differs with the build's switches (optsim.py: OPTSIM_UI): "dev" the trial's copy of Optimist's dev
 // profile (PATTERNS: PROJECT's rows PROJECT, USER ...; SYSTEM's INFO then GENERAL, KNOB COLORS its first card), else
 // the source defaults (PROJECT's slots: USER its third row; SYSTEM's GENERAL its 4th page here, KNOB COLORS its second
-// card: the simulator's build has a Stats page the trial's lacks)
+// card: a USB STATS row before it, USB audio on)
 const DEV = process.env.OPTSIM_UI === "dev";
 if (mode === "write") {
   tap("ENV"); turn("KNOB 2", 4);                       // a sound: track 1's DEC 112 -> 116
   tap("GLO"); turn("KNOB 1", 5);                       // the tempo: 111 -> 116
   tap("GLO");                                          // SYSTEM, GENERAL's KNOB COLORS on
   if (DEV) { turn("SELECT", 1); turn("KNOB 1", 1); } else { turn("SELECT", 3); turn("KNOB 2", 1); }
+  if (DEV) { turn("SELECT", 1); turn("KNOB 1", 3); }   // and USB AUDIO's MASTER NONE -> 1+2 (the routing, "UAR3")
   tap("HOME");
   tap("SAVE"); turn("KNOB 2", 1); key(2); tap("SAVE"); tap("SAVE");   // PROJECT: SAVE to slot 3, YES, the name's SAVE
   turn("SELECT", DEV ? 1 : 2); turn("KNOB 2", 1); key(0); tap("SAVE"); tap("SAVE");   // USER: SAVE to U01, YES, the name's SAVE

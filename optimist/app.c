@@ -22,6 +22,12 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 }
 
 void app_panic(void) { opt_core_panic(); }
+/* the USB audio input's frames, Optimist's four channels (opt_core_render made them while the computer records) */
+const int32_t *app_usb_capture(const int32_t *lr, uint32_t n)
+{
+    (void)lr;
+    return opt_core_capture(n);
+}
 
 #ifdef PLAT_HOST
 static int flash_load(const char *path, uint32_t *sectors);
@@ -168,7 +174,9 @@ int app_expect(const char *what, int *got)
     else if (!strncmp(what, "w.", 2)) {          /* w.ADDR: the flash's 32-bit word at ADDR (little-endian); -1 unread */
         uint32_t w;
         *got = opt_st_word((uint32_t)strtoul(what + 2, 0, 0), &w) ? -1 : (int)w;
-    } else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
+    } else if (!strncmp(what, "uad.", 4))        /* uad.S: SYSTEM > USB AUDIO's source S (0 MASTER): its channels (3: 1+2) */
+        *got = (int)opt_ui_uad((uint32_t)atoi(what + 4));
+    else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
     else
         return 0;

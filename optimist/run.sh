@@ -13,7 +13,8 @@
 # writes (optsim.py idle), and storage_keep.txt: a setting saved keeps the settings record's fields the trial does not
 # build) and the two flashes are compared (optsim.py same: sector by sector, the section log record by
 # record); it also goes over the trial's flash (optsim.py touch) and the trial reads the result (storage_touched.txt).
-# The dev run then checks the web editor (edproof.py): the same SysEx to the trial and to Optimist's simulator built with
+# The dev run also plays and records USB audio (usbproof.py: fm1-base's simulator's usb_play / usb_rec, the stems, the
+# routing, the USB input track), then checks the web editor (edproof.py): the same SysEx to the trial and to Optimist's simulator built with
 # the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
 # the first python3 on PATH. OPTSIM=0: without Optimist's simulator (no emcc / node). PROFILES: the runs (default
@@ -32,6 +33,9 @@ run_profile() {                     # $1: dev (the trial's profile copy) or none
     $H/optimist_host $T/storage.txt $H
     OPT_FLASH=$H/trial-flash.bin OPT_DUMP=$H/trial-flash2.bin $H/optimist_host $T/storage_restart.txt $H
     OPT_FLASH=$H/trial-flash2.bin $H/optimist_host $T/storage_resume.txt $H
+    if [ "$1" != none ]; then       # (USB audio: a computer recording and playing, fm1-base's simulator: usbproof.py)
+        "$PY" optimist/usbproof.py $H/optimist_host $H/usb
+    fi
     if [ "${OPTSIM:-1}" != 0 ]; then
         "$PY" optimist/optsim.py build
         "$PY" optimist/optsim.py write $H/optimist-flash.bin

@@ -6,6 +6,9 @@
  * fm1-base's never meet; the app sees only opt_core.h. The include list is tests/hostsim.c's (Optimist's host render):
  * the same subset of firmware/src/felucca.c; its UI follows (ui/opt_ui.c, the end of this file). */
 #define FELUCCA_ARRANGER 1               /* (felucca.c: always; SONG, the scenes and the chain are the UI's too) */
+#ifndef FELUCCA_USB_AUDIO
+#define FELUCCA_USB_AUDIO 1              /* (felucca.c's default: Optimist's USB audio; on fm1-base's here, below) */
+#endif
 /* Optimist's globals that fm1-base's unit has under the same names (device/main_fm1.c bootguard, device/panel.c panel,
  * both in .noinit): this unit's under its own (Optimist's boot guard is fm1-base's job here; its panel state is its UI's) */
 #define bootguard opt_bootguard
@@ -108,6 +111,62 @@ static int midi_out_open(void) { return 1; }
 #endif
 #include "seq/seq.c"
 
+#if FELUCCA_USB_AUDIO
+/* ---- USB audio (FELUCCA_USB_AUDIO, the profile's): Optimist's USB input track (fx.c ut_mix, ua_take) and its capture
+ * routing (io/usb/ua_tap.h in core.h, io/usb/usb_audio_route.c here: SYSTEM > USB AUDIO, the settings record's "UAR3")
+ * on fm1-base's USB audio in place of Optimist's io/usb driver (usb_audio_stream.c, usb_audio.c: from Melodee, not in
+ * the trial). The computer's audio: plat_usb_audio_play once a render (APP_USB_PLAY: at unity, 24-bit, played as sent
+ * with fm1.toml usb_audio_out_feedback), handed to ut_mix a mix block at a time in the mix bus's Q15 (>> 8: the 16 bits
+ * Optimist's own decoder keeps of a 24-bit sample, ua_decode). The capture: each mix block's four channels as
+ * Optimist's ua_route builds them (the stems, or the routing's sources), clipped to Q15 (its ua_clip) and taken to 24
+ * bits (<< 8: the 16 bits its PCM24 sends, ua_encode, with felucca-bsp's 24 bits of headroom unused); app_usb_capture
+ * hands felucca-bsp the render's (APP_USB_CAPTURE: resampled there to the computer's clock with usb_audio_in_host_clock,
+ * as Optimist's own ua_rs does) */
+#define UA_CAP_CHANNELS 4u                         /* (usb_audio_stream.c's: fm1.toml usb_audio_in_channels = 4) */
+_Static_assert(NTRK == UA_CAP_CHANNELS, "the default routing hands the stems (NTRK a frame) over as the channels");
+#include "io/usb/usb_audio_route.c"
+/* usb_audio_stream.c's counters as SYSTEM > INFO and USB AUDIO read them (op_project.c): fm1-base's USB audio keeps its
+ * own (felucca-bsp's uac / uo) and plat.h does not give them, so these stay 0 here */
+static struct {
+    uint8_t play_alt, cap_alt;
+    uint32_t play_underruns, play_overruns, cap_underruns, cap_overruns, bad_packets, rx_packets, tx_packets, missed_frames;
+    uint32_t gap_max, gap_n, fill_lo1;
+} ua;
+static uint32_t ua_feedback(void) { return 0; }   /* (SYSTEM > INFO's feedback rate, 10.14: likewise not given) */
+static int32_t opt_play[2u * HALF_FRAMES];         /* this render's computer's audio (plat_usb_audio_play), 24-bit */
+static int32_t opt_cap[UA_CAP_CHANNELS * HALF_FRAMES];   /* this render's capture, 24-bit, four channels a frame */
+static uint32_t opt_play_got, opt_play_at;
+static uint8_t opt_cap_on;                         /* the computer records this render (plat_usb_audio_rec) */
+/* the USB input track's next n frames (fx.c ut_mix, from mix_block: RAM code, through FAR), Q15; 0 = none */
+static HOT uint32_t ua_take(int32_t *l, int32_t *r, uint32_t n)
+{
+    uint32_t i, at = opt_play_at;
+    if (!opt_play_got || at + n > HALF_FRAMES)
+        return 0;
+    for (i = 0; i < n; i++) {
+        l[i] = opt_play[2u * (at + i)] >> 8;
+        r[i] = opt_play[2u * (at + i) + 1u] >> 8;
+    }
+    opt_play_at = at + n;
+    return 1;
+}
+/* a mix block's capture (o: its master, Q15, before the codec's shift), frames f .. f + n of the render */
+static void opt_cap_block(const int32_t *o, uint32_t f, uint32_t n)
+{
+    const int32_t *c = ua_route(o, n);
+    uint32_t i;
+    for (i = 0; i < UA_CAP_CHANNELS * n && f * UA_CAP_CHANNELS + i < UA_CAP_CHANNELS * HALF_FRAMES; i++)
+        opt_cap[f * UA_CAP_CHANNELS + i] = clamp(c[i], -32768, 32767) * 256;
+}
+const int32_t *opt_core_capture(uint32_t n) { return opt_cap_on && n <= HALF_FRAMES ? opt_cap : 0; }
+/* the computer is streaming into the FM-1 (its audio in a render of the last 300 ms; now: fm1_ticks()): the flash
+ * writes that can wait do (project.c audio_quiet), as usb_audio_stream.c's ua_streaming says */
+static volatile uint32_t opt_play_t, opt_play_seen;
+static int ua_streaming(uint32_t now) { return opt_play_seen && now - opt_play_t < 300u * 24000u; }
+#else
+const int32_t *opt_core_capture(uint32_t n) { (void)n; return 0; }
+#endif
+
 /* ------------------------------------------------------------- the app's side --- */
 /* opt_core_init, the power-on: in ui/opt_ui.c (core/model.c's felucca_init path, after the UI's files) */
 
@@ -134,9 +193,23 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
     song.master_q12 = master_q12 > 4096u ? 4096u : master_q12;
     if (opt_master_q12)                              /* (the mirror's client plays MASTER: ui/opt_editor.h) */
         song.master_q12 = opt_master_q12 - 1u;
+#if FELUCCA_USB_AUDIO
+    opt_cap_on = (uint8_t)(plat_usb_audio_rec() != 0);   /* (as audio.c's audio_block at its start: the stems this block) */
+    track_capture_on = opt_cap_on;
+    opt_play_got = (uint32_t)plat_usb_audio_play(opt_play, n <= HALF_FRAMES ? n : HALF_FRAMES);
+    opt_play_at = 0;
+    if (opt_play_got) {
+        opt_play_t = fm1_ticks();
+        opt_play_seen = 1;
+    }
+#endif
     for (f = 0; f + CTL <= n; f += CTL) {
         int32_t *o = lr + 2u * f;
         FAR(mix_block)(o, CTL);                     /* (HOT: RAM code with OPT_HOT_RAM; called as core/audio.c does) */
+#if FELUCCA_USB_AUDIO
+        if (opt_cap_on)
+            opt_cap_block(o, f, CTL);               /* (audio.c ua_block: the channels, the master before the shift) */
+#endif
         for (i = 0; i < 2u * CTL; i++)
             o[i] <<= OUT_SHIFT;
     }

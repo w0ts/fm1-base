@@ -17,11 +17,11 @@ OPT_PROFILE=none: empty, Optimist's source defaults), for the trial's storage ch
                                    autosave; its flash to OUT
   optsim.py idle IN.bin OUT.bin    Optimist's firmware powered on with IN, hands off for 15 s: what a power-on writes
                                    by itself (the autosave of the work resumed), to OUT
-  optsim.py same OPT.bin TRIAL.bin the two flashes after the same steps: every 4 KiB sector the same byte for byte, but
-                                   what this build has and the trial's lacks (Optimist's USB audio): in the section
-                                   log (0x97000 format 1, 0xA0000 format 2) the FX records (their USB input track),
-                                   the other records compared one by one; in the settings record (0xFC000) the USB
-                                   routing ("UAR3") and the header's CRCs
+  optsim.py same OPT.bin TRIAL.bin the two flashes after the same steps: every 4 KiB sector the same byte for byte,
+                                   the section log (0x97000 format 1, 0xA0000 format 2) and the settings record
+                                   (0xFC000) too: the trial has Optimist's USB audio (its USB input track in the FX
+                                   records, the routing "UAR3" in the settings); a log that differs is listed record
+                                   by record
 
 The build uses Optimist's tools/sim.py (its flags, its compile) without its generate step (that writes Optimist's
 tree: gen_param_help.py's copy into web/editor.html): felucca_config.h the profile's (above), the trial's generated
@@ -103,13 +103,11 @@ def drive(*args):
         raise SystemExit(f"optsim: {' '.join(args)} failed")
 
 
-# what the simulator's build writes and the trial's does not (Optimist's switches the trial has off: USB audio), by name:
-#   the section log  the FX records (fx_rec.c: the USB input track's UT_TLV, ids 105..121 the scenes' and the autosave's,
-#                    140 the project's): the other records the same, in the same order (id, project, bytes)
-#   the settings     its header's CRCs and the USB audio routing (persist_rec.c PER4: ua_src .. ua_mark3, "UAR3")
-LOG = {"none": (0x97000, 8), "dev": (0xA0000, 32)}  # (sec_log.c: format 1 / format 2 with no sample slots built)
+# the section log's sectors, for the listing of a difference (sec_log.c: format 1 / format 2 with no sample slots built);
+# the FX records (fx_rec.c, ids 105..121 the scenes' and the autosave's, 140 the project's: the USB input track's UT_TLV
+# among them) named in it
+LOG = {"none": (0x97000, 8), "dev": (0xA0000, 32)}
 FX_IDS = set(range(105, 122)) | {140}
-SET_OK = set(range(16, 20)) | set(range(28, 32)) | set(range(0x2B6, 0x2DC))
 
 
 def log_records(img, base, n):
@@ -132,20 +130,22 @@ def same(a, b):
         raise SystemExit("optsim: same: two 1 MiB images")
     base, n = LOG["none" if os.environ.get("OPT_PROFILE") == "none" else "dev"]
     rx, ry = log_records(x, base, n), log_records(y, base, n)
-    fx = [r for r in rx if r[0] in FX_IDS] + [r for r in ry if r[0] in FX_IDS]
-    log_ok = [r for r in rx if r[0] not in FX_IDS] == [r for r in ry if r[0] not in FX_IDS]
-    print(f"  {'ok  ' if log_ok else 'FAIL'} the section log {base:#07x}: {len(rx)} / {len(ry)} records, the same but the "
-          f"FX records ({len(fx)}: ids {sorted({r[0] for r in fx})})")
-    bad = 0 if log_ok else 1
+    fx = sum(1 for r in rx if r[0] in FX_IDS)
+    log_ok = rx == ry
+    print(f"  {'ok  ' if log_ok else 'FAIL'} the section log {base:#07x}: {len(rx)} / {len(ry)} records, every one the "
+          f"same (the FX records too: {fx}, ids {sorted({r[0] for r in rx if r[0] in FX_IDS})})" if log_ok else
+          f"FAIL the section log {base:#07x}: {len(rx)} / {len(ry)} records; differ: " +
+          ", ".join(f"#{i} id {a[0]}/{b[0]}" for i, (a, b) in enumerate(zip(rx, ry)) if a != b))
+    bad = 0
     used = sum(1 for s in range(0, len(x), 0x1000) if x[s:s + 0x1000] != b"\xff" * 0x1000)
     for s in range(0, len(x), 0x1000):
         d = [i - s for i in range(s, s + 0x1000) if x[i] != y[i]]
-        if not d or base <= s < base + n * 0x1000:
-            continue
-        why = "the settings record: its CRCs and the USB audio routing" if s == 0xFC000 and set(d) <= SET_OK else ""
-        print(f"  {'ok  ' if why else 'FAIL'} sector {s:#07x}: {len(d)} bytes differ" + (f" ({why})" if why else ""))
-        bad += not why
-    print(f"{'FAIL' if bad else '  ok'} optsim same: {used} sectors written by Optimist, {bad} differ unexplained")
+        if d:
+            print(f"FAIL sector {s:#07x}: {len(d)} bytes differ (first at {d[0]:#x})")
+            bad += 1
+        elif s == 0xFC000 and x[s:s + 0x1000] != b"\xff" * 0x1000:
+            print(f"  ok   the settings record {s:#07x}: the same byte for byte (the USB audio routing \"UAR3\" too)")
+    print(f"{'FAIL' if bad else '  ok'} optsim same: {used} sectors written by Optimist, {bad} differ")
     if bad:
         raise SystemExit(1)
 

@@ -11,8 +11,8 @@
  *   the stores  Optimist's own storage (opt_storage.h: its formats, its addresses) on fm1-base's plat_data windows and,
  *               for its globals 0xFC000..0xFEFFF, the app's unit (app.c opt_glob_*); its power-on (persist_boot,
  *               autosave_resume) and its main loop's saves (autosave_tick, settings_poll, sections_flush, sec_service)
- *               here; the rest left out (opt_stubs.h, and the builds' switches off: Bluetooth, the mirror, the editor,
- *               USB audio, CPU1)
+ *               here; the rest left out (opt_stubs.h, and the builds' switches off: Bluetooth, CPU1; the mirror, the
+ *               editor and USB audio are in: opt_editor.h, core/opt_core.c)
  * The composition follows Optimist's host UI test (tests/ui_optimist_test.c) and its main loop (system/main.c). */
 
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
@@ -224,3 +224,8 @@ int opt_st_word(uint32_t off, uint32_t *w)       /* the 32-bit little-endian wor
     return 0;
 }
 const char *opt_ui_msg(void) { return ui.msg; }   /* the header's last message */
+#if FELUCCA_USB_AUDIO
+int32_t opt_ui_uad(uint32_t s) { return s < UAS_N ? ua_dst[s] : -1; }   /* SYSTEM > USB AUDIO: source s's channels (UAD_*) */
+#else
+int32_t opt_ui_uad(uint32_t s) { (void)s; return -1; }
+#endif

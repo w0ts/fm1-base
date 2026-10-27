@@ -88,6 +88,15 @@ static inline void fm1_irq_on(void)
     }
 }
 
+/* ---- the core that runs this (hal/fm1_dual.h fm1_cnum: 0 or 1; FM6's scratch per core, eng_fm6.c): fm1-base's
+ * plat_core (felucca-bsp's fm1_cnum on the FM-1; the host: 1 inside its simulated second core's job), through a pointer:
+ * the render's RAM code calls it too (fm1.toml ram_code_allow) */
+static inline uint32_t fm1_cnum(void)
+{
+    uint32_t (*volatile f)(void) = plat_core;
+    return f();
+}
+
 /* ---- time: TIMER4's 24 MHz count is plat_ticks24 on both. The host simulator's plat_ticks24 is its machine's clock,
  * while its plat_ms is the simulated one (a script's "wait 80" is 80 ms of plat_ms and some microseconds of the
  * clock): Optimist times its knobs' acceleration and its buttons' holds in ticks, so on the host the ticks follow

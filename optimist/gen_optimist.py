@@ -105,9 +105,24 @@ def config(tree, prof):
         if err:
             raise SystemExit(f"gen_optimist: {prof.name} ({out}): " + "; ".join(err))
         configure.write_header(cfg, name, GEN / out)
+        if out == "felucca_config.h":
+            host_dual(configure.flags(cfg)[0].get("FELUCCA_DUAL", 0), GEN / out)
         if env is None:
             env = configure.flags(cfg)[1]       # (the trial's: its sample sets, SLICE)
     return env
+
+
+def host_dual(dual, path):
+    """the profile's second core (DUAL: an FM-1-only item, its header sets FELUCCA_DUAL under __PI32V2__ alone) on the
+    host too: fm1-base's simulated second core (host/plat_host.c, fm1.toml cpu2) runs core/opt_dual.c's jobs there, so
+    the host runs the FM-1's render path"""
+    if not dual:
+        return
+    text = path.read_text()
+    extra = ("/* the trial (gen_optimist.py host_dual): the profile's second core on the host too */\n"
+             f"#if defined(PLAT_HOST) && !defined(FELUCCA_DUAL)\n#define FELUCCA_DUAL {dual}\n#endif\n")
+    if not text.endswith(extra):
+        path.write_text(text + extra)
 
 
 def stamp(tree):

@@ -110,6 +110,9 @@ static int midi_out_open(void) { return 1; }
 #include "seq/arranger.c"
 #endif
 #include "seq/seq.c"
+#if FELUCCA_DUAL >= 2
+#include "opt_dual.c"                            /* the second core: Optimist's split on fm1-base's (mix_block) */
+#endif
 
 #if FELUCCA_USB_AUDIO
 /* ---- USB audio (FELUCCA_USB_AUDIO, the profile's): Optimist's USB input track (fx.c ut_mix, ua_take) and its capture
@@ -234,6 +237,9 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
         for (i = 0; i < HALF_WORDS; i++)
             h[i] = f * 2u + i < 2u * n ? lr[f * 2u + i] : 0;
         audio_halves++;
+#if FELUCCA_DUAL >= 2
+        dual_load_half();                            /* CPU1's load, once a half (core/opt_dual.c, dual_load.h) */
+#endif
     }
     while (mo_r != mo_w) {                           /* the sequencer's and the keys' MIDI out (the out ring) */
         plat_midi_send(midi_out_q[mo_r % MQ], TO_USB);
@@ -272,6 +278,25 @@ uint32_t opt_core_voices(void)
 }
 
 const char *opt_core_engine(uint32_t part) { return part < NPART ? ENGINES[trk[part].engine]->name : ""; }
+
+#if FELUCCA_DUAL >= 2
+void opt_core_dual_parts(uint32_t jobs) { dual_fixed = jobs & DUAL_ALLOWED; }
+int32_t opt_core_dual_stat(uint32_t k)
+{
+    if (k == 0u)
+        return dual.up;
+    if (k == 1u)
+        return dual.why;
+    if (k == 2u)
+        return (int32_t)dual.jobs;
+    if (k == 3u)
+        return (int32_t)dual.posts;
+    return -1;
+}
+#else
+void opt_core_dual_parts(uint32_t jobs) { (void)jobs; }
+int32_t opt_core_dual_stat(uint32_t k) { (void)k; return -1; }
+#endif
 
 /* ------------------------------------------------------------- the UI --- */
 #include "../ui/opt_ui.c"                         /* Optimist's UI on fm1-base's canvas and panel (after the core: one unit) */

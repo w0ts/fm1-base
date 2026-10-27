@@ -270,6 +270,20 @@ int plat_file_write(const plat_file_t *f, uint32_t off, const void *src, uint32_
 int plat_file_commit(const plat_file_t *f, uint32_t size, uint32_t crc);   /* checked, current: 0 */
 int plat_file_delete(const plat_file_t *f);                    /* 0 = none now */
 
+/* The companion's parameters (fm1.toml companion = true, app.h APP_PARAMS: docs/COMPANION.md): what app_param says of
+ * parameter i. id the app's own (kept from one release to the next); type PLAT_PT_*: a number min .. max, or one of
+ * labels (max - min + 1 of them, for min .. max); unit (0: none) and group (an index into app_param_group's) for a page;
+ * flags PLAT_PA_READONLY: shown, never set */
+enum { PLAT_PT_NUMBER, PLAT_PT_ENUM };
+#define PLAT_PA_READONLY 1u
+typedef struct {
+    uint16_t id;
+    uint8_t type, group, flags;
+    int32_t min, max, def;
+    const char *name, *unit;
+    const char *const *labels;
+} plat_param_t;
+
 /* audio load in % of the render budget, and xruns since boot (device: from the ISR) */
 uint32_t plat_cpu_pct(void);
 uint32_t plat_xruns(void);
@@ -347,4 +361,8 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  * Its files (APP_FILES): int app_file(i, plat_file_info_t *f) (file i: 0 = there, -1 past the last), app_file_read(i,
  * off, dst, n), app_file_begin(i, size), app_file_write(i, off, src, n) (in order), app_file_commit(i, size, crc) (all
  * of it came, its CRC-32 checked: make it current), app_file_delete(i) (0 = done each), app_file_busy() (1: no write or
- * delete now, playing). plat_file_* (above) keeps a file in the data area for an app that has nowhere else */
+ * delete now, playing). plat_file_* (above) keeps a file in the data area for an app that has nowhere else.
+ * Its parameters (APP_PARAMS; APP_PARAM_MAX the most, 64 by default): int app_param(i, plat_param_t *p) (parameter i: 0
+ * = there, -1 past the last), const char *app_param_group(g) (0 past the last), int32_t app_param_get(i),
+ * int32_t app_param_set(i, v) (v within min .. max; -> the value now). Main loop: a value the render reads is shared
+ * as the app's own UI shares it */

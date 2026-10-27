@@ -49,7 +49,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              pool spare the build insists on (8192 B; a demo build may spend it)
   backup = true              backup and restore of the app's saved objects over USB (FM1B_BACKUP: device/backup.c;
                              tools/fm1_backup.py); app.h gives APP_BACKUP_OBJS, _MAGIC, _VERSION and the app_backup_* hooks
-  cpu2 = true                the second core (FM1B_CPU2: device/cpu2.c, plat_cpu2_* in plat.h, on felucca-bsp's
+  companion = true           the companion services over USB (FM1B_COMPANION: device/companion.c, docs/COMPANION.md;
+                             tools/fm1_companion.py): what the firmware is and has, for a generic page or tool
+  cpu2 = true               the second core (FM1B_CPU2: device/cpu2.c, plat_cpu2_* in plat.h, on felucca-bsp's
                              chip/fm1_cpu1.*): a worker for a part of the render. A failure of it (a misread, a
                              fault, a late job) restarts the FM-1, the reason in the crash record (Melodee's releases)
   cpu2_fallback = true       instead, one core after a failure, until power-off (FM1_CPU1_FALLBACK); FM1B_BUILD, a
@@ -840,8 +842,11 @@ def build_id():
 
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
-    return [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"))
-            if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"))
+             if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+    if "-DFM1B_COMPANION=1" in flags and PRODUCT:
+        flags.append(f'-DFELUCCA_ID="{PRODUCT}"')   # (the capability query's identity in the simulator and the browser too;
+    return flags                                 # the device's build passes it anyway: the same define twice)
 
 
 def build_host():
@@ -979,6 +984,7 @@ def main():
              ("USB audio out", on("usb_audio_out", "FM1B_UAC_OUT", True) and on("usb_audio_in", "FM1B_UAC", True)),
              ("screen mirroring", bool(CONF.get("mirror")) or os.environ.get("FM1B_MIRROR") == "1"), ("backup and restore", bool(CONF.get("backup")) and os.environ.get("FM1B_BACKUP") != "0"),
              ("the second core", CPU2), ("USB MIDI host", on("usb_host", "FM1B_USB_HOST", False)),
+             ("companion services", on("companion", "FM1B_COMPANION", False)),
              ("velocity and pressure", any(re.search(r"^#define APP_TOUCH\b", f.read_text(errors="ignore"), re.M)
                                             for f in APP.glob("*.h")))]
     print("parts    " + ", ".join(n for n, x in parts if x) + "  (not built in: " +

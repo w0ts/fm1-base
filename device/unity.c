@@ -25,7 +25,8 @@
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
  *   FM1B_MIRROR 0           the screen and panel mirrored over USB (fm1.toml mirror = true: mirror.c)
  *   FM1B_BACKUP 0           backup and restore of the app's objects over USB (fm1.toml backup = true: backup.c)
- *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h) */
+ *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h)
+ *   FM1B_COMPANION 0        the companion services over USB (fm1.toml companion = true: companion.c) */
 #include <stdint.h>
 #include "plat.h"
 #include "app.h"                  /* first: the scan's hooks below may call the app */
@@ -109,6 +110,9 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #endif
 #ifndef FM1B_CPU2
 #define FM1B_CPU2 0
+#endif
+#ifndef FM1B_COMPANION
+#define FM1B_COMPANION 0
 #endif
 #define FELUCCA_MIRROR FM1B_MIRROR /* usb.c's ring for mirror.c's frames */
 #ifndef FM1B_USB_HOST
@@ -349,6 +353,10 @@ static int bu_room(void)                            /* the SysEx ring empty: a f
 static int bu_send(const uint8_t *p, uint32_t n) { return ota_wire_send(p, n); }
 static void bu_flush(void) { app_backup_flush(); }
 static void bu_hold(int on) { app_backup_hold(on); }
+#endif
+#if FM1B_COMPANION
+#include "companion.c"            /* the companion services over USB (docs/COMPANION.md: web/companion, tools/fm1_companion.py) */
+static int cp_send(const uint8_t *p, uint32_t n) { return usb.config ? ota_wire_send(p, n) : -1; }
 #endif
 #ifdef APP_TOUCH
 #include "touch.c"

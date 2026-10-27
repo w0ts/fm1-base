@@ -118,6 +118,8 @@ int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n);   
 int app_file_commit(uint32_t i, uint32_t size, uint32_t crc);   /* all of it came, CRC-32 checked: make it current */
 int app_file_delete(uint32_t i);                   /* 0 = gone */
 int app_file_busy(void);                           /* 1: no write or delete now (playing) */
+#define APP_FILE_COUNT                             /* optional: uint32_t app_file_count(void), the files' number, for an
+                                                      app whose app_file is costly (the list asks it once, not a file each) */
 
 #define APP_PARAMS                                 /* parameters: */
 #define APP_PARAM_MAX 64                           /* the most there are (watching keeps a value each) */

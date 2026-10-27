@@ -584,6 +584,9 @@ int plat_store_save(uint32_t obj, const void *src, uint32_t len)
 
 static uint32_t cpu_pct;
 uint32_t plat_cpu_pct(void) { return cpu_pct; }
+#ifdef APP_CPU_KHZ
+uint32_t plat_cpu_khz(void) { return 0; }        /* (no clock to speak of: the host's) */
+#endif
 uint32_t plat_xruns(void) { return 0; }
 uint32_t plat_ticks24(void)                     /* the host's monotonic clock, at the device's rate */
 {
@@ -1130,6 +1133,10 @@ static int expect(const char *what, const char *val)
         got = ble_state;
     else if (!strcmp(what, "ble_dev"))              /* the Bluetooth MIDI device: BLE_DEV_* (4 connected) */
         got = bdev_state;
+#ifdef APP_CPU_KHZ
+    else if (!strcmp(what, "cpu_khz"))              /* plat_cpu_khz: the CPU's clock (the host's: 0, none) */
+        got = (int)plat_cpu_khz();
+#endif
     else if (!strcmp(what, "midi_in_usb"))          /* plat_midi_count: messages in from USB */
         got = (int)plat_midi_count(PORT_USB, 0);
     else if (!strcmp(what, "peak_db_max") || !strcmp(what, "peak_db_min")) {

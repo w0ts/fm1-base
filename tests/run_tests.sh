@@ -82,5 +82,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# an app with APP_CPU_KHZ (plat_cpu_khz) in the host simulator: tests/cpukhz_app
+run cpukhz-app sh -c "$PY tools/build.py tests/cpukhz_app --host && \
+    tests/cpukhz_app/build/host/khztest_host tests/cpukhz_app/tests/cpukhz.txt tests/cpukhz_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

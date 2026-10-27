@@ -36,13 +36,18 @@ def serve(out):
 def test_hello(out):
     link, c = serve(out)
     h = c.hello()
-    check("protocol version 1", h["version"] == 1, h["version"])
+    check("protocol version 2", h["version"] == 2, h["version"])
+    check("the backup format", h["backup"] == {"magic": "CPTB", "version": 2, "ext": "cpb"}, h["backup"])
     check("identity FM-1_1400", h["identity"] == "FM-1_1400", h["identity"])
     check("name and version", (h["name"], h["app_version"]) == ("CPTEST", "1.2"), (h["name"], h["app_version"]))
     check("the app's tags", h["extras"] == {"editor": "cptest/1", "site": "https://example.invalid/cptest"},
           h["extras"])
-    want = {"capability query", "screen reader", "the app's own SysEx", "USB audio in", "USB audio out"}
+    want = {"capability query", "screen reader", "backup", "the app's own SysEx", "USB audio in", "USB audio out"}
     check("services", set(h["services"]) == want, h["services"])
+    old = c.request(0x60)                         # a version 1 reader: the same fields up to the extras, the end unread
+    (ident, name, ver, extras), tail = C.cstrings(old[13:], 4)
+    check("a version 1 reader's fields", (ident, name, ver) == (h["identity"], "CPTEST", "1.2") and extras.startswith("editor="), (ident, name, ver, extras))
+    check("the backup format at the answer's end", tail == b"CPTB" + bytes([2, 0]) + b"cpb\0", tail)
     check("chunks", (h["read_max"], h["write_max"]) == (256, 512), (h["read_max"], h["write_max"]))
     # the app's own SysEx: the app's, not the companion's (no answer)
     link.send(bytes([0xF0, 0x7D, 0x43, 0x50, 0x01, 0xF7]))

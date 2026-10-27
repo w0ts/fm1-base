@@ -94,8 +94,13 @@ class Client:
     def hello(self):
         b = self.request(HELLO)
         ver, svc, rmax, wmax, nf, np_ = struct.unpack_from("<BIHHHH", b)
-        (ident, name, version, extras), _ = cstrings(b[13:], 4)
-        return {"version": ver, "services": [s for i, s in enumerate(SERVICES) if svc >> i & 1], "bits": svc,
+        (ident, name, version, extras), rest = cstrings(b[13:], 4)
+        backup = None                                 # protocol 2 (an answer's end an old reader skips): the backup's format
+        if ver >= 2 and len(rest) >= 7:
+            magic, bver = struct.unpack_from("<4sH", rest)
+            if magic != bytes(4):
+                backup = {"magic": magic.decode("latin-1"), "version": bver, "ext": cstrings(rest[6:], 1)[0][0]}
+        return {"backup": backup, "version": ver, "services": [s for i, s in enumerate(SERVICES) if svc >> i & 1], "bits": svc,
                 "read_max": rmax, "write_max": wmax, "files": nf, "params": np_, "identity": ident, "name": name,
                 "app_version": version,
                 "extras": dict(kv.split("=", 1) if "=" in kv else (kv, "") for kv in extras.split(";") if kv)}
@@ -164,6 +169,8 @@ def show_info(c, out):
     print("services: " + ", ".join(h["services"]), file=out)
     print(f"files: {h['files']}, parameters: {h['params']} (chunks: read {h['read_max']}, write {h['write_max']})",
           file=out)
+    if h["backup"]:
+        print(f"backup: {h['backup']['magic']} version {h['backup']['version']}, files .{h['backup']['ext']}", file=out)
     for k, v in h["extras"].items():
         print(f"  {k} = {v}", file=out)
     return 0

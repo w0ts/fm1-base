@@ -845,8 +845,11 @@ def opt_flags():
     flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"))
              if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
     if "-DFM1B_COMPANION=1" in flags and PRODUCT:
-        flags.append(f'-DFELUCCA_ID="{PRODUCT}"')   # (the capability query's identity in the simulator and the browser too;
-    return flags                                 # the device's build passes it anyway: the same define twice)
+        flags.append(f'-DFELUCCA_ID="{PRODUCT}"')   # (the capability query's identity in the simulator and the browser too:
+                                                 # the device's build passes it anyway: the same define twice)
+    if "-DFM1B_COMPANION=1" in flags and "-DFM1B_BACKUP=1" in flags:
+        flags.append(f'-DFM1B_BACKUP_EXT="{CONF.get("backup_ext", "bak")}"')   # (the capability query tells the backup's extension)
+    return flags
 
 
 def build_host():

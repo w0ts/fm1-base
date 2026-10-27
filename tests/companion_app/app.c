@@ -16,6 +16,10 @@ void app_ui_init(void) { lcd_fill(0, 0, 240, 240, C_BLACK); }
 void app_frame(void) {}
 void app_input_only(void) {}
 void app_say(const char *a, const char *b) { (void)a, (void)b; }
+int app_backup_playing(void) { return 0; }
+void app_backup_flush(void) {}
+void app_backup_hold(int on) { (void)on; }
+void app_backup_restored(void) {}
 
 int app_sysex(const uint8_t *p, uint32_t n)
 {

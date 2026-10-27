@@ -16,7 +16,10 @@
 #define APP_COMPANION_EXTRAS ""
 #endif
 #define CP_HELLO 0x60u
-#define CP_VERSION 1u
+#define CP_VERSION 2u                                 /* 2: the backup's format at the answer's end (0x60) */
+#ifndef FM1B_BACKUP_EXT
+#define FM1B_BACKUP_EXT "bak"                         /* the backup files' extension (fm1.toml backup_ext: tools/build.py) */
+#endif
 #define CP_READ_MAX 256u                              /* a read's bytes at most (its answer fits the SysEx ring whole) */
 #define CP_WRITE_MAX 512u                             /* a write's (the computer's frame: 640 bytes between F0 and F7) */
 #define CP_BODY_MAX (12u + CP_READ_MAX)               /* the longest answer's body */
@@ -138,6 +141,15 @@ static void cp_hello(void)
     cp_str(APP_NAME, 31);
     cp_str(APP_VERSION, 31);
     cp_str(APP_COMPANION_EXTRAS, 120);
+#if defined FM1B_BACKUP && FM1B_BACKUP                /* version 2: the backup's format (backup.c's image: magic, version) */
+    cp_u32(APP_BACKUP_MAGIC);
+    cp_u16(APP_BACKUP_VERSION);
+    cp_str(FM1B_BACKUP_EXT, 7);
+#else
+    cp_u32(0);                                        /* (no backup: magic 0, version 0, no extension) */
+    cp_u16(0);
+    cp_str("", 7);
+#endif
     cp_end(CP_HELLO);
 }
 

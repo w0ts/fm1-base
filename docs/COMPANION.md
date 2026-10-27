@@ -12,7 +12,7 @@ is built byte for byte as before (its package, its host simulator, its `app.wasm
 
 | Service | The app gives | The computer can |
 | --- | --- | --- |
-| capability query (always, with `companion = true`) | `APP_NAME`, `APP_VERSION`, optional `APP_COMPANION_EXTRAS` | ask which platform services this firmware has, the app's name, version and its own tags |
+| capability query (always, with `companion = true`) | `APP_NAME`, `APP_VERSION`, optional `APP_COMPANION_EXTRAS` | ask which platform services this firmware has, the app's name, version, its own tags and its backup's format |
 | files (`APP_FILES` in app.h) | a list of named objects and their reads and writes | list them, read one in chunks, write one (checked by CRC-32 before it counts, resumable), delete one; refused while the app is busy (playing) |
 | parameters (`APP_PARAMS` in app.h) | a table of parameters (id, name, range, enum labels, unit, group) and get / set | describe them, get and set values, be told when one changes on the FM-1 |
 
@@ -38,7 +38,7 @@ handshake, `0x11`, still tells it the identity).
 Request: an empty body (or one byte, the client's protocol version: ignored for now). Answer:
 
 ```
-u8  version (1)
+u8  version (2)
 u32 services, a bit each:  0 the capability query   1 files            2 parameters      3 backup (backup.c)
                            4 mirror (mirror.c)      5 screen reader    6 Bluetooth MIDI  7 WiFi
                            8 USB audio in           9 USB audio out   10 the app's own SysEx (APP_SYSEX)
@@ -47,11 +47,22 @@ u32 services, a bit each:  0 the capability query   1 files            2 paramet
 u16 the largest read chunk (256), u16 the largest write chunk (512)
 u16 files, u16 parameters  (their counts now; 0 without the service)
 identity \0   name \0   version \0   extras \0
+-- protocol 2, at the end (a version 1 reader stops after the extras and never sees it) --
+4 bytes the backup's magic (APP_BACKUP_MAGIC, as backup.c writes it: 4 ASCII letters, the image's first 4 bytes),
+        0 0 0 0 without backup (FM1B_BACKUP)
+u16 the backup's format version (APP_BACKUP_VERSION), 0 without backup
+ext \0  the backup files' extension without the dot (fm1.toml backup_ext, "bak" by default), "" without backup
 ```
 
 identity is the package identity (`FM-1_NNNN`, the update handshake's), name `APP_NAME`, version `APP_VERSION`, extras
 `APP_COMPANION_EXTRAS` ("" by default): the app's own tags for its own pages, `key=value` pairs split by `;` (e.g.
 `editor=optimist/7;site=https://...`). A generic page shows what the bits say and leaves the extras to the app's pages.
+
+The backup's format (magic, version, extension) is the platform's to tell, not an extras tag: a page or phone app that
+reads a backup file or asks the FM-1 for one takes them from the answer (version 2). An older firmware (version 1)
+answers without them: a client may then fall back to tags its app's own pages know (the extras), or to what it knows
+of the firmware. Fields are only ever added at the answer's end and the version raised; a reader takes the fields it
+knows and ignores the rest.
 
 ### 0x61 files
 

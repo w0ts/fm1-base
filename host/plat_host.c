@@ -38,6 +38,9 @@
  *                                (plat.h), up to that window's end
  *   res 0|1                      (FM1B_RES) the resource region there (1, at start) or not (0: an FM-1 updated
  *                                without it; plat_res 0)
+ *   data_erase OFFSET            plat_data_erase(OFFSET), as an app calls it (expect data_rc: what it returned)
+ *   data_write OFFSET HEX        plat_data_write of HEX's bytes (up to 31, e.g. F00F) at OFFSET: as the flash, each
+ *                                byte becomes the old AND the new (expect data_rc; -2: no bytes)
  *   fbdump FILE                  the screen's pixels raw (240 x 240 RGB565, high byte first) into FILE
  *   flash_fail 0|1               every store save fails (1) or works (0); expect store_tries counts the attempts
  *   clock N [MS]                 N MIDI clocks in (F8) over USB, MS apart (default 21: 119 bpm)
@@ -101,6 +104,7 @@
 #ifdef __linux__
 #define _GNU_SOURCE                             /* (open_memstream: --serve) */
 #endif
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -821,6 +825,7 @@ static uint8_t data_area[PLAT_XDATA1_HI - DATA_BASE];
 #endif
 static uint8_t data_ready;
 static uint32_t data_writes;            /* every erase and write */
+static int data_cmd_rc;                   /* the last script data_erase / data_write: what it returned (expect data_rc) */
 static void data_init(void)
 {
     if (!data_ready) {
@@ -1688,6 +1693,8 @@ static int expect(const char *what, const char *val)
     else if (!strcmp(what, "dim_ns"))               /* the dim pulse (plat_dim_ns, else the glow's), ns */
         got = (int)dim_pulse();
 #endif
+    else if (!strcmp(what, "data_rc"))           /* the last data_erase / data_write: 0 done, -1 refused, -2 no bytes */
+        got = data_cmd_rc;
     else if (!strcmp(what, "clocks_out"))
         got = (int)clock_out_count;
     else if (!strcmp(what, "usb_play_gain"))        /* plat_usb_play_gain's level, 0..4096 */
@@ -2150,7 +2157,17 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "res"))             /* res 0|1: the resource region there or not */
             res_there = atoi(a) != 0;
 #endif
-        else if (!strcmp(cmd, "data")) {          /* data FILE OFFSET: a file into the data area (plat_data) */
+        else if (!strcmp(cmd, "data_erase"))      /* data_erase OFFSET: plat_data_erase, as an app calls it */
+            data_cmd_rc = plat_data_erase((uint32_t)strtoul(a, 0, 0));
+        else if (!strcmp(cmd, "data_write")) {    /* data_write OFFSET HEX: plat_data_write of those bytes */
+            uint8_t w[32];
+            uint32_t n = 0;
+            while (n < sizeof w && isxdigit((unsigned char)b[2u * n]) && isxdigit((unsigned char)b[2u * n + 1u])) {
+                char h[3] = {b[2u * n], b[2u * n + 1u], 0};
+                w[n++] = (uint8_t)strtoul(h, 0, 16);
+            }
+            data_cmd_rc = n && !b[2u * n] ? plat_data_write((uint32_t)strtoul(a, 0, 0), w, n) : -2;
+        } else if (!strcmp(cmd, "data")) {        /* data FILE OFFSET: a file into the data area (plat_data) */
             FILE *df = fopen(a, "rb");
             uint32_t off = (uint32_t)strtoul(b, 0, 0), hi = data_window_hi(off);
             data_init();

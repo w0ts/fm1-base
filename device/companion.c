@@ -182,6 +182,9 @@ static struct {
     uint16_t i;
     uint32_t size, crc, next, run;                    /* the file's size and CRC-32; the bytes come so far, their CRC */
 } cw;
+#ifdef APP_FILE_COUNT
+static uint32_t cp_nfiles(void) { return app_file_count(); }   /* (the app's own count: its app_file is costly) */
+#else
 static uint32_t cp_nfiles(void)
 {
     plat_file_info_t f;
@@ -190,6 +193,7 @@ static uint32_t cp_nfiles(void)
         i++;
     return i;
 }
+#endif
 static void cp_head(uint32_t op, uint32_t st, uint32_t i)   /* an answer's start: op, status, index */
 {
     cp_begin();

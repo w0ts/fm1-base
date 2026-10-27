@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The trial in the host simulator, built and run: optimist/run.sh (from anywhere). Twice: with Optimist's source
 # defaults (OPT_PROFILE=none: tests/), then with the trial's copy of Optimist's dev profile (profiles/
-# dev-171e96a3.config: the device build's switches, the reference profile's data formats and addresses; tests/dev/),
+# dev-bt.config: the device build's switches, the reference profile's data formats and addresses; tests/dev/),
 # which the build is left with.
 # Each run builds with fm1-base's tools/build.py --host (Terminus: X0X_FONTSET, which fm1.toml cannot set yet), then
 # runs the note (milestone 1: the sound), the UI (milestone 2) and the storage (milestone 3): storage.txt saves through

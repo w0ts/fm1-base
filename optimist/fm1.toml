@@ -43,7 +43,7 @@ cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: un
 # mirror over Bluetooth (ui/opt_bt.h: its screens, settings record and mirror on plat_ble_* / plat_bta_*)
 ble = true
 ble_stack = "own"
-ble_pairing = true             # a Mac or phone pairs (Just Works, the bond kept: Optimist's settings record, APP_BLE_STORE)
+ble_pairing = false            # no pairing, as Optimist's dev profile has it (BLE_BOND 0): a Mac or phone connects unbonded (3,420 B)
 bt_audio = true                # Bluetooth audio to headphones and speakers (A2DP), as Optimist's BT_AUDIO
 ble_midi_time = true           # BLE MIDI in by the sender's time (plat_midi_in_t24): Optimist's clock follower times F8s
                                # itself (clock_sync.c, BT OFS), as its own midi_ble.c ble_in_time gave them

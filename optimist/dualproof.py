@@ -28,7 +28,7 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent
 ROOT = APP.parent
 TEMPLATE = APP / "tests" / "dual.txt"
-PROFILE = APP / "profiles" / "dev-171e96a3.config"
+PROFILE = APP / "profiles" / "dev-bt.config"
 SPLITS = [None, 0x1, 0x6, 0x8, 0x10, 0x1F]       # (bit p: part p, 3 the drums, 4 the reverb's kept block)
 SENDS = [0, 100]                                 # (0 first: the sends' part of the output is a take less the 0 one)
 CTL = 32                                         # (Optimist's mix block, frames: the reverb's lateness)

@@ -31,7 +31,7 @@ LINK = BUILD / "optimist"
 GEN = BUILD / "optgen"
 # Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off (OPT_PROFILE=none)
 HOST_ENV = {"FELUCCA_SAMPLES_SKIP": "", "FELUCCA_SLICE": "0"}
-PROFILE = "profiles/dev-171e96a3.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after)
+PROFILE = "profiles/dev-bt.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after)
 MARKER = "# ---- the trial:"                   # (the copy's line where the trial's own changes start)
 # the audio core's and the UI's headers (Optimist tools/build.py generate(): its colours for the UI; its fonts are not
 # used (fm1-base's canvas draws with fm1-base's), its icons nowhere, the help lines off (gen_param_help.py would also

@@ -1040,6 +1040,7 @@ uint32_t plat_cpu_pct(void) { return cpu_pct; }
 uint32_t plat_cpu_khz(void) { return 0; }        /* (no clock to speak of: the host's) */
 #endif
 uint32_t plat_xruns(void) { return 0; }
+uint32_t plat_midi_in_t24(void) { return plat_ticks24(); }   /* (no Bluetooth timestamps here: now) */
 uint32_t plat_ticks24(void)                     /* the host's monotonic clock, at the device's rate */
 {
     struct timespec t;

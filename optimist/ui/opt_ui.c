@@ -171,6 +171,7 @@ void opt_ui_frame(void)
 #else
     usb.config = plat_battery() == 4;            /* (opt_stubs.h: a USB host powers the FM-1) */
 #endif
+    opt_ua_poll();                               /* (USB audio's counters, for SYSTEM > INFO: core/opt_core.c) */
     opt_in_scan();
     fm1_ms = plat_ms();
     ui_input();

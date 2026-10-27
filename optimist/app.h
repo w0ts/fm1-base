@@ -42,6 +42,7 @@ void app_loop(void);
  * routing (APP_USB_CAPTURE: app_usb_capture, core/opt_core.c) */
 #define APP_USB_PLAY
 #define APP_USB_CAPTURE
+#define APP_USB_STATS                    /* plat_usb_audio_stats: SYSTEM > INFO's USB counters (core/opt_core.c) */
 const int32_t *app_usb_capture(const int32_t *lr, uint32_t n);
 
 /* the host simulator's checks (host/plat_host.c "expect"): voices (sounding), blocks (rendered), keys (held, as the

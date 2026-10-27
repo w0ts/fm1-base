@@ -125,14 +125,27 @@ static int midi_out_open(void) { return 1; }
 #define UA_CAP_CHANNELS 4u                         /* (usb_audio_stream.c's: fm1.toml usb_audio_in_channels = 4) */
 _Static_assert(NTRK == UA_CAP_CHANNELS, "the default routing hands the stems (NTRK a frame) over as the channels");
 #include "io/usb/usb_audio_route.c"
-/* usb_audio_stream.c's counters as SYSTEM > INFO and USB AUDIO read them (op_project.c): fm1-base's USB audio keeps its
- * own (felucca-bsp's uac / uo) and plat.h does not give them, so these stay 0 here */
+/* usb_audio_stream.c's counters as SYSTEM > INFO and USB STATS read them (op_project.c), from fm1-base's (felucca-bsp's
+ * uac / uo: plat_usb_audio_stats, APP_USB_STATS) each main loop pass (opt_ua_poll): the output's (playback) runs dry
+ * and overflows, its packets in, the input's (capture) runs dry and overflows, its IN tokens that found nothing, its
+ * packets out, the feedback. Not kept by fm1-base: a bad packet's count, the lowest fill, the polls' gaps (0 here) */
 static struct {
     uint8_t play_alt, cap_alt;
     uint32_t play_underruns, play_overruns, cap_underruns, cap_overruns, bad_packets, rx_packets, tx_packets, missed_frames;
     uint32_t gap_max, gap_n, fill_lo1;
 } ua;
-static uint32_t ua_feedback(void) { return 0; }   /* (SYSTEM > INFO's feedback rate, 10.14: likewise not given) */
+static uint32_t ua_fb_now;
+static uint32_t ua_feedback(void) { return ua_fb_now; }   /* (SYSTEM > INFO's feedback rate, 10.14 frames a ms) */
+static void opt_ua_poll(void)
+{
+    plat_usb_audio_stats_t s;
+    plat_usb_audio_stats(&s);
+    ua.play_alt = s.out_alt, ua.cap_alt = s.in_alt;
+    ua.play_underruns = s.out_underruns, ua.play_overruns = s.out_overruns, ua.rx_packets = s.out_packets;
+    ua.cap_underruns = s.in_underruns, ua.cap_overruns = s.in_overruns, ua.missed_frames = s.in_missed;
+    ua.tx_packets = s.in_packets;
+    ua_fb_now = s.out_feedback;
+}
 static int32_t opt_play[2u * HALF_FRAMES];         /* this render's computer's audio (plat_usb_audio_play), 24-bit */
 static int32_t opt_cap[UA_CAP_CHANNELS * HALF_FRAMES];   /* this render's capture, 24-bit, four channels a frame */
 static uint32_t opt_play_got, opt_play_at;
@@ -165,6 +178,7 @@ static volatile uint32_t opt_play_t, opt_play_seen;
 static int ua_streaming(uint32_t now) { return opt_play_seen && now - opt_play_t < 300u * 24000u; }
 #else
 const int32_t *opt_core_capture(uint32_t n) { (void)n; return 0; }
+static void opt_ua_poll(void) {}
 #endif
 
 /* ------------------------------------------------------------- the app's side --- */

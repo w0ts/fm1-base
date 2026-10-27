@@ -66,6 +66,7 @@ if command -v node >/dev/null 2>&1; then
     # FM1_STOCK_FWSC=<path to M-VAVE's FM-1_015.fwsc> adds the stock file's cases (that file is not in this repository)
     run checkufw node tests/checkufw_test.mjs web/m-bootloader/fm1-uboot-1.2.fwsc ${FM1_STOCK_FWSC:-}
     run installer-bluetooth node tests/installer_bluetooth_test.mjs
+    run installer-family-ports node tests/installer_family_ports_test.mjs
 else
     echo "  skip installer-boot (no node)"
 fi

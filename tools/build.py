@@ -43,6 +43,14 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_host = true            the USB port as a MIDI host when the app asks (FM1B_USB_HOST: felucca-bsp's
                              FELUCCA_USB_HOST, docs/USB_HOST.md; plat_usb_host in plat.h): a USB-MIDI controller or
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
+  app_end = 0xCE000          a bigger app slot (FM1B_APP_END; FM1B_APP_END=0x... in the environment for one build): the
+                             app area [0x4000, app_end) instead of [0x4000, 0x93000), on a 4 KiB boundary up to 0xE0000;
+                             the code may then reach past the old end, plat.h's data window starts at app_end
+                             (PLAT_DATA_LO; XDATA0 goes) and the update loader (felucca-bsp's, FL_APP_END) writes the
+                             bigger area. Any app_end (0x93000 too) builds the loader that compares slots before an
+                             install (LDR_SLOT_SWITCH): after a bigger app, the old code above app_end is erased
+  app_clear_end = 0xDA000    with app_end: what an install over an app with a smaller slot erases first, [app_end,
+                             app_clear_end) (the data the other app kept where this one keeps its own)
   mirror = true              the screen and panel mirrored over USB (FM1B_MIRROR: device/mirror.c; web/mirror/,
                              tools/fm1_mirror.py), the panel played from the host; FM1B_MIRROR=1 in the environment
                              builds it in whatever fm1.toml says (an app's demo build), FM1B_POOL_SPARE=N the
@@ -290,6 +298,9 @@ def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = BSP / "loader"
     flags = [*CFLAGS, *inc(BSP / "chip", BSP / "boards" / "fm1")]
+    if app_end():                 # the app's slot: the loader writes it, and compares it with the installed app's
+        flags += [f"-DFL_APP_END={app_end():#x}u", "-DLDR_SLOT_SWITCH=1",
+                  *([f"-DLDR_CLEAR_END={CONF['app_clear_end']:#x}u"] if CONF.get("app_clear_end") else [])]
     tc_all(("cc", "-c", src / "crt0_ldr.S", "-o", LDR / "crt0_ldr.o"),
            ("cc", *flags, "-c", src / "loader.c", "-o", LDR / "loader.o"))
     elf = LDR / "loader.elf"
@@ -611,6 +622,13 @@ def build_app():
     lto = ["--plugin", "/opt/jieli/pi32v2/bin/LLVMgold.so" if use_docker() else str(toolchain() / "pi32v2/bin/LLVMgold.so"),
            f"--plugin-opt=mcpu={CPU}", "--plugin-opt=-pi32v2-large-program=true"] if BLE or WIFI else []
     ld = SRC / "device" / ("app_wifi.ld" if WIFI else "app.ld")
+    if app_slot() != APP_SLOT:    # a bigger slot (app_end): the script with XIP that long
+        text, n = re.subn(r"(XIP\s*\(rx\)\s*:\s*ORIGIN = 0x02000120, LENGTH = )0x8DFBC", rf"\g<1>{app_slot():#X}".replace("0X", "0x"),
+                          ld.read_text())
+        if n != 1:
+            raise SystemExit(f"build: {ld.name}: no XIP line to give the slot")
+        ld = OUT / ld.name
+        ld.write_text(text)
     tc("pi32v2/bin/ld", *lto, "--gc-sections", "-e", "_start", "-T", ld, *objs, *b_objs,
        *b_libs, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
@@ -723,8 +741,8 @@ def check(img, syms, dis, rt):
             errors.append(f"--no-ble build links Bluetooth code: {bt}")
         else:
             notes.append("--no-ble: no Bluetooth code linked")
-    if len(img) > APP_SLOT:
-        errors.append(f"image {len(img)} B exceeds the app slot")
+    if len(img) > app_slot():
+        errors.append(f"image {len(img)} B exceeds the app slot ({app_slot()} B)")
     # the FPU is single precision; a soft-double routine in the image means a double crept in
     soft = sorted(set(re.findall(r"\s(__(?:add|sub|mul|div|neg|cmp|eq|ne|lt|le|gt|ge|un|extendsf|truncdf|fixdf|fixunsdf|floatsidf|floatunsidf|floatdidf)\w*df\w*)$", syms, re.M)))
     if soft and (BLE or WIFI):
@@ -809,7 +827,8 @@ def o2_files():
 def o2_objects(cc, base_flags, out):
     """the o2 units compiled apart (each with its own flags: o2_cflags, o2_include, its directory) for the host or the
     browser; their objects"""
-    extra = [*CONF.get("o2_cflags", []), *[a for h in CONF.get("o2_include", []) for a in ("-include", str(APP / h))]]
+    extra = [*CONF.get("o2_cflags", []), *[a for h in CONF.get("o2_include", []) for a in ("-include", str(APP / h))],
+             *slot_flags()]
     out.mkdir(parents=True, exist_ok=True)
     jobs = [(f, out / ("_".join(f.relative_to(APP).with_suffix("").parts) + ".o")) for f in o2_files()]
 
@@ -838,10 +857,38 @@ def build_id():
     return int.from_bytes(h.digest()[:4], "little")
 
 
+APP_END = 0x93000                   # the normal app area's end (felucca-bsp's FL_APP_END)
+
+
+def app_end():
+    """the app area's end: fm1.toml app_end, or FM1B_APP_END in the environment; None when neither sets it (0x93000)"""
+    v = os.environ.get("FM1B_APP_END") or CONF.get("app_end")
+    if v in (None, ""):
+        return None
+    end = int(v, 0) if isinstance(v, str) else int(v)
+    if end % 0x1000 or not APP_END <= end <= 0xE0000:
+        raise SystemExit(f"app_end {end:#x}: a 4 KiB boundary from {APP_END:#x} up to 0xe0000")
+    clear = CONF.get("app_clear_end")
+    if clear is not None and (clear % 0x1000 or not end < clear <= 0xE0000):
+        raise SystemExit(f"app_clear_end {clear:#x}: a 4 KiB boundary above app_end ({end:#x}), up to 0xe0000")
+    return end
+
+
+def app_slot():
+    """app.bin's room: the app area less its head and tail (fm1pkg_make.py)"""
+    return fm1pkg_make.app_slot(app_end() or APP_END)
+
+
+def slot_flags():
+    """the app area's end for every unit (plat.h PLAT_DATA_LO, felucca-bsp's FL_APP_END): only when an app sets it"""
+    end = app_end()
+    return [f"-DFM1B_APP_END={end:#x}u", f"-DFL_APP_END={end:#x}u"] if end and end != APP_END else []
+
+
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
     return [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"))
-            if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+            if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"] + slot_flags()   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
 
 
 def build_host():
@@ -983,7 +1030,7 @@ def main():
                                             for f in APP.glob("*.h")))]
     print("parts    " + ", ".join(n for n, x in parts if x) + "  (not built in: " +
           (", ".join(n for n, x in parts if not x) or "none") + ")")
-    pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
+    pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY, app_end() or APP_END), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
     print(f"app      {OUT / (NAME + '.bin')}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")

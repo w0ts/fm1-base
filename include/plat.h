@@ -165,9 +165,14 @@ void plat_log(const char *line);
  * from 0xF02), so in these two an app keeps bytes 0xF00..0xF07 of every sector erased (0xFF), or else makes sure
  * those bytes never read as a record: never "AT" at 0xF06 (LOOM-8's sample bank moves its data so, and refuses a
  * bank that has it) */
-#define PLAT_DATA_LO 0x97000u
+/* An app with a bigger slot (fm1.toml app_end: FM1B_APP_END, its code past 0x93000): the data area starts at its end,
+ * and XDATA0 is what is left of 0x93000..0x96FFF above it (none from 0x97000 on) */
+#ifndef FM1B_APP_END
+#define FM1B_APP_END 0x93000u
+#endif
+#define PLAT_DATA_LO (FM1B_APP_END > 0x97000u ? FM1B_APP_END : 0x97000u)
 #define PLAT_DATA_HI 0xE0000u
-#define PLAT_XDATA0_LO 0x93000u
+#define PLAT_XDATA0_LO (FM1B_APP_END < 0x97000u ? FM1B_APP_END : 0x97000u)
 #define PLAT_XDATA0_HI 0x97000u
 #define PLAT_XDATA1_LO 0xE5000u
 #define PLAT_XDATA1_HI 0xFC000u

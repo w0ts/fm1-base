@@ -319,6 +319,10 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  *   APP_MIRROR_TEST int app_mirror_test(int on)  the mirror's remote asks for a test session (on 1, off 0): 1 done
  *   APP_CSTART      void app_cstart(void)         first thing at a start, before the RAM is cleared and with nothing
  *                   set up (registers only, no RAM): an app's own second core that a reset left running, held
+ *   (fm1.toml boot_pack) void app_boot_unpack(const uint8_t *src)   at a start, after the RAM is cleared: .data's
+ *                   initial values and the RAM code (.ram_text) from the app's coded stream at src (the image's,
+ *                   right after the code) into _data_start.._data_end, then _rt_start.._rt_end, in place of the
+ *                   copies. It runs from the flash with its stack alone: no global, no RAM code (nothing is there yet)
  *                   (fm1-base's own, cpu2 = true, needs none of these)
  *   APP_FAULT       void app_fault(const fm1_crash_t *c)   a crash, before the crash screen (c: the record): an app's
  *                   own second core given up; or the crash is on that core (c->sp on its stacks): it stops there

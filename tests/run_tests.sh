@@ -98,5 +98,7 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# the simulator's USB audio (usb_play, usb_rec): a computer's signal through the template's MASTER, recorded back
+run host-usb-audio "$PY" tests/host_usb_audio_test.py template/build/host/template_host template/build/tests/usb_audio
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

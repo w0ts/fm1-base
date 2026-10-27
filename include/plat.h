@@ -204,6 +204,17 @@ void plat_usb_audio_full(int on);
  * there is some, 0 = none (lr silent). Without APP_USB_PLAY (the platform mixes it at MASTER) it is always 0 */
 int plat_usb_audio_rec(void);
 int plat_usb_audio_play(int32_t *lr, uint32_t n);
+/* USB audio's counters since the start (an app with APP_USB_STATS: its own page of them; felucca-bsp's uac / uo): the
+ * input (the computer records: packets sent, ring run dry, ring full, an IN token that found nothing, the computer
+ * stopped reading) and the output (it plays: packets and frames in, ring run dry, ring full), the last feedback sent
+ * (usb_audio_out_feedback: 10.14 frames a ms, 0 none) and the alt settings the computer chose (0: no stream). The
+ * simulator: its usb_play's frames, the rest 0 */
+typedef struct {
+    uint32_t in_packets, in_underruns, in_overruns, in_missed, in_stalls;
+    uint32_t out_packets, out_frames, out_underruns, out_overruns, out_feedback;
+    uint8_t in_alt, out_alt;
+} plat_usb_audio_stats_t;
+void plat_usb_audio_stats(plat_usb_audio_stats_t *s);
 
 /* the keys' velocity and pressure (an app with APP_KEY_SENSE): on, the scan reads the keys on the analog rows and
  * hands each reading to the app (app_key_sample, app_key_probe); off by default */
@@ -288,6 +299,7 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  *                   app until the call returns (lr: the block as the output has it, the master, MASTER not yet
  *                   applied with plat_usb_audio_full); 0 = silence. Audio interrupt, after each render, only while
  *                   the computer records (plat_usb_audio_rec). Without it the input is the master (2 channels)
+ *   APP_USB_STATS   (no function) plat_usb_audio_stats is built (the app shows USB audio's counters)
  *   APP_USB_PLAY    (no function) the app mixes the computer's audio itself (plat_usb_audio_play in its render: a
  *                   mixer track) instead of the platform adding it at MASTER after the render
  *   APP_FAULT       void app_fault(const fm1_crash_t *c)   a crash, before the crash screen (c: the record): an app's

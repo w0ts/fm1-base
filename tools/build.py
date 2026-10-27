@@ -121,6 +121,12 @@ app.h); the build prints what it has.
                              `ir_pass IN.ll OUT.ll [UNIT]` (UNIT: an o2 unit's path relative to APP_DIR; none for
                              unity.c), then compiles OUT.ll at the unit's level (an app marking its cold code
                              minsize: Melodee's idea). Without changes the round trip makes the same code
+  boot_pack = "tools/pack.py"   the app's coder for what the start copies into RAM (relative to APP_DIR): the build
+                             runs `boot_pack OUT DATA RAMTEXT` (.data's initial values and .ram_text, each a binary
+                             file; OUT the coded stream to write) and puts OUT in the image right after the code
+                             (_etext) instead of the two copies; the app's app_boot_unpack (plat.h) decodes it at the
+                             start (FM1B_BOOT_PACK). The linker's load addresses for the two are then outside the
+                             image (a PACK region), so only the stream counts against the slot
 The app's own code that runs from RAM (out of the XIP cache's way: an audio path) goes in section .app_ram (plat.h
 PLAT_RAM_CODE): copied at boot with .ram_text, inside the guard's RAM code window (between _ar_start and _ar_end). It
 may call only RAM code, to any depth, and nothing through a pointer (tools/ramcode.py, over the disassembly). XIP code
@@ -690,6 +696,8 @@ def build_app():
             flags.append(f'-D{macro}="{CONF[key]}"')
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
+    if CONF.get("boot_pack"):                     # the app decodes what the start copies into RAM (app_boot_unpack)
+        flags.append("-DFM1B_BOOT_PACK=1")
     if CPU2:
         flags += ["-DFM1_CPU1=1", f"-DFM1B_BUILD={build_id():#010x}u", f"-DFM1_CPU1_FALLBACK={int(bool(CONF.get('cpu2_fallback')))}"]
         flags += cpu2_stack_flags()
@@ -745,6 +753,8 @@ def build_app():
     global LAYOUT
     ld = SRC / "device" / ("app_wifi.ld" if WIFI else "app.ld")
     LAYOUT = memory_regions(ld.read_text())
+    if CONF.get("boot_pack"):                     # the RAM copies' load addresses out of the image: the stream is there
+        ld = pack_script(ld)
     tc("pi32v2/bin/ld", *lto, "--gc-sections", "-e", "_start", "-T", ld, *objs, *b_objs,
        *b_libs, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
@@ -760,6 +770,10 @@ def build_app():
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
     img = bytearray((OUT / "text.bin").read_bytes())
+    if CONF.get("boot_pack"):
+        img += boot_stream(symv("_etext") - APP_XIP - len(img))
+        (OUT / (NAME + ".bin")).write_bytes(img)
+        return bytes(img), syms, dis, rt
     # .ram_text and .data follow .text at their load addresses; crt0 copies them by words
     for sect, lname in (("ramtext.bin", "_rt_load"), ("data.bin", "_data_load")):
         load = symv(lname)
@@ -774,6 +788,41 @@ def build_app():
     img += b"\xff" * (-len(img) % 4)
     (OUT / (NAME + ".bin")).write_bytes(img)
     return bytes(img), syms, dis, rt
+
+
+def pack_script(ld):
+    """-> OUT/NAME_pack.ld: the linker script with the RAM copies' load addresses in a region of their own (PACK, past
+    anything mapped: never written), for a build whose image holds the app's coded stream instead (boot_pack)"""
+    text = ld.read_text()
+    if "AT > XIP" not in text:
+        raise SystemExit(f"build: {ld.name} has no load address in XIP to move (boot_pack)")
+    text = re.sub(r"(\bMEMORY\s*\{)", r"\1\n    PACK   (r)   : ORIGIN = 0x10000000, LENGTH = 0x100000", text, count=1)
+    out = OUT / (NAME + "_pack.ld")
+    out.write_text(text.replace("AT > XIP", "AT > PACK"))
+    return out
+
+
+def boot_stream(gap):
+    """the app's coded stream of .data and .ram_text (fm1.toml boot_pack), padded to the word: what follows the code
+    (gap: _etext's distance from the end of .text.bin, 0 but for the alignment)"""
+    out = OUT / "boot_pack.bin"
+    out.unlink(missing_ok=True)
+    blobs = [OUT / s for s in ("data.bin", "ramtext.bin")]
+    for b in blobs:
+        if not b.exists():
+            b.write_bytes(b"")
+    r = subprocess.run([sys.executable, str(APP / CONF["boot_pack"]), str(out), *map(str, blobs)],
+                       capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    if r.returncode or not out.exists():
+        sys.stderr.write(r.stderr)
+        raise SystemExit(f"build: {CONF['boot_pack']} failed")
+    stream = out.read_bytes()
+    raw = sum(b.stat().st_size for b in blobs)
+    print(f"boot     {raw:,} B copied into RAM at the start (.data, .ram_text), {len(stream):,} B in the image "
+          f"({CONF['boot_pack']})")
+    data = b"\xff" * gap + stream
+    return data + b"\xff" * (-len(data) % 4)
 
 
 def memory_regions(script):

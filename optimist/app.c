@@ -215,7 +215,11 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
     else if (!strcmp(what, "bta_out"))         /* Bluetooth audio: the sound to the device (1) or the FM-1's own (0) */
+#if FM1B_BT_AUDIO
         *got = plat_bta_out_device();
+#else
+        *got = -1;                             /* (not built) */
+#endif
     else if (!strcmp(what, "c1up"))            /* the second core takes jobs (1); c1why: why not (dual_mode.h DUAL_*); */
         *got = (int)opt_core_dual_stat(0);     /* c1jobs: its jobs joined; c1posts: handed over (-1: no DUAL) */
     else if (!strcmp(what, "c1why"))

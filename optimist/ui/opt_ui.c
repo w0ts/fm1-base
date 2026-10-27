@@ -9,7 +9,7 @@
  *   the panel   fm1-base's plat_buttons / plat_keys / plat_enc as Optimist's HAL gives them (opt_in.h: the matrix ids,
  *               the edges, the press times); the LEDs onto plat_lights / plat_lights_mid
  *   the stores  Optimist's own storage (opt_storage.h: its formats, its addresses) on fm1-base's plat_data windows and,
- *               for its globals 0xFC000..0xFEFFF, the app's unit (app.c opt_glob_*); its power-on (persist_boot,
+ *               its globals 0xFC000..0xFEFFF in the fourth (PLAT_XDATA2, app.c opt_glob_*); its power-on (persist_boot,
  *               autosave_resume) and its main loop's saves (autosave_tick, settings_poll, sections_flush, sec_service)
  *               here; the rest left out (opt_stubs.h, and the builds' switches off: Bluetooth, CPU1; the mirror, the
  *               editor and USB audio are in: opt_editor.h, core/opt_core.c)

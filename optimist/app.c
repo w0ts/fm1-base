@@ -157,67 +157,24 @@ const char *app_param_group(uint32_t g)
 int32_t app_param_get(uint32_t i) { return opt_cp_get(i); }
 int32_t app_param_set(uint32_t i, int32_t v) { return opt_cp_set(i, v); }
 
-/* Optimist's globals, 0xFC000..0xFEFFF (its settings A/B, its autosave's copy B: ui/opt_storage.h): outside every
- * plat_data window, so here, in the app's unit, on felucca-bsp's own driver (fl_erase4k / fl_write, whose FL_RANGE_OK
- * allows FL_GLOB) and its XIP window, as plat_fm1.c's plat_data_* do for the windows. A gap plat.h would close with a
- * fourth window (PLAT_GLOB 0xFC000..0xFF000). On the host: a model of these three sectors beside plat_host.c's (erased
- * at the start, an erase sets 0xFF, a write ANDs; kept across a simulated reboot) */
-#ifdef PLAT_HOST
-static uint8_t opt_glob[OPT_GLOB_HI - OPT_GLOB_LO];
-static uint8_t opt_glob_ready;
-static void opt_glob_init(void)
-{
-    if (!opt_glob_ready) {
-        memset(opt_glob, 0xFF, sizeof opt_glob);
-        opt_glob_ready = 1;
-    }
-}
+/* Optimist's globals, 0xFC000..0xFEFFF (its settings A/B, its autosave's copy B: ui/opt_storage.h): plat.h's fourth
+ * window, PLAT_XDATA2 (fm1.toml xdata2 = true), on the device and in the host simulator alike. Here, in the app's
+ * unit, for the UI's unit (core/opt_core.h): plat_data* with the window's bounds */
+_Static_assert(OPT_GLOB_LO == PLAT_XDATA2_LO && OPT_GLOB_HI == PLAT_XDATA2_HI, "Optimist's globals are PLAT_XDATA2");
+#if !FM1B_XDATA2
+#error "optimist/fm1.toml: xdata2 = true (its globals are plat.h's PLAT_XDATA2)"
 #endif
 const uint8_t *opt_glob_ptr(uint32_t off)
 {
-    if (!plat_in(off, 1u, OPT_GLOB_LO, OPT_GLOB_HI))
-        return 0;
-#ifdef PLAT_HOST
-    opt_glob_init();
-    return &opt_glob[off - OPT_GLOB_LO];
-#else
-    return flash_ok ? (const uint8_t *)FL_XIP(off) : 0;
-#endif
+    return plat_in(off, 1u, OPT_GLOB_LO, OPT_GLOB_HI) ? plat_data(off) : 0;
 }
 int opt_glob_erase(uint32_t off)
 {
-    if ((off & 0xFFFu) || !plat_in(off, 0x1000u, OPT_GLOB_LO, OPT_GLOB_HI))
-        return -1;
-#ifdef PLAT_HOST
-    opt_glob_init();
-    memset(&opt_glob[off - OPT_GLOB_LO], 0xFF, 0x1000u);
-    return 0;
-#else
-    {
-        uint32_t took;
-        if (!flash_ok)
-            return -1;
-        fm1_wdt_feed();
-        audio_silence();                        /* (as plat_data_erase: no flash reads meanwhile) */
-        return fl_erase4k(off, &took);
-    }
-#endif
+    return plat_in(off, 0x1000u, OPT_GLOB_LO, OPT_GLOB_HI) ? plat_data_erase(off) : -1;
 }
 int opt_glob_write(uint32_t off, const void *src, uint32_t n)
 {
-    if (!plat_in(off, n, OPT_GLOB_LO, OPT_GLOB_HI))
-        return -1;
-#ifdef PLAT_HOST
-    {
-        uint32_t i;
-        opt_glob_init();
-        for (i = 0; i < n; i++)                 /* as flash: bits only go from 1 to 0 */
-            opt_glob[off - OPT_GLOB_LO + i] &= ((const uint8_t *)src)[i];
-        return 0;
-    }
-#else
-    return flash_ok ? fl_write(off, src, n) : -1;
-#endif
+    return plat_in(off, n, OPT_GLOB_LO, OPT_GLOB_HI) ? plat_data_write(off, src, n) : -1;
 }
 
 #ifdef PLAT_HOST

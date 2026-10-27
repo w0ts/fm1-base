@@ -51,7 +51,7 @@ uint32_t opt_st_panel_hits(void);                            /* storage.c's obje
 int opt_st_word(uint32_t off, uint32_t *w);                  /* the flash word at off through st_read; 0 = read */
 const char *opt_ui_msg(void);                                /* the header's last message */
 int32_t opt_ui_uad(uint32_t s);                              /* USB AUDIO's source s (0 MASTER): its channels (3: 1+2); -1 none */
-/* the globals' sectors 0xFC000..0xFEFFF (app.c: felucca-bsp's driver; the host's model) */
+/* the globals' sectors 0xFC000..0xFEFFF: plat.h's PLAT_XDATA2 (app.c, on plat_data*) */
 #define OPT_GLOB_LO 0xFC000u
 #define OPT_GLOB_HI 0xFF000u
 int opt_glob_erase(uint32_t off);

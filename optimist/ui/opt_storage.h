@@ -7,9 +7,8 @@
  * bytes, so an FM-1's data stays readable.
  *   st_read / st_erase / st_prog   Optimist's three hooks: plat_data / plat_data_erase / plat_data_write for what is
  *                                  inside plat.h's windows (the main store 0x97000..0xDFFFF, XDATA0's 0x95000 / 0x96000,
- *                                  XDATA1's drum records 0xE5000 / 0xE6000); its globals 0xFC000..0xFEFFF (the settings
- *                                  A/B, the autosave's copy B) are outside every window: the app's unit writes them
- *                                  with felucca-bsp's driver (app.c opt_glob_*: a gap in plat.h, a fourth window)
+ *                                  XDATA1's drum records 0xE5000 / 0xE6000) and its globals 0xFC000..0xFEFFF (the settings
+ *                                  A/B, the autosave's copy B: plat.h's fourth window, PLAT_XDATA2, through app.c opt_glob_*)
  *   FL_STORE_OK                    Optimist's allow-list on top (hal/fm1_flash_map.h): never the SDK's VM, BTIF or USR
  *                                  area (0xE7000..0xFBFFF, which plat.h's XDATA1 includes), never key_mac
  *   st_xip                         the banks read in place: plat_data, or the globals' own window (opt_glob_ptr)
@@ -76,9 +75,8 @@ static int st_erase(uint32_t off)
         return opt_glob_erase(off);
     return -8;
 }
-/* plat.h's plat_data_write is "into erased flash"; Optimist's section log also clears bits in place (sec_log.c: a
- * record's state, dead), as NOR allows and felucca-bsp's fl_prog_ram and the host's model do (an AND): relied on here,
- * not promised by plat.h (a gap) */
+/* Optimist's section log clears bits in place (sec_log.c: a record's state, dead): plat.h promises that plat_data_write
+ * may (each byte the old AND the new, on the device and the host) */
 static int st_prog(uint32_t off, const void *src, uint32_t n)
 {
     if (!FL_STORE_OK(off, n))

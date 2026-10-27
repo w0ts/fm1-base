@@ -32,6 +32,8 @@ usb_audio_out_name = "Optimist Out"
 usb_audio_in_channel_names = ["CH1", "CH2", "CH3", "CH4"]
 # The second core: Optimist's DUAL (the profile's: its split of the render, core/opt_dual.c) on fm1-base's (plat_cpu2_*,
 # felucca-bsp's chip/fm1_cpu1.h). Optimist's rule on a failure: one core from then on, never a restart (cpu2_fallback)
+xdata2 = true                  # Optimist's globals 0xFC000..0xFEFFF (its settings A/B, its autosave's copy B): plat.h's fourth
+                               # plat_data window, PLAT_XDATA2 (its store objects are elsewhere: APP_STORE_MAP 0xD8000)
 cpu2 = true
 cpu2_fallback = true
 cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096

@@ -1017,7 +1017,7 @@ def build_host():
     out.mkdir(parents=True, exist_ok=True)
     exe = out / (STEM + "_host")                  # NAME_host; NAME-usb_host with --no-ble
     inc_dirs = [f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))]
-    o2_objs = o2_objects(os.environ.get("CC", "cc"), ["-O2", "-ffp-contract=off", "-std=c99", "-w", "-DPLAT_HOST", *inc_dirs],
+    o2_objs = o2_objects(os.environ.get("CC", "cc"), ["-O2", "-ffp-contract=off", "-std=c99", "-w", "-DPLAT_HOST", *opt_flags(), *inc_dirs],
                          out / "o2")
     uac = [*usb_audio_flags(), *(f"-D{f}={os.environ[f]}" for f in ("FM1B_UAC", "FM1B_UAC_OUT") if os.environ.get(f) in ("0", "1"))]
     cmd = [os.environ.get("CC", "cc"), "-O2", "-ffp-contract=off", "-std=c99", "-Wall", "-Wextra",
@@ -1117,7 +1117,7 @@ def build_web():
     emu = OUT / "emu"
     emu.mkdir(parents=True, exist_ok=True)
     web_inc = [f"-I{d}" for d in (SRC / "host", SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))]
-    o2_objs = o2_objects("emcc", ["-O2", "-ffp-contract=off", "-std=gnu99", "-w", "-DPLAT_HOST", "-DPLAT_WEB", *web_inc],
+    o2_objs = o2_objects("emcc", ["-O2", "-ffp-contract=off", "-std=gnu99", "-w", "-DPLAT_HOST", "-DPLAT_WEB", *opt_flags(), *web_inc],
                          emu / "o2")
     parts = emu_parts()
     cmd = ["emcc", "-O2", "-ffp-contract=off", "-std=gnu99", "-Wall", "-Wno-unused-function", "-Wno-unused-parameter",

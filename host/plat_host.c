@@ -170,6 +170,9 @@ int32_t plat_enc(int role)
 }
 uint32_t plat_master(void) { return mirror_in_master(master); }
 int plat_battery(void) { return 3; }   /* (the host and the emulator: full) */
+#ifdef APP_BATTERY_RAW
+int32_t plat_battery_raw(void) { return 620; }   /* (full: over the third bar's 591, as plat_battery's 3) */
+#endif
 /* the lights ("leds"): bright, and dim (glow 0: none); PLAY's green counts as PLAY */
 void plat_lights(uint32_t b, uint32_t k, uint32_t db, uint32_t dk, int glow)
 {
@@ -1077,6 +1080,10 @@ static int expect(const char *what, const char *val)
 #if FM1B_BACKUP
     else if (!strcmp(what, "restore_rc"))
         got = restore_rc;
+#endif
+#ifdef APP_BATTERY_RAW
+    else if (!strcmp(what, "battery_raw"))          /* plat_battery_raw: the battery's reading (the host's: full) */
+        got = (int)plat_battery_raw();
 #endif
     else if (!strcmp(what, "clocks_out"))
         got = (int)clock_out_count;

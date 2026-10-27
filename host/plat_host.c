@@ -648,6 +648,13 @@ static int usb_play_take(int32_t *lr, uint32_t n)
     }
     return (int)got;
 }
+void plat_usb_audio_stats(plat_usb_audio_stats_t *s)
+{
+    memset(s, 0, sizeof *s);
+    s->out_frames = usb_play_frames;                /* (the simulator keeps no packets: one clock, no ring) */
+    s->out_alt = (uint8_t)(usb_play_buf != 0);
+    s->in_alt = (uint8_t)(usb_rec_f != 0);
+}
 int plat_usb_audio_play(int32_t *lr, uint32_t n)
 {
 #ifdef APP_USB_PLAY

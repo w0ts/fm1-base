@@ -17,6 +17,7 @@ ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI
 gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)
 words = "words.tsv"
 font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)
+font_trim = true               # each glyph its lit box only (feat/font-trim): the same pixels, the fonts 26 KB smaller
 # USB audio as Optimist's own presents it (io/usb, from Melodee): two devices, "Optimist Out" (the computer plays,
 # the USB input track: APP_USB_PLAY) and "Optimist In" (it records four channels, CH1..CH4, by SYSTEM > USB AUDIO's
 # routing: APP_USB_CAPTURE), 16- and 24-bit both ways; the input on the computer's clock, the output on the FM-1's

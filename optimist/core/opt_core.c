@@ -112,6 +112,10 @@ static uint8_t live_save_off;
  * (io/usb/usb.c): fm1-base's USB is the device's. The outputs are always open (midi_out_open): fm1-base routes what
  * the out ring holds (opt_core_render: plat_midi_send) */
 static int midi_out_open(void) { return 1; }
+#if FELUCCA_BLE
+static void opt_ble_in(uint32_t pkt);          /* (ui/opt_bt.h: Bluetooth MIDI in, its time sent; the mirror's requests) */
+static void opt_ble_tick(uint32_t now);        /* (ui/opt_bt.h: Bluetooth MIDI out, CLOCK OUT's F8s at their time) */
+#endif
 #include "io/midi/midi_rings.c"
 #if FELUCCA_ARRANGER
 #include "seq/arranger.c"
@@ -337,6 +341,12 @@ static uint32_t opt_rx_bad;
 void opt_core_midi(uint32_t pkt, int port)
 {
     uint32_t src = port == PORT_TRS ? MSRC_TRS : port == PORT_BLE ? MSRC_BLE : MSRC_USB;
+#if FELUCCA_BLE
+    if (port == PORT_BLE) {
+        opt_ble_in(pkt);                             /* (Optimist's midi_ble.c checks, the sender's time: ui/opt_bt.h) */
+        return;
+    }
+#endif
     if (midi_rx_bad(pkt)) {
         opt_rx_bad++;
         return;
@@ -368,6 +378,9 @@ void opt_core_tick(void)
             plat_midi_send(pkt, TO_USB);
         }
     }
+#endif
+#if FELUCCA_BLE
+    opt_ble_tick(fm1_ticks() + OPT_TICK_HALF);      /* Bluetooth: the events and CLOCK OUT to the computer's link */
 #endif
 }
 

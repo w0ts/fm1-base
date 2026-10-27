@@ -33,6 +33,12 @@ int opt_ed_frame(const uint8_t *p, uint32_t n);
 void opt_ed_poll(void);
 void opt_sysex_byte(uint8_t b);
 void opt_ui_input(void);                                     /* the panel only (and the meters) */
+/* Bluetooth (ui/opt_bt.h): what fm1-base keeps (app.c app_ble_load / app_ble_save, APP_BLE_STORE: Optimist's settings
+ * record's fields), and whether it starts at power-on (APP_BLE_AT_BOOT: SYSTEM > BT MIDI as saved) */
+struct plat_ble_rec;
+int opt_ble_load(struct plat_ble_rec *r);
+int opt_ble_save(const struct plat_ble_rec *r);
+int opt_ble_at_boot(void);
 
 /* the host simulator's checks (app.c app_expect) */
 uint32_t opt_ui_scr(void);                                   /* the screen shown (Optimist's SCR_*) */

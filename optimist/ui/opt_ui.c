@@ -85,12 +85,14 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
 #include "drums/dsnd_desc.c"
 #include "ui/meters.c"
 #include "opt_stubs.h"                           /* the parts of Optimist not in the trial yet, as the UI sees them */
+#include "opt_bt.h"                              /* Optimist's Bluetooth on fm1-base's plat_ble_* / plat_bta_* (before its screens) */
 /* font_big (op_graph.c): FONT_L with FONT_S's range, made once, "made" read from .scale (Optimist's font has one,
  * fm1-base's has none): its height instead, as nonzero once copied (fm1-base's FONT_L has lower case with fm1.toml
  * font_full = ["L"], so the range it is given is its own) */
 #define scale h
 #include "ui/optimist/optimist.c"
 #undef scale
+#include "opt_bt_rec.h"                          /* the settings record's Bluetooth fields (after op_bt.c, before the storage) */
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
 #include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
 
@@ -112,10 +114,12 @@ void opt_core_init(void)
     mir_test_boot = 0;                           /* (once: a crash in the session, and the next start is the user's) */
 #endif
     opt_ed_forget();                             /* (the host's restart: what an FM-1's clears) */
+    opt_bt_forget();
     cpu_khz = opt_cpu_khz();                     /* the CPU clock (main.c: before the audio), the guard's (core/opt_core.c) */
     tab_expand();                                /* the smooth tables into RAM (core/opt_core.c TAB_CODED_FORCE), first */
     opt_cv_init();                               /* the canvas (the app's unit's), before anything draws */
     persist_boot();                              /* the settings record, the stores found (before settings_init) */
+    opt_bt_boot();                               /* (its Bluetooth fields: ui/opt_bt.h, main.c ble_midi_init's order) */
     fm6_boot();
 #if CZ_NUSER
     czb_find();
@@ -212,6 +216,7 @@ void opt_ui_frame(void)
     song.batt_raw = opt_batt_raw();               /* SYSTEM > BATTERY, the header's icon (main.c: its own reading) */
     song.cpu_q8 = plat_cpu_pct() * 256u / 100u;   /* SYSTEM > INFO's CPU LOAD (audio.c's cpu_q8: fm1-base's, the same
                                                    * smoothing over the whole render, USB audio's work in it) */
+    opt_bt_poll();                               /* Bluetooth: the audio's view, the devices list, the mirror's frames out */
     ui_input();
     opt_ui_polls();
     ui_leds();

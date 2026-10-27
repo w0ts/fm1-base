@@ -107,6 +107,7 @@ def config(tree, prof):
         configure.write_header(cfg, name, GEN / out)
         if out == "felucca_config.h":
             host_dual(configure.flags(cfg)[0].get("FELUCCA_DUAL", 0), GEN / out)
+            host_bt(configure.flags(cfg)[0], GEN / out)
         if env is None:
             env = configure.flags(cfg)[1]       # (the trial's: its sample sets, SLICE)
     return env
@@ -121,6 +122,24 @@ def host_dual(dual, path):
     text = path.read_text()
     extra = ("/* the trial (gen_optimist.py host_dual): the profile's second core on the host too */\n"
              f"#if defined(PLAT_HOST) && !defined(FELUCCA_DUAL)\n#define FELUCCA_DUAL {dual}\n#endif\n")
+    if not text.endswith(extra):
+        path.write_text(text + extra)
+
+
+BT_ITEMS = ("FELUCCA_BLE", "FELUCCA_BLE_BOND", "FELUCCA_BLE_CENTRAL", "FELUCCA_BT_AUDIO", "FELUCCA_BT_AFH")
+
+
+def host_bt(flags, path):
+    """OPT_HOST_BT=1: the profile's Bluetooth (BLE, BT_AUDIO ...: FM-1-only items, under __PI32V2__ alone) on the host
+    too: Optimist's Bluetooth screens, settings and mirror on the host simulator's stand-ins for fm1-base's stack
+    (ui/opt_bt.h; optimist/run.sh's bt run). Off by default: the host runs stay comparable with Optimist's own simulator,
+    which has no Bluetooth"""
+    if os.environ.get("OPT_HOST_BT") != "1":
+        return
+    lines = "".join(f"#define {k} {flags.get(k, 0)}\n" for k in BT_ITEMS)
+    extra = ("/* the trial (gen_optimist.py host_bt, OPT_HOST_BT=1): the profile's Bluetooth on the host too */\n"
+             f"#if defined(PLAT_HOST)\n{lines}#endif\n")
+    text = path.read_text()
     if not text.endswith(extra):
         path.write_text(text + extra)
 
@@ -158,6 +177,7 @@ def generate(tree):
     prof = profile()
     key = stamp(tree) + (f"profile {prof}\n" + prof.read_text() if prof else "profile none\n")
     key += f"companion {companion()}\n"
+    key += f"host_bt {os.environ.get('OPT_HOST_BT') == '1'}\n"
     st = GEN / "stamp"
     outs = [out for _, out in GENERATORS] + ["felucca_config.h", "felucca_config_profile.h"]
     if st.exists() and st.read_text() == key and all((GEN / out).exists() for out in outs):

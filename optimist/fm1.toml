@@ -39,7 +39,14 @@ cpu2 = true
 cpu2_fallback = true
 cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096
                                # leaves Optimist's own room, 3,840 B: tools/build.py CPU1_STACK_ROOM there)
-ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
+# Bluetooth: fm1-base's own stack, which is Optimist's (bt/: the same files), for Optimist's BT MIDI, BT AUDIO and the
+# mirror over Bluetooth (ui/opt_bt.h: its screens, settings record and mirror on plat_ble_* / plat_bta_*)
+ble = true
+ble_stack = "own"
+ble_pairing = true             # a Mac or phone pairs (Just Works, the bond kept: Optimist's settings record, APP_BLE_STORE)
+bt_audio = true                # Bluetooth audio to headphones and speakers (A2DP), as Optimist's BT_AUDIO
+ble_midi_time = true           # BLE MIDI in by the sender's time (plat_midi_in_t24): Optimist's clock follower times F8s
+                               # itself (clock_sync.c, BT OFS), as its own midi_ble.c ble_in_time gave them
 companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, Optimist's backup
                                # objects and sample slots as its files (in place of its editor's own cmds 43..48, 11..15:
                                # Optimist's io/editor/ed_comp.c), a few of its parameters (app.h APP_FILES, APP_PARAMS; app.c)

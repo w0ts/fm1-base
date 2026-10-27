@@ -22,9 +22,6 @@
 #if FELUCCA_ED_LIVE
 #error "the trial's editor: ED_LIVE off (the dev profile's: backup, librarian, mirror); the live editor is not wired"
 #endif
-#if FELUCCA_BLE
-#error "the trial's editor: no Bluetooth (ed_mirror.c's Bluetooth link writes RING_PUBLISH's other way)"
-#endif
 #define FELUCCA_OTA 1                           /* (felucca.c: the editor needs the OTA SysEx plumbing, here fm1-base's) */
 /* fm1-base's companion services (fm1.toml companion = true, docs/COMPANION.md): the backup's objects and the sample slots
  * are its files (Optimist's io/editor/ed_comp.c; app.c app_file_* through opt_cf_*, below), the editor's own cmds 43..48
@@ -32,8 +29,9 @@
 #if OPT_COMPANION && FELUCCA_FLASH && FELUCCA_BACKUP
 #define FELUCCA_ED_COMPANION 1
 #endif
-#define MIR_BLE 0                               /* (felucca.c: the mirror over Bluetooth needs BLE) */
-#define MBR_PROJ 0
+#define MIR_BLE MIR_BLE_BUILT                   /* the mirror over Bluetooth too (felucca.c's: with BLE; ui/opt_bt.h sends its
+                                                 * frames and hands it the requests) */
+#define MBR_PROJ (MIR_BLE && FELUCCA_BT_PROJ && FELUCCA_FLASH && FELUCCA_BACKUP && FELUCCA_PATTERNS)   /* (felucca.c's) */
 
 /* ---- usb.c's state as the editor reads it (opt_stubs.h usb: config, resets), each main loop pass */
 static void opt_ed_usb(void)
@@ -149,7 +147,11 @@ static volatile uint32_t mir_test_boot __attribute__((section(".noinit")));   /*
 #define ED_OUT_HERE 1
 static uint8_t ed_out[ED_OUT_N] __attribute__((aligned(4))) IN_POOL;
 #undef RING_PUBLISH
-#define RING_PUBLISH() opt_sx_publish()         /* (inside the editor's files only: ed_mirror.c mir_pkt, the one use built) */
+/* (inside the editor's files only: mir_pkt's, the USB ring's packet written, goes on to fm1-base's ring; the Bluetooth
+ * ring's (ed_mirror.c mbr_*, mir_ble_*, mir_poll) stay the barrier they are) */
+#define OPT_IN_MIR_PKT (sizeof __func__ == sizeof "mir_pkt" && __func__[1] == 'i' && __func__[4] == 'p')   /* (no strcmp:
+                                                 * the FM-1 has no C library; the compiler folds it) */
+#define RING_PUBLISH() do { if (OPT_IN_MIR_PKT) opt_sx_publish(); __asm__ volatile("" ::: "memory"); } while (0)
 #include "io/editor/editor.c"
 #undef RING_PUBLISH
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")   /* (core/core.h's) */
@@ -209,6 +211,14 @@ static void opt_ed_master(void)
 #if FELUCCA_ED_MIRROR
     uint32_t pot = plat_master() / 4u, v;       /* (fm1-base's MASTER 0..4096; Optimist's pot 0..1023: main.c master_pot) */
     pot = pot > 1023u ? 1023u : pot;
+#if FELUCCA_BT_AUDIO
+    if (bt_vol_hold((int32_t)pot * 16)) {       /* SHIFT + the knob: the output switch, the volume held (op_bt.c; main.c
+                                                 * master_pot's knob: the pot x16) */
+        if (!opt_master_q12)
+            opt_master_q12 = song.master_q12 + 1u;
+        return;
+    }
+#endif
     v = mir_master(pot);
     opt_master_q12 = v == pot && !(mir.on && mir.master) ? 0u : ((v * v) >> 8) + 1u;   /* (main.c: k10 * k10 >> 8) */
 #endif

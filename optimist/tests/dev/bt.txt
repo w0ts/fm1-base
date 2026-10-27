@@ -1,0 +1,326 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Optimist's Bluetooth in the trial on fm1-base's host stand-ins (OPT_HOST_BT=1: optimist/run.sh's bt run; ui/opt_bt.h):
+# SYSTEM > BT MIDI on, a computer connected: a note in plays and ends when the link goes; CLOCK OUT reaches it; a
+# clock from it is followed; the mirror answers over it. SYSTEM > BT AUDIO on: a headset found, connected, the output
+# switched with SHIFT and the volume knob; after a restart both modes and the headset are back (Optimist's settings
+# record holds them: APP_BLE_STORE)
+wait 1500
+master 2048
+wait 100
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+spin SELECT 1
+wait 100
+# BT MIDI MODE MAN: the radio starts, advertises
+spin K1 1
+wait 1500
+cells
+expect ble 2
+ble connect
+wait 100
+cells
+# a note from the computer plays; the link lost ends it
+midi BLE 90 3C 64
+wait 60
+expect voices >0
+ble disconnect
+wait 150
+expect voices 0
+ble connect
+wait 100
+# CLOCK OUT (stopped, at the tempo) to the computer too
+out
+clockout 1
+wait 300
+expect_out BLE F8 00 00
+expect_out USB F8 00 00
+clockout 0
+out
+# the mirror's request over Bluetooth (editor cmd 106, the screen): its frames come back there
+blesx F07D464C6A01F7
+wait 300
+expect_out BLE F0 7D 46
+out
+# a clock from the computer: START, then 100 BPM (25 ms a tick), followed
+midi BLE FA
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+midi BLE F8
+wait 23
+expect playing 1
+expect bpm 100
+midi BLE FC
+wait 600
+expect playing 0
+# BT AUDIO MODE MAN: a headset around, found by the page's scan, connected with SAVE
+spin SELECT 1
+wait 100
+spin K1 1
+wait 300
+bta add XM4
+wait 1500
+cells
+tap SAVE
+wait 500
+cells
+expect bta 7
+expect bta_known 1
+expect bta_out 1
+# SHIFT held and the volume knob moved 15 %: the output to the FM-1's own, the link kept
+press OCT-
+wait 50
+master 3000
+wait 200
+release OCT-
+wait 100
+expect bta_out 0
+expect bta 7
+# HOME: SYSTEM left, the settings kept; a restart: BT MIDI and BT AUDIO MAN again, the headset remembered
+tap HOME
+wait 3000
+reboot
+wait 2500
+expect ble 2
+expect bta >0
+expect bta_known 1

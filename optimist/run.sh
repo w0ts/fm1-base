@@ -21,11 +21,20 @@
 # the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
 # the first python3 on PATH. OPTSIM=0: without Optimist's simulator (no emcc / node). PROFILES: the runs (default
-# "none dev").
+# "none bt dev"; bt: the dev profile with its Bluetooth on the host too, OPT_HOST_BT=1, tests/dev/bt.txt and ui.txt).
 set -e
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"
 H=optimist/build/host
+
+run_bt() {                          # the dev profile with its Bluetooth on the host too (OPT_HOST_BT=1: gen_optimist.py
+                                    # host_bt): Optimist's Bluetooth screens, settings and mirror on fm1-base's stand-ins
+    echo "optimist/run.sh: profile dev, Bluetooth on the host (tests/dev/bt.txt)"
+    unset OPT_PROFILE
+    OPT_HOST_BT=1 X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
+    $H/optimist_host optimist/tests/dev/bt.txt $H
+    $H/optimist_host optimist/tests/dev/ui.txt $H
+}
 
 run_profile() {                     # $1: dev (the trial's profile copy) or none (Optimist's source defaults)
     if [ "$1" = none ]; then T=optimist/tests; export OPT_PROFILE=none; else T=optimist/tests/dev; unset OPT_PROFILE; fi
@@ -61,8 +70,8 @@ run_profile() {                     # $1: dev (the trial's profile copy) or none
     fi
 }
 
-for p in ${PROFILES:-none dev}; do
-    run_profile "$p"
+for p in ${PROFILES:-none bt dev}; do
+    if [ "$p" = bt ]; then run_bt; else run_profile "$p"; fi
 done
 unset OPT_PROFILE
-echo "optimist/run.sh: every check passed (${PROFILES:-none dev})"
+echo "optimist/run.sh: every check passed (${PROFILES:-none bt dev})"

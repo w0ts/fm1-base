@@ -53,6 +53,7 @@ check(found.length === 1 && found[0].hello.name === "CPTEST", "the port answers 
 const c = new Companion(input, output, { timeout: 200, tries: 1 });
 const h = await c.hello();
 check(h.identity === "FM-1_1400" && h.appVersion === "1.2" && h.extras.editor === "cptest/1", "identity, version, tags", h);
+check(h.version === 2 && h.backup && h.backup.magic === "CPTB" && h.backup.version === 2 && h.backup.ext === "cpb", "the backup's format", h.backup);
 check(["files", "parameters", "the app's own SysEx"].every((s) => h.services.includes(s)), "services", h.services);
 
 const files = await c.files();

@@ -309,6 +309,16 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         }
         return 1;
     }
+    if (!strcmp(cmd, "engine")) {                /* engine T E: synth track T on engine slot E (its first preset) */
+        const char *nm = a && b && a[0] && b[0] ? opt_ui_engine((uint32_t)atoi(a), (uint32_t)atoi(b)) : 0;
+        if (nm) {
+            printf("  ok engine %s %s: %s\n", a, b, nm);
+        } else {
+            printf("FAIL engine %s %s: no such track or engine, or no room\n", a ? a : "", b ? b : "");
+            app_fails++;
+        }
+        return 1;
+    }
     if (!strcmp(cmd, "param")) {                 /* param T ID V: track T's value ID (Optimist's P_*) set to V, as is */
         if (!a || !b || !c || !a[0] || !b[0] || !c[0]) {
             printf("FAIL param T ID V\n");

@@ -1,0 +1,1218 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# mul64proof.py's script (its {PCM}: the render's samples). Every engine of the profile (engine T E, slots 0..7: ANALOG
+# DIGITAL FM6 PHYS ACID JUNO PLAITS STRINGS) on T1, T2 and T3 at once, then PHYS + PLAITS + FM6; three presets of each
+# (ALGORITHM picks the track, PRESETS the sound); a chord on each synth track's MIDI channel and drum hits on DR's,
+# through the sends (CHOR 34, DLY 35, REV 36: Optimist's P_*), a JUNO CHORUS insert on T1 and a GATE on T2 (ins T S
+# FXT_*: 17, 15); then the drum kits (PRESETS on DR)
+wait 600
+expect blocks >100
+ins 0 0 17
+ins 1 0 15
+
+param 0 34 40
+param 0 35 70
+param 0 36 50
+param 1 34 40
+param 1 35 70
+param 1 36 50
+param 2 34 40
+param 2 35 70
+param 2 36 50
+param 3 35 60
+pcm {PCM}
+# T1 T2 T3: engines 0 1 4
+engine 0 0
+engine 1 1
+engine 2 4
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 1 2 5
+engine 0 1
+engine 1 2
+engine 2 5
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 2 3 6
+engine 0 2
+engine 1 3
+engine 2 6
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 3 4 7
+engine 0 3
+engine 1 4
+engine 2 7
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 4 5 0
+engine 0 4
+engine 1 5
+engine 2 0
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 5 6 1
+engine 0 5
+engine 1 6
+engine 2 1
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 6 7 2
+engine 0 6
+engine 1 7
+engine 2 2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 7 0 3
+engine 0 7
+engine 1 0
+engine 2 3
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# T1 T2 T3: engines 3 6 2
+engine 0 3
+engine 1 6
+engine 2 2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO 1
+wait 200
+turn PRESET 1
+wait 300
+turn ALGO -2
+wait 200
+midi 90 3C 64
+midi 90 43 64
+midi 91 40 64
+midi 91 47 64
+midi 92 37 64
+midi 92 4A 64
+midi 93 24 64
+midi 99 24 64
+wait 120
+midi 93 26 64
+midi 99 26 64
+wait 120
+midi 93 2A 64
+midi 99 2A 64
+wait 120
+midi 93 28 64
+midi 99 28 64
+wait 120
+wait 300
+midi 80 3C 00
+midi 80 43 00
+midi 81 40 00
+midi 81 47 00
+midi 82 37 00
+midi 82 4A 00
+wait 500
+# the drum kits
+turn ALGO 3
+wait 300
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+turn PRESET 3
+wait 400
+midi 99 24 70
+wait 90
+midi 99 26 70
+wait 90
+midi 99 2A 70
+wait 90
+midi 99 28 70
+wait 90
+midi 99 2D 70
+wait 90
+midi 99 30 70
+wait 90
+midi 99 31 70
+wait 90
+midi 99 33 70
+wait 90
+wait 400
+wait 1500
+pcm stop

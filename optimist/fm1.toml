@@ -12,6 +12,8 @@ o2 = ["core/opt_core.c", "core/opt_fpu_*.c"]
                                # 2's filter models and the X0X kits, float units of their own on the FM-1 (as Optimist
                                # builds them), empty on the host (inside opt_core.c there)
 o2_include = ["build/optgen/felucca_config.h"]   # the build's switches (gen_optimist.py: the profile copy through Optimist's builder)
+o2_cflags = ["-DFELUCCA_MUL64_CLEAR=1"]   # Optimist's asm loops with no load beside a 64-bit multiply (its hal/fm1_dsp_asm.h;
+                               # felucca-bsp docs/CPU.md), as ir_pass.py makes the C's multiplies (mul64_pass.py)
 include = ["build/optimist/firmware/src", "build/optgen"]   # Optimist's tree (gen_optimist.py links it), its headers
 ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI at minsize, the rest -Os: as Optimist builds felucca.c)
 gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)

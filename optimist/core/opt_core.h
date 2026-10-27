@@ -53,6 +53,8 @@ uint32_t opt_st_panel_hits(void);                            /* storage.c's obje
 int opt_st_word(uint32_t off, uint32_t *w);                  /* the flash word at off through st_read; 0 = read */
 const char *opt_ui_msg(void);                                /* the header's last message */
 void opt_ui_ins(uint32_t track, uint32_t slot, uint32_t type);   /* insert type (fx_slots.c FXT_*) into a track's slot */
+const char *opt_ui_engine(uint32_t track, uint32_t eng);     /* a synth track's engine (its slot) with its first preset,
+                                                               * as ENGINE picks it; its name (0: refused, no room) */
 int32_t opt_ui_fxi(uint32_t track, uint32_t slot);           /* its instance (fxi.c FXI_*: 0 none, 1 OK, 2 WAIT, 3 FULL) */
 int32_t opt_ui_beat(void);                                   /* the transport's beat (core.h clk_beat) */
 void opt_ui_clock_out(uint32_t on);                          /* the HOME menu's CLOCK OUT */

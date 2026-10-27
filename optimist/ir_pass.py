@@ -11,6 +11,8 @@
                     without minsize gets optsize, so the unit is built as Optimist builds felucca.c (-Os, the UI at
                     minsize) though fm1-base compiles o2 units at -O2 (OPT_IR_OS=0: the sound side at -O2 instead)
   anything else     unchanged (the float units at -O2, as Optimist builds them; fm1-base's unity.c)
+  then, every unit  mul64_pass.py: each 64-bit multiply as a short piece of inline assembly with no load beside it
+                    (felucca-bsp docs/CPU.md); OPT_MUL64=0 leaves them as the compiler makes them
 
 Optimist's tree: gen_optimist.py's (the env OPTIMIST, else the worktree beside the fm1-base clone)."""
 import os
@@ -66,8 +68,24 @@ def main(argv):
     src, dst = argv[0], argv[1]
     unit = argv[2] if len(argv) == 3 else None
     if unit == "core/opt_core.c":
-        return size_pass(src, dst)
-    shutil.copyfile(src, dst)
+        rc = size_pass(src, dst)
+        if rc:
+            return rc
+    else:
+        shutil.copyfile(src, dst)
+    if os.environ.get("OPT_MUL64", "1") != "0":
+        return mul64(dst, unit or "unity.c")
+    return 0
+
+
+def mul64(path, unit):
+    """every 64-bit multiply in line and clear of loads (mul64_pass.py: felucca-bsp docs/CPU.md)"""
+    sys.path.insert(0, str(APP))
+    import mul64_pass
+    ir, done = mul64_pass.run(Path(path).read_text())
+    Path(path).write_text(ir)
+    if done:
+        print(f"ir_pass: {unit}: 64-bit multiplies clear of loads: {done}")
     return 0
 
 

@@ -272,6 +272,13 @@ const char *opt_ui_msg(void) { return ui.msg; }   /* the header's last message *
 /* the parity checks (tests/dev/parity.txt): a track's insert slots and their instances, the transport's beat, CLOCK OUT,
  * the guard's level, the late halves */
 void opt_ui_ins(uint32_t track, uint32_t slot, uint32_t type) { ins_load(track, slot, type); }   /* (the mixer's INSERT) */
+const char *opt_ui_engine(uint32_t track, uint32_t eng)
+{
+    if (track >= NPART || eng >= NENGINES)
+        return 0;
+    set_engine_of(&trk[track], eng);             /* (model.c: refused without room, the arena's part memory) */
+    return trk[track].eng_req == eng ? ENGINES[eng]->name : 0;
+}
 int32_t opt_ui_fxi(uint32_t track, uint32_t slot) { return (int32_t)fxi_state(track, slot); }   /* fxi.c FXI_*: 1 OK */
 int32_t opt_ui_beat(void) { return (int32_t)clk_beat; }
 void opt_ui_clock_out(uint32_t on)

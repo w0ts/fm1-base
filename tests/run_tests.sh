@@ -82,5 +82,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# an app with APP_BATTERY_RAW (plat_battery_raw) in the host simulator: tests/battery_app
+run battery-app sh -c "$PY tools/build.py tests/battery_app --host && \
+    tests/battery_app/build/host/battest_host tests/battery_app/tests/battery.txt tests/battery_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

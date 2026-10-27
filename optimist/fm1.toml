@@ -50,7 +50,17 @@ app_clear_end = 0xDA000        # an SD card mode install over a normal one erase
 sd = true                      # the SD card on the LCD's bus (fm1-base's plat_sd_*: a hardware mod), Optimist's SD card
                                # mode on it (ui/opt_sd.h, core/opt_sd_mmc.c; the profile copy's SD items); without a
                                # card it finds none
-ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
+# Bluetooth: fm1-base's own stack, which is Optimist's (bt/: the same files), for Optimist's BT MIDI, BT AUDIO and the
+# mirror over Bluetooth (ui/opt_bt.h: its screens, settings record and mirror on plat_ble_* / plat_bta_*)
+conf_gen = "gen_optimist.py --conf"   # ble and bt_audio below: the configuration's BLE and BT_AUDIO (tools/build.py)
+ble = true
+ble_stack = "own"
+ble_pairing = false            # no pairing, as Optimist's dev profile has it (BLE_BOND 0): a Mac or phone connects unbonded (3,420 B)
+bt_audio = true                # Bluetooth audio to headphones and speakers (A2DP), as Optimist's BT_AUDIO
+ble_midi_time = true           # BLE MIDI in by the sender's time (plat_midi_in_t24): Optimist's clock follower times F8s
+                               # itself (clock_sync.c, BT OFS), as its own midi_ble.c ble_in_time gave them
+ble_diag = false               # the link layer's diagnostics left out (feat/ble-diag-option), as Optimist builds its stack
+                               # (its BLE_DIAG off): ~2.4 KB of RAM and their code
 companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, Optimist's backup
                                # objects and sample slots as its files (in place of its editor's own cmds 43..48, 11..15:
                                # Optimist's io/editor/ed_comp.c), a few of its parameters (app.h APP_FILES, APP_PARAMS; app.c)
@@ -85,5 +95,8 @@ ram_code_allow = [
     # each through plat_ticks24 (FAR: the clock is flash code); dual_job, the second core's job, the same clock
     "dual_run", "dual_job",
 ]
+# what the start copies into RAM (.data, the RAM code: 56 KB) coded by Optimist's own boot coder in the image and
+# decoded at the start (feat/boot-pack: boot_pack.py, app.c app_boot_unpack), as Optimist's own firmware does
+boot_pack = "boot_pack.py"
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"

@@ -6,6 +6,9 @@
  * 10 kHz), audio (ALNK0), USB; then the main loop: UI at ~60 frames/s, input polled in between. */
 extern uint32_t _data_start[], _data_end[], _data_load[], _bss_start[], _bss_end[];
 extern uint32_t _pool_start[], _pool_end[], _rt_start[], _rt_end[], _rt_load[];
+#if FM1B_BOOT_PACK
+void app_boot_unpack(const uint8_t *src);    /* (the stream at _etext: fm1_guard.h declares it) */
+#endif
 
 /* --------------------------------------------------------------- audio --- */
 /* HALF_FRAMES (unity.c, from APP_BLOCK): the I2S half buffer, 256 frames = 5.8 ms at 44.1 kHz by default */
@@ -462,6 +465,7 @@ static int log_frame(const uint8_t *p, uint32_t n)
         shim_off_max = 0;
     }
 #if FM1B_BLE_OWN
+#if BLE_DIAG                                         /* (fm1.toml ble_diag = false: the counters not kept, no line) */
     {   /* the own stack's link layer: advertising events, connections taken / refused, packets good / CRC bad,
          * links closed : the last reason, the longest BLE interrupt (us) */
         q = b;
@@ -485,6 +489,7 @@ static int log_frame(const uint8_t *p, uint32_t n)
         *q = 0;
         log_line_send(b);
     }
+#endif
 #else
     {   /* the radio's tasks' deepest stacks and its heap's most, now (the "stacks" lines may have scrolled away) */
         extern int shim_stack_depth(int task);
@@ -1090,7 +1095,7 @@ static void fm1_main(void)
 
 void fm1_cstart(void)
 {
-    uint32_t *s, *d, p3, src, wdt;
+    uint32_t *d, p3, src, wdt;
 #if FM1B_CPU2
     fm1_cpu1_stop();                                /* a second core that a reset left running would read the RAM
                                                      * cleared below: held (registers only) */
@@ -1126,10 +1131,18 @@ void fm1_cstart(void)
         *d = 0;
     for (d = _pool_start; d < _pool_end; d++)
         *d = 0;
-    for (s = _data_load, d = _data_start; d < _data_end; s++, d++)
-        *d = *s;
-    for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
-        *d = *s;
+#if FM1B_BOOT_PACK
+    app_boot_unpack((const uint8_t *)_etext);       /* .data's values, then the RAM code: the app's coded stream right
+                                                     * after the code (fm1.toml boot_pack, tools/build.py) */
+#else
+    {
+        const uint32_t *s;
+        for (s = _data_load, d = _data_start; d < _data_end; s++, d++)
+            *d = *s;
+        for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
+            *d = *s;
+    }
+#endif
     fm1_mailbox_clear();
     fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
     safe_mode = (uint8_t)(p3 >> 8);

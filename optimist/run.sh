@@ -1,8 +1,9 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# The trial in the host simulator, built and run: optimist/run.sh (from anywhere). Three times: with Optimist's source
-# defaults (OPT_PROFILE=none: tests/), with the SD card mode (run_sd: tests/sd), then with the trial's copy of Optimist's dev profile (profiles/
-# dev-171e96a3.config: the device build's switches, the reference profile's data formats and addresses; tests/dev/),
+# The trial in the host simulator, built and run: optimist/run.sh (from anywhere). Four times: with Optimist's source
+# defaults (OPT_PROFILE=none: tests/), with the SD card mode (run_sd: tests/sd), with the dev profile's Bluetooth on the
+# host too (run_bt), then with the trial's copy of Optimist's dev profile (profiles/
+# dev-bt.config: the device build's switches, the reference profile's data formats and addresses; tests/dev/),
 # which the build is left with.
 # Each run builds with fm1-base's tools/build.py --host (Terminus: X0X_FONTSET, which fm1.toml cannot set yet), then
 # runs the note (milestone 1: the sound), the UI (milestone 2) and the storage (milestone 3): storage.txt saves through
@@ -21,7 +22,8 @@
 # the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
 # the first python3 on PATH. OPTSIM=0: without Optimist's simulator (no emcc / node). PROFILES: the runs (default
-# "none sd dev"; sd: the SD card mode, run_sd below).
+# "none sd bt dev"; sd: the SD card mode, run_sd below; bt: the dev profile with its Bluetooth on the host too,
+# OPT_HOST_BT=1, tests/dev/bt.txt and ui.txt).
 set -e
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"
@@ -47,8 +49,18 @@ run_sd() {
     unset OPT_PROFILE FM1B_APP_END
 }
 
-run_profile() {                     # $1: dev (the trial's profile copy), none (Optimist's source defaults) or sd
+run_bt() {                          # the dev profile with its Bluetooth on the host too (OPT_HOST_BT=1: gen_optimist.py
+                                    # host_bt): Optimist's Bluetooth screens, settings and mirror on fm1-base's stand-ins
+    echo "optimist/run.sh: profile dev, Bluetooth on the host (tests/dev/bt.txt)"
+    unset OPT_PROFILE
+    OPT_HOST_BT=1 X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
+    $H/optimist_host optimist/tests/dev/bt.txt $H
+    $H/optimist_host optimist/tests/dev/ui.txt $H
+}
+
+run_profile() {                     # $1: dev (the trial's profile copy), none (Optimist's source defaults), sd or bt
     if [ "$1" = sd ]; then run_sd; return; fi
+    if [ "$1" = bt ]; then run_bt; return; fi
     if [ "$1" = none ]; then T=optimist/tests; export OPT_PROFILE=none; else T=optimist/tests/dev; unset OPT_PROFILE; fi
     echo "optimist/run.sh: profile $1"
     X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
@@ -82,8 +94,8 @@ run_profile() {                     # $1: dev (the trial's profile copy), none (
     fi
 }
 
-for p in ${PROFILES:-none sd dev}; do
+for p in ${PROFILES:-none sd bt dev}; do
     run_profile "$p"
 done
 unset OPT_PROFILE
-echo "optimist/run.sh: every check passed (${PROFILES:-none sd dev})"
+echo "optimist/run.sh: every check passed (${PROFILES:-none sd bt dev})"

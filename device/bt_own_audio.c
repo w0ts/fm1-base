@@ -10,6 +10,8 @@
 #define FELUCCA_BT_AFH 1                          /* the channels a headset fails on leave the hopping (bt_afh.c) */
 #endif
 #define FELUCCA_BLE 1                             /* (the BLE stack is in this build: bt_own.c) */
+#pragma push_macro("FELUCCA_CDC")              /* (unity.c's, FM1B_CDC: back after the stack, below) */
+#undef FELUCCA_CDC
 #define FELUCCA_CDC 0                             /* no console: the probe's printing compiles away */
 #define FELUCCA_BT_DIAG 0
 #define FELUCCA_DUAL 0                            /* (the second core is fm1-base's: it keeps to RAM, cpu2.c) */
@@ -79,6 +81,7 @@ static void con_dec(uint32_t v) { (void)v; }
 static int own_bt_trims(struct ble_rf_trims *t);
 #define BTI_RADIO_TRIMS own_bt_trims              /* (bt_inq.c bti_radio_up: our constants, the 187 measured) */
 #include "bt_inq.c"
+#pragma pop_macro("FELUCCA_CDC")
 
 static int own_bt_trims(struct ble_rf_trims *t)
 {
@@ -201,7 +204,7 @@ void plat_bta_on(int on)
 void plat_bta_scan(int on)
 {
     if (bta.mode != BTA_OFF)
-        bta_scan(on ? 1 : 0);
+        bta_scan(on == 2 ? 2 : on ? 1 : 0);       /* (2: the inquiry again, the list kept: bt_audio.c) */
 }
 int plat_bta_found(int i, char *name)             /* found device i: its name (17 bytes) -> 0: none */
 {
@@ -245,6 +248,21 @@ void plat_bta_forget(int i)
 }
 void plat_bta_hangup(void) { bta_hangup(); }
 int plat_bta_state(void) { return (int)bta_state(); }   /* PLAT_BTA_S_* (the same values as bt_audio.h's BTA_S_*) */
+void plat_bta_output(int to_device) { bta_output(to_device != 0); }   /* (streaming only: bt_audio.c) */
+int plat_bta_out_device(void) { return bta_out_bt(); }
+int plat_bta_lost(void)                           /* (PLAT_BTA_LOST_*: bt_audio.c's BTA_W_*, in the same order) */
+{
+    uint32_t w = bta_seen;
+    return bta_lost() ? (int)(w % 7u) : PLAT_BTA_LOST_NONE;
+}
+int plat_bta_timed_out(void) { return bta_state() == BTA_S_REFUSED && bta_gave_up(); }
+int32_t plat_bta_latency_us(void)
+{
+    int32_t t = bta_lat_t();                      /* (TIMER4 ticks: bt_acl.c) */
+    return t < 0 ? -1 : t / (int32_t)FM1_TICKS_PER_US;
+}
+_Static_assert(PLAT_BTA_LOST_LINK == BTA_W_LINK && PLAT_BTA_LOST_REFUSED == BTA_W_REFUSED, "plat.h PLAT_BTA_LOST_*: bt_audio.c's BTA_W_*");
+_Static_assert(PLAT_BTA_STREAMING == BTA_S_STREAMING && PLAT_BTA_READY == BTA_S_READY, "plat.h PLAT_BTA_*: bt_audio.h's BTA_S_*");
 
 /* ---- the USB remote (main_fm1.c; tools/fm1_remote.py bta ...): F0 7D 4C 41 cmd [arg] F7
  *   1 on  2 off  3 scan  4 status ("<state> <found> <known>")  5 the found devices, a line each  6 i: connect found i

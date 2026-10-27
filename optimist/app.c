@@ -69,6 +69,22 @@ void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { 
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { lcd_blit(x, y, w, h, px); }
 void opt_lcd_sync(void) { lcd_sync(); }
 
+#if FM1B_BOOT_PACK
+/* the start's copies into RAM (fm1.toml boot_pack: boot_pack.py, Optimist's tools/lzb.py): .data's initial values, then
+ * the RAM code, decoded from the image by Optimist's own boot decoder (system/lzb.h: no global, from the flash, its
+ * 6.5 KB model on the start's stack and gone after: not inlined into fm1_cstart, which never returns), as Optimist's
+ * main.c fm1_cstart decodes its own boot stream */
+#include "system/lzb.h"
+extern uint32_t _data_start[], _data_end[], _rt_start[], _rt_end[];
+__attribute__((noinline)) void app_boot_unpack(const uint8_t *src)
+{
+    lzb_t z;
+    lzb_init(&z, src);
+    lzb_expand(&z, (uint8_t *)_data_start, (uint8_t *)_data_end);
+    lzb_expand(&z, (uint8_t *)_rt_start, (uint8_t *)_rt_end);
+}
+#endif
+
 /* the platform's messages (safe mode, an update): over Optimist's screen, which draws itself again after */
 void app_say(const char *a, const char *b)
 {
@@ -88,6 +104,9 @@ void app_ui_init(void) { opt_ui_init(); }
 int app_sysex(const uint8_t *p, uint32_t n) { return opt_ed_frame(p, n); }
 void app_sysex_byte(uint8_t b) { opt_sysex_byte(b); }
 void app_loop(void) { opt_ed_poll(); }
+/* what Bluetooth keeps (APP_BLE_STORE): Optimist's settings record's fields (ui/opt_bt.h) */
+int app_ble_load(struct plat_ble_rec *r) { return opt_ble_load(r); }
+int app_ble_save(const struct plat_ble_rec *r) { return opt_ble_save(r); }
 void app_input_only(void) { opt_ui_input(); }
 void app_frame(void) { opt_ui_frame(); }
 
@@ -195,6 +214,8 @@ int app_expect(const char *what, int *got)
         *got = (int)opt_ui_batt();
     else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
+    else if (!strcmp(what, "bta_out"))         /* Bluetooth audio: the sound to the device (1) or the FM-1's own (0) */
+        *got = plat_bta_out_device();
     else if (!strcmp(what, "c1up"))            /* the second core takes jobs (1); c1why: why not (dual_mode.h DUAL_*); */
         *got = (int)opt_core_dual_stat(0);     /* c1jobs: its jobs joined; c1posts: handed over (-1: no DUAL) */
     else if (!strcmp(what, "c1why"))
@@ -267,6 +288,25 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     uint32_t k;
     int32_t gv[4];
     (void)b, (void)c, (void)d;
+    if (!strcmp(cmd, "blesx")) {                 /* blesx F07D...F7: a SysEx frame from the computer over Bluetooth (the
+                                                 * hex bytes in one word), as USB-MIDI packets into the tick's MIDI in
+                                                 * (core/opt_core.c opt_core_midi from PORT_BLE): the mirror's requests */
+        uint8_t f[96];
+        uint32_t n = 0, i;
+        for (; a && a[0] && a[1] && n < sizeof f; a += 2) {
+            char h[3] = {a[0], a[1], 0};
+            f[n++] = (uint8_t)strtoul(h, 0, 16);
+        }
+        for (i = 0; i < n; i += 3) {
+            uint32_t m = n - i < 3u ? n - i : 3u, end = i + m == n && f[n - 1] == 0xF7u;
+            uint32_t cin = end ? 4u + m : 4u, pkt = cin;
+            uint32_t j;
+            for (j = 0; j < m; j++)
+                pkt |= (uint32_t)f[i + j] << (8u * (j + 1u));
+            opt_core_midi(pkt, PORT_BLE);
+        }
+        return 1;
+    }
     if (!strcmp(cmd, "msg")) {                   /* msg [TEXT]: the header's last message (has TEXT, else a failure) */
         int bad = a && a[0] && !strstr(opt_ui_msg(), a);
         printf("%s msg \"%s\"%s%s\n", bad ? "FAIL" : "  ok", opt_ui_msg(), a && a[0] ? " has " : "", a ? a : "");

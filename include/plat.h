@@ -92,6 +92,10 @@ enum { PORT_USB, PORT_BLE, PORT_TRS, NPORTS };
 #define TO_BLE_DEV (1u << 3)           /* the Bluetooth MIDI device the FM-1 connected to (FM1B_BLE_CENTRAL) */
 #define TO_BLE (TO_BLE_HOST | TO_BLE_DEV)
 int plat_midi_in(uint32_t *pkt, int *port);   /* 1 = got one, from port PORT_* (port may be 0) */
+/* when the last message plat_midi_in gave was sent, on plat_ticks24's clock: a Bluetooth one's from its own BLE-MIDI
+ * timestamp, the connection's bunching taken out (fm1.toml ble_midi_time, with ble_stack = "own": the transport
+ * then comes at once, not held to the sender's time); any other: now. For an app that follows a clock by time */
+uint32_t plat_midi_in_t24(void);
 uint32_t plat_midi_in_from(void);      /* where the last one came from, as an out: TO_USB, TO_BLE_HOST or TO_BLE_DEV
                                         * (0: the TRS jack, which has no out); called where plat_midi_in is */
 void plat_midi_send(uint32_t pkt, uint32_t to);   /* to: TO_USB | TO_BLE, or one link; main loop, the render or the
@@ -153,6 +157,26 @@ int plat_ble_passkey(void);            /* a pairing with a device waits for its 
  * on starts it (or advertises again). Whether it starts at power-on: APP_BLE_AT_BOOT (app.h, e.g. a saved setting;
  * default 1) */
 void plat_ble_enable(int on);
+/* What Bluetooth keeps (the own stack, ble_stack = "own"), by default in the app's store object OBJ_BLE. An app that
+ * keeps it in its own saved data instead (a settings record it has, with these fields at its own places) defines
+ * APP_BLE_STORE in app.h and gives the two calls below; it then needs no OBJ_BLE. app_ble_load: at Bluetooth's start
+ * (main loop), 1 with r filled, 0 none kept (the platform makes the address then, and saves it); app_ble_save: main
+ * loop, once something changed (a new address, a pairing, a remembered audio device), 0 kept (the app may write it
+ * to the flash later, with its own data) */
+struct plat_ble_rec {
+    uint8_t addr[6];                   /* our BLE address (static random: the top two bits 1) */
+    uint8_t bonded, rsv;               /* the computer's bond (ble_pairing): bonded, ediv, rand, ltk */
+    uint16_t bond_ediv;
+    uint8_t bond_rand[8], bond_ltk[16];
+    uint8_t bta_addr[6], bta_addr_set;   /* Bluetooth audio (bt_audio): our BR/EDR address, once made */
+    uint8_t bta_n;                     /* the remembered audio devices, the last one first */
+    struct plat_bta_dev {
+        uint8_t addr[6], bonded, link_key[16];   /* link_key: from its pairing (air order), when bonded */
+        char name[17];
+    } bta[4];
+};
+int app_ble_load(struct plat_ble_rec *r);
+int app_ble_save(const struct plat_ble_rec *r);
 
 /* Bluetooth audio out (fm1.toml bt_audio = true, with ble_stack = "own": FM1B_BT_AUDIO 1): an A2DP source to headphones
  * and speakers (SBC), beside Bluetooth MIDI on the one radio. While it streams, the render goes to the device and the
@@ -164,7 +188,8 @@ void plat_ble_enable(int on);
 enum { PLAT_BTA_OFF, PLAT_BTA_SCANNING, PLAT_BTA_FOUND, PLAT_BTA_NONE, PLAT_BTA_PAGING, PLAT_BTA_LINKED, PLAT_BTA_SETUP,
        PLAT_BTA_STREAMING, PLAT_BTA_REFUSED, PLAT_BTA_NO_LAST, PLAT_BTA_FAILED, PLAT_BTA_READY };
 void plat_bta_on(int on);              /* on: the radio up (Bluetooth MIDI's start, if not yet), ready to scan / connect */
-void plat_bta_scan(int on);            /* look for devices (about 10 s) */
+void plat_bta_scan(int on);            /* look for devices (about 10 s): 1 a fresh list, 2 again with the list kept
+                                        * (only when nothing else is under way: a page goes on), 0 stop */
 int plat_bta_found(int i, char *name); /* found device i: its name (17 bytes) -> 0: none */
 int plat_bta_known(int i, char *name); /* remembered device i (0 the last one) -> 0: none */
 void plat_bta_pick(int i);             /* connect found device i (pairing if new; it becomes the last one) */
@@ -172,6 +197,18 @@ int plat_bta_reconnect(int i);         /* connect remembered device i -> 0 pagin
 void plat_bta_forget(int i);
 void plat_bta_hangup(void);
 int plat_bta_state(void);              /* PLAT_BTA_* */
+/* while it streams, where the sound goes: 1 the device, 0 the FM-1's own output (the stream suspended, the link
+ * kept: back to the device at once, without a new connection) */
+void plat_bta_output(int to_device);
+int plat_bta_out_device(void);         /* 1: the sound goes to the device (the default) */
+/* a link that ended by itself (the device left, or refused): where it had got to, once (then PLAT_BTA_LOST_NONE) */
+enum { PLAT_BTA_LOST_NONE, PLAT_BTA_LOST_LINK, PLAT_BTA_LOST_PAIRING, PLAT_BTA_LOST_ENCRYPTION, PLAT_BTA_LOST_SETUP,
+       PLAT_BTA_LOST_STREAMING, PLAT_BTA_LOST_REFUSED };
+int plat_bta_lost(void);
+int plat_bta_timed_out(void);          /* PLAT_BTA_REFUSED because the set-up timed out (the device never said no) */
+int32_t plat_bta_latency_us(void);     /* what the stream adds on the FM-1's side (its queue), us; -1: not streaming.
+                                        * An app that follows a clock may play that much earlier (the device's own
+                                        * buffer comes on top and is not known) */
 
 /* WiFi (fm1.toml wifi = true: FM1B_WIFI 1): a station on JieLi's WiFi libraries and the SDK's lwIP, on the same shim.
  * Off until the app turns it on; then it joins the networks it joined before (kept in the app's store object OBJ_WIFI,
@@ -499,6 +536,10 @@ uint32_t plat_core(void);
  *   APP_MIRROR_TEST int app_mirror_test(int on)  the mirror's remote asks for a test session (on 1, off 0): 1 done
  *   APP_CSTART      void app_cstart(void)         first thing at a start, before the RAM is cleared and with nothing
  *                   set up (registers only, no RAM): an app's own second core that a reset left running, held
+ *   (fm1.toml boot_pack) void app_boot_unpack(const uint8_t *src)   at a start, after the RAM is cleared: .data's
+ *                   initial values and the RAM code (.ram_text) from the app's coded stream at src (the image's,
+ *                   right after the code) into _data_start.._data_end, then _rt_start.._rt_end, in place of the
+ *                   copies. It runs from the flash with its stack alone: no global, no RAM code (nothing is there yet)
  *                   (fm1-base's own, cpu2 = true, needs none of these)
  *   APP_USB_CAPTURE const int32_t *app_usb_capture(const int32_t *lr, uint32_t n)   the USB audio input's frames
  *                   (FM1B_UAC): n frames of FM1B_UAC_CH samples side by side, 24-bit as the render's, kept by the

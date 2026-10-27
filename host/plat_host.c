@@ -21,6 +21,7 @@
  *                                BLE is the computer's link, BLE-DEV the device's: both PORT_BLE, FM1B_BLE_CENTRAL)
  *   ble connect | ble link | ble disconnect   a central listening, or linked and not yet listening (FM1B_BLE: the
  *                                stand-in stack is ready a second after the start)
+ *   bta add NAME | bta drop NAME a Bluetooth audio device around, or gone (FM1B_BT_AUDIO: a link to it is lost)
  *   wav FILE | wavstop           start / stop recording the output
  *   usb_rec FILE | usb_recstop   (FM1B_UAC) a computer records the USB audio input from the next render into FILE (a WAV
  *                                of FM1B_UAC_CH channels at 44.1 kHz, 24-bit with FM1B_UAC_24, else 16): the app's own
@@ -410,6 +411,223 @@ void plat_ble_enable(int on)
         plat_ble_start();
     }
 }
+#if FM1B_BT_AUDIO
+/* Bluetooth audio (FM1B_BT_AUDIO): a stand-in for the A2DP source. The devices around are the script's ("bta add NAME",
+ * "bta drop NAME": it leaves, a link to it is lost); a scan lists them after 1 s, a connect streams 0.3 s later (one
+ * the script has not added answers nothing: FAILED after 1 s); four are remembered, the last one first. The sound
+ * stays the simulator's own output (the stream is not simulated) */
+#define BTH_N 8
+static char bth_near[BTH_N][17], bth_found[BTH_N][17], bth_mem[4][17];
+static uint32_t bth_nnear, bth_nfound, bth_nmem, bth_t;
+static int bth_st = PLAT_BTA_OFF, bth_out = 1, bth_lost;
+static int bth_tried;
+static int bth_is_near(const char *nm)
+{
+    uint32_t i;
+    for (i = 0; i < bth_nnear; i++)
+        if (!strcmp(bth_near[i], nm))
+            return 1;
+    return 0;
+}
+static int bth_rest(void)                         /* the state with no link and nothing under way (bt_audio.c's MAN) */
+{
+    return bth_tried ? PLAT_BTA_FAILED : bth_nfound ? PLAT_BTA_FOUND : PLAT_BTA_NONE;
+}
+static void bth_front(uint32_t i)                 /* remembered device i becomes the last one */
+{
+    char t[17];
+    memcpy(t, bth_mem[i], 17);
+    memmove(bth_mem[1], bth_mem[0], 17u * i);
+    memcpy(bth_mem[0], t, 17);
+}
+#ifdef APP_BLE_STORE
+/* APP_BLE_STORE: the remembered devices from the app's record at the first plat_bta_on after a boot, and back to it
+ * whenever the list changes (as the device's stack keeps them: their names here; an address of its own, k + 1) */
+static uint8_t bth_loaded;
+static void bth_load(void)
+{
+    struct plat_ble_rec r;
+    uint32_t k;
+    memset(&r, 0, sizeof r);
+    bth_loaded = 1;
+    if (!app_ble_load(&r))
+        return;
+    for (k = 0; k < r.bta_n && k < 4u; k++)
+        memcpy(bth_mem[k], r.bta[k].name, 17);
+    bth_nmem = k;
+}
+static void bth_keep(void)
+{
+    static const uint8_t ADDR[6] = {0x11, 0x22, 0x33, 0x44, 0x55, 0xC6};   /* (a static random one: the top bits 11) */
+    struct plat_ble_rec r;
+    uint32_t k;
+    memset(&r, 0, sizeof r);
+    if (!app_ble_load(&r))
+        memcpy(r.addr, ADDR, 6);                  /* (none kept yet: the stack makes its address, as on the device) */
+    memset(r.bta, 0, sizeof r.bta);
+    r.bta_n = (uint8_t)bth_nmem;
+    for (k = 0; k < bth_nmem; k++) {
+        r.bta[k].addr[0] = (uint8_t)(k + 1u);
+        r.bta[k].bonded = 1;
+        memcpy(r.bta[k].name, bth_mem[k], 17);
+    }
+    (void)app_ble_save(&r);
+}
+#else
+static uint8_t bth_loaded = 1;
+static void bth_load(void) {}
+static void bth_keep(void) {}
+#endif
+static void bta_boot(void)                        /* a boot (the simulator's reboot too): nothing up, the list to load */
+{
+    bth_st = PLAT_BTA_OFF;
+    bth_nfound = 0;
+#ifdef APP_BLE_STORE
+    bth_nmem = 0;
+    bth_loaded = 0;
+#endif
+}
+static void bta_tick(void)
+{
+    if (bth_st == PLAT_BTA_SCANNING && now_ms - bth_t >= 1000u) {
+        uint32_t i;
+        for (i = 0, bth_nfound = 0; i < bth_nnear; i++)
+            memcpy(bth_found[bth_nfound++], bth_near[i], 17);
+        bth_st = bth_rest();
+    }
+    if (bth_st == PLAT_BTA_PAGING && now_ms - bth_t >= (bth_is_near(bth_mem[0]) ? 300u : 1000u)) {
+        bth_tried = 1;
+        bth_st = bth_is_near(bth_mem[0]) ? PLAT_BTA_STREAMING : PLAT_BTA_FAILED;
+        bth_out = 1;
+    }
+}
+void plat_bta_on(int on)
+{
+    if (on && bth_st == PLAT_BTA_OFF) {
+        if (ble_state == BLE_OFF)
+            plat_ble_start();
+        if (!bth_loaded)
+            bth_load();
+        bth_tried = 0;
+        bth_st = bth_rest();
+    } else if (!on)
+        bth_st = PLAT_BTA_OFF;
+}
+void plat_bta_scan(int on)
+{
+    if (bth_st == PLAT_BTA_OFF)
+        return;
+    if (on == 2 && bth_st == PLAT_BTA_SCANNING)
+        return;                                   /* (again, the list kept: only when idle) */
+    if (on && bth_st != PLAT_BTA_STREAMING && bth_st != PLAT_BTA_PAGING) {
+        if (on != 2)
+            bth_nfound = 0;                       /* (a fresh list) */
+        bth_st = PLAT_BTA_SCANNING;
+        bth_t = now_ms;
+    } else if (!on && bth_st == PLAT_BTA_SCANNING)
+        bth_st = bth_rest();
+}
+int plat_bta_found(int i, char *name)
+{
+    if (i < 0 || (uint32_t)i >= bth_nfound)
+        return 0;
+    if (name)
+        memcpy(name, bth_found[i], 17);
+    return 1;
+}
+int plat_bta_known(int i, char *name)
+{
+    if (i < 0 || (uint32_t)i >= bth_nmem)
+        return 0;
+    if (name)
+        memcpy(name, bth_mem[i], 17);
+    return 1;
+}
+static void bth_page(void)
+{
+    bth_st = PLAT_BTA_PAGING;
+    bth_t = now_ms;
+}
+void plat_bta_pick(int i)
+{
+    uint32_t k;
+    if (bth_st == PLAT_BTA_OFF || i < 0 || (uint32_t)i >= bth_nfound)
+        return;
+    for (k = 0; k < bth_nmem && strcmp(bth_mem[k], bth_found[i]); k++)
+        ;
+    if (k == bth_nmem) {                          /* (new: remembered, the oldest one forgotten when four are) */
+        if (bth_nmem < 4u)
+            bth_nmem++;
+        k = bth_nmem - 1u;
+        memcpy(bth_mem[k], bth_found[i], 17);
+    }
+    bth_front(k);
+    bth_keep();
+    bth_page();
+}
+int plat_bta_reconnect(int i)
+{
+    if (bth_st == PLAT_BTA_OFF || i < 0 || (uint32_t)i >= bth_nmem)
+        return -1;
+    if (i == 0 && (bth_st == PLAT_BTA_STREAMING || bth_st == PLAT_BTA_PAGING))
+        return 0;                                 /* (that device already) */
+    bth_front((uint32_t)i);
+    bth_keep();
+    bth_page();
+    return 0;
+}
+void plat_bta_forget(int i)
+{
+    if (i < 0 || (uint32_t)i >= bth_nmem)
+        return;
+    memmove(bth_mem[i], bth_mem[i + 1], 17u * (bth_nmem - 1u - (uint32_t)i));
+    bth_nmem--;
+    bth_keep();
+}
+void plat_bta_hangup(void)
+{
+    if (bth_st == PLAT_BTA_STREAMING || bth_st == PLAT_BTA_PAGING)
+        bth_st = bth_rest();
+}
+int plat_bta_state(void) { return bth_st; }
+void plat_bta_output(int to_device)
+{
+    if (bth_st == PLAT_BTA_STREAMING)
+        bth_out = to_device != 0;
+}
+int plat_bta_out_device(void) { return bth_out; }
+int plat_bta_lost(void)
+{
+    int w = bth_lost;
+    bth_lost = PLAT_BTA_LOST_NONE;
+    return w;
+}
+int plat_bta_timed_out(void) { return 0; }
+int32_t plat_bta_latency_us(void) { return bth_st == PLAT_BTA_STREAMING ? 20000 : -1; }   /* (a queue's worth) */
+static int bta_script(const char *what, const char *name, int lineno)   /* "bta add NAME", "bta drop NAME" -> 1 bad */
+{
+    uint32_t i;
+    if (!strcmp(what, "add") && bth_nnear < BTH_N && !bth_is_near(name)) {
+        snprintf(bth_near[bth_nnear++], 17, "%s", name);
+        return 0;
+    }
+    if (!strcmp(what, "drop")) {
+        for (i = 0; i < bth_nnear && strcmp(bth_near[i], name); i++)
+            ;
+        if (i < bth_nnear) {
+            memmove(bth_near[i], bth_near[i + 1], 17u * (bth_nnear - 1u - i));
+            bth_nnear--;
+        }
+        if (bth_st == PLAT_BTA_STREAMING && !strcmp(bth_mem[0], name)) {
+            bth_st = PLAT_BTA_FAILED;             /* (its link lost: said once, plat_bta_lost) */
+            bth_lost = PLAT_BTA_LOST_STREAMING;
+        }
+        return 0;
+    }
+    printf("line %d: bta %s %s: add or drop NAME\n", lineno, what, name);
+    return 1;
+}
+#endif
 #if FM1B_WIFI
 /* WiFi (FM1B_WIFI): a stand-in, two networks around ("Home", kept, and "Cafe", open), on 0.5 s after asked, joined
  * 1.5 s after (an address 0.5 s later); the network code (fm1.toml net) is the device's alone: plat_net_task runs
@@ -973,6 +1191,7 @@ uint32_t plat_cpu_pct(void) { return cpu_pct; }
 uint32_t plat_cpu_khz(void) { return 0; }        /* (no clock to speak of: the host's) */
 #endif
 uint32_t plat_xruns(void) { return 0; }
+uint32_t plat_midi_in_t24(void) { return plat_ticks24(); }   /* (no Bluetooth timestamps here: now) */
 uint32_t plat_ticks24(void)                     /* the host's monotonic clock, at the device's rate */
 {
     struct timespec t;
@@ -1458,6 +1677,9 @@ static void boot(void)
     ble_state = BLE_OFF;                            /* Bluetooth starts at every boot, as on the device */
     ble_conn = ble_link = 0;
     bdev_state = BLE_DEV_OFF;
+#if FM1B_BT_AUDIO
+    bta_boot();
+#endif
     if (APP_BLE_AT_BOOT)
         plat_ble_start();
 #ifdef APP_BOOT
@@ -1477,6 +1699,9 @@ static void run_ms(uint32_t ms)
     for (i = 0; i < ms; i++) {
         now_ms++;
         ble_tick();
+#if FM1B_BT_AUDIO
+        bta_tick();
+#endif
 #if FM1B_WIFI
         wifi_tick();
 #endif
@@ -1669,6 +1894,12 @@ static int expect(const char *what, const char *val)
         got = ble_state;
     else if (!strcmp(what, "ble_dev"))              /* the Bluetooth MIDI device: BLE_DEV_* (4 connected) */
         got = bdev_state;
+#if FM1B_BT_AUDIO
+    else if (!strcmp(what, "bta"))                  /* Bluetooth audio: PLAT_BTA_* (7 streaming) */
+        got = bth_st;
+    else if (!strcmp(what, "bta_known"))            /* its remembered devices */
+        got = (int)bth_nmem;
+#endif
     else if (!strcmp(what, "midi_in_usb"))          /* plat_midi_count: messages in from USB */
         got = (int)plat_midi_count(PORT_USB, 0);
     else if (!strcmp(what, "usb_rec_frames"))       /* frames the computer recorded (usb_rec), and played (usb_play) */
@@ -2073,6 +2304,11 @@ int main(int argc, char **argv)
                 fails++;
             }
             run_ms(2);
+#if FM1B_BT_AUDIO
+        } else if (!strcmp(cmd, "bta")) {
+            fails += bta_script(a, b, lineno);
+            run_ms(2);
+#endif
         } else if (!strcmp(cmd, "out")) {
             uint32_t i;
             for (i = 0; i < n_out; i++)

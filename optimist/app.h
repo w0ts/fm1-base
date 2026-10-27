@@ -10,6 +10,10 @@
 #define APP_NAME "OPTIMIST"
 #define APP_SPLASH_RGB RGB(255, 214, 10)
 #define APP_BLOCK 256u                   /* frames per audio block (8 of Optimist's 32-frame mix blocks) */
+/* the canvas: Optimist's own, 240 x 124 (display/gfx.c CV_MAX: its graph strip; every screen of its UI draws in bands
+ * of at most that, as on its own firmware), not fm1-base's 240 x 144: 9,600 B of the SRAM. fm1-base's own screens draw
+ * 64 rows at most (main_fm1.c splash, sys_text.c) */
+#define APP_CANVAS_PX (240u * 124u)
 
 /* the store: only the platform's panel calibration (fm1-base's device/storage.c). Optimist's own data (its projects,
  * section log, presets, kits, snapshots, settings, autosave, drum records) is Optimist's storage at Optimist's addresses
@@ -45,6 +49,14 @@ void app_sysex_byte(uint8_t b);
 void app_loop(void);
 #define APP_RESTART                      /* plat_restart: a restore done, the mirror's test session */
 #define APP_TICK                         /* 1 kHz, the timer interrupt: the MIDI in, CLOCK OUT (core/opt_core.c) */
+/* Bluetooth (fm1.toml ble_stack = "own": Optimist's own stack, fm1-base's): what it keeps lives in Optimist's settings
+ * record, as Optimist keeps it (APP_BLE_STORE: app.c app_ble_load / app_ble_save, ui/opt_bt.h), so no OBJ_BLE; it
+ * starts at power-on when SYSTEM > BT MIDI was left on (Optimist's: off by default); it advertises as Optimist does,
+ * "Optimist XXXX" (XXXX from its address: the same name on Optimist's firmware) */
+#define APP_BLE_STORE
+#define APP_BLE_AT_BOOT (opt_ble_at_boot() != 0)
+int opt_ble_at_boot(void);
+#define BLE_DEVICE_NAME "Optimist"
 void app_tick(void);
 #define APP_BATTERY_RAW                  /* plat_battery_raw: SYSTEM > BATTERY's volts and charge (ui/opt_ui.c) */
 #define APP_CPU_KHZ                      /* plat_cpu_khz: SYSTEM > INFO's CPU MHz, the CPU guard's clock (core/opt_core.c) */

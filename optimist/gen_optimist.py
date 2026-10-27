@@ -20,6 +20,7 @@
    build writes: tools/optimist.py build), instead of the profile copy: the felucca_config.h is FILE with RELEASE_OFF
    (below) appended, felucca_config_profile.h FILE as it is (the profile as Optimist's own firmware would run it)
    as Optimist's host tests have them.
+   Bluetooth is the configuration's: fm1.toml's ble and bt_audio follow its BLE and BT_AUDIO (--conf, fm1.toml conf_gen).
 3. build/optgen: Optimist's generated headers for the audio core (tables, samples, drum kits, the 909 samples,
    wavetables), in the profile's environment (its sample sets); made again only when Optimist's HEAD, its working
    tree or the profile changed (build/optgen/stamp)."""
@@ -34,11 +35,11 @@ LINK = BUILD / "optimist"
 GEN = BUILD / "optgen"
 # Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off (OPT_PROFILE=none)
 HOST_ENV = {"FELUCCA_SAMPLES_SKIP": "", "FELUCCA_SLICE": "0"}
-PROFILE = "profiles/dev-171e96a3.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after)
+PROFILE = "profiles/dev-bt.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after: with Bluetooth)
 # what the release leaves off whatever the configuration says, for lack of support in fm1-base's platform (the trial's
-# block in the profile copy says the same, with DUAL 2): never a data format or an address
-RELEASE_OFF = ("# ---- the release: off for lack of support on fm1-base (its own Bluetooth stack is not wired yet, its app.ld and "
-               "boot are its own)\nBLE=0\nBT_AUDIO=0\nCACHE_RAM=0\n")
+# block in the profile copy says the same): never a data format or an address. Bluetooth (BLE, BT_AUDIO) is the
+# configuration's own: fm1.toml's ble / bt_audio follow it (conf_gen, --conf below)
+RELEASE_OFF = "# ---- the release: off for lack of support on fm1-base (its own app.ld and boot are its own)\nCACHE_RAM=0\n"
 MARKER = "# ---- the trial:"                   # (the copy's line where the trial's own changes start)
 # the audio core's and the UI's headers (Optimist tools/build.py generate(): its colours for the UI; its fonts are not
 # used (fm1-base's canvas draws with fm1-base's), its icons nowhere, the help lines off (gen_param_help.py would also
@@ -126,6 +127,7 @@ def config(tree, prof):
             host_dual(configure.flags(cfg)[0].get("FELUCCA_DUAL", 0), GEN / out)
             host_sd(configure.flags(cfg)[0], GEN / out)
             slot_check(configure.flags(cfg)[0].get("FELUCCA_LAYOUT", 0), prof)
+            host_bt(configure.flags(cfg)[0], GEN / out)
         if env is None:
             env = configure.flags(cfg)[1]       # (the trial's: its sample sets, SLICE)
     return env
@@ -175,6 +177,24 @@ def host_dual(dual, path):
         path.write_text(text + extra)
 
 
+BT_ITEMS = ("FELUCCA_BLE", "FELUCCA_BLE_BOND", "FELUCCA_BLE_CENTRAL", "FELUCCA_BT_AUDIO", "FELUCCA_BT_AFH")
+
+
+def host_bt(flags, path):
+    """OPT_HOST_BT=1: the profile's Bluetooth (BLE, BT_AUDIO ...: FM-1-only items, under __PI32V2__ alone) on the host
+    too: Optimist's Bluetooth screens, settings and mirror on the host simulator's stand-ins for fm1-base's stack
+    (ui/opt_bt.h; optimist/run.sh's bt run). Off by default: the host runs stay comparable with Optimist's own simulator,
+    which has no Bluetooth"""
+    if os.environ.get("OPT_HOST_BT") != "1":
+        return
+    lines = "".join(f"#define {k} {flags.get(k, 0)}\n" for k in BT_ITEMS)
+    extra = ("/* the trial (gen_optimist.py host_bt, OPT_HOST_BT=1): the profile's Bluetooth on the host too */\n"
+             f"#if defined(PLAT_HOST)\n{lines}#endif\n")
+    text = path.read_text()
+    if not text.endswith(extra):
+        path.write_text(text + extra)
+
+
 def companion():
     """1: the build has fm1-base's companion services (fm1.toml companion = true; FM1B_COMPANION=0 / 1 over it, as
     tools/build.py opt_flags has it): OPT_COMPANION in the trial's header, for the Optimist unit (an o2 unit: on the host
@@ -208,6 +228,7 @@ def generate(tree):
     prof = profile()
     key = stamp(tree) + (f"profile {prof}\n" + prof.read_text() if prof else "profile none\n")
     key += f"companion {companion()}\n"
+    key += f"host_bt {os.environ.get('OPT_HOST_BT') == '1'}\n"
     st = GEN / "stamp"
     outs = [out for _, out in GENERATORS] + ["felucca_config.h", "felucca_config_profile.h"]
     if st.exists() and st.read_text() == key and all((GEN / out).exists() for out in outs):
@@ -232,7 +253,25 @@ def generate(tree):
     print(f"optimist {tree} (headers: {GEN}; profile {prof.name if prof else 'none: the source defaults'})")
 
 
+def conf():
+    """--conf (fm1.toml conf_gen, run by tools/build.py before the build): fm1.toml's ble and bt_audio from the chosen
+    configuration's BLE and BT_AUDIO (a profile without BLE builds without the stack; OPT_PROFILE=none: neither)"""
+    prof = profile()
+    flags = {}
+    if prof is not None:
+        sys.dont_write_bytecode = True
+        sys.path.insert(0, str(optimist_tree() / "tools" / "builder"))
+        import configure
+        flags = configure.flags(configure.parse(prof.read_text())[0])[0]
+    ble = bool(flags.get("FELUCCA_BLE", 0))
+    audio = ble and bool(flags.get("FELUCCA_BT_AUDIO", 0))
+    print(f"ble = {str(ble).lower()}\nbt_audio = {str(audio).lower()}")
+    return 0
+
+
 def main():
+    if sys.argv[1:] == ["--conf"]:
+        return conf()
     tree = optimist_tree()
     link(tree)
     generate(tree)

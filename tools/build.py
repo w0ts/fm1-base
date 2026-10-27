@@ -70,6 +70,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              fm1_sd_hw.h; plat_sd_* in plat.h, felucca-bsp docs/SD.md): the screen idles selected,
                              the card's chip select being its own inverted; the host simulator reads a card image
                              (FM1B_SD=FILE)
+  conf_gen = "x.py args"     a script of the app (cwd APP_DIR) whose output, fm1.toml lines (ble = false), replaces the
+                             file's own before the build: a setting the app's configuration chooses
   app_end = 0xCE000          a bigger app slot (FM1B_APP_END; FM1B_APP_END=0x... in the environment for one build): the
                              app area [0x4000, app_end) instead of [0x4000, 0x93000), on a 4 KiB boundary up to 0xE0000;
                              the code may then reach past the old end, plat.h's data window starts at app_end
@@ -108,6 +110,11 @@ app.h); the build prints what it has.
                              FM1B_BLE_OWN) instead of JieLi's libraries: nothing of the SDK's linked, no shim
   ble_pairing = true         with ble_stack = "own": pairing and an encrypted link (LE legacy pairing, Just Works),
                              the bond kept in OBJ_BLE; without it a pairing is refused (macOS and iOS connect anyway)
+  ble_midi_time = true       with ble_stack = "own": Bluetooth MIDI in by the sender's time (FM1B_BLE_MIDI_TIME): each
+                             message's time sent, from its BLE-MIDI timestamp (bt/ble/ble_time.c), for plat_midi_in_t24;
+                             the transport then comes at once instead of held to the sender's time
+  ble_diag = false           with ble_stack = "own": the link layer's diagnostics left out (bt/ble/ble_diag.h BLE_DIAG 0:
+                             its counters and event rings, ~2.4 KB of RAM, and the radio log's "BT ll" line); kept by default
   ble = true                 Bluetooth MIDI (FM1B_BLE): ble/ on JieLi's BT libraries, from the AC79 SDK ($AC79_SDK);
                              --no-ble builds without it (NAME-usb.fwsc), and the build checks nothing of JieLi's is in
   wifi = true                WiFi (FM1B_WIFI): a station on JieLi's WiFi libraries and the SDK's lwIP (built from its
@@ -128,6 +135,12 @@ app.h); the build prints what it has.
                              `ir_pass IN.ll OUT.ll [UNIT]` (UNIT: an o2 unit's path relative to APP_DIR; none for
                              unity.c), then compiles OUT.ll at the unit's level (an app marking its cold code
                              minsize: Melodee's idea). Without changes the round trip makes the same code
+  boot_pack = "tools/pack.py"   the app's coder for what the start copies into RAM (relative to APP_DIR): the build
+                             runs `boot_pack OUT DATA RAMTEXT` (.data's initial values and .ram_text, each a binary
+                             file; OUT the coded stream to write) and puts OUT in the image right after the code
+                             (_etext) instead of the two copies; the app's app_boot_unpack (plat.h) decodes it at the
+                             start (FM1B_BOOT_PACK). The linker's load addresses for the two are then outside the
+                             image (a PACK region), so only the stream counts against the slot
 The app's own code that runs from RAM (out of the XIP cache's way: an audio path) goes in section .app_ram (plat.h
 PLAT_RAM_CODE): copied at boot with .ram_text, inside the guard's RAM code window (between _ar_start and _ar_end). It
 may call only RAM code, to any depth, and nothing through a pointer (tools/ramcode.py, over the disassembly). XIP code
@@ -196,11 +209,15 @@ BT_SYMS = ("btstack_init", "bt_ble_init", "bt_max_pwr_set", "le_controller_set_m
 
 
 def read_conf(path):
+    return parse_conf(path.read_text(), path)
+
+
+def parse_conf(text, path):
     """fm1.toml: key = "string" | number | true | false | ["string", ...] (a list may go on over several lines),
     # comments (the little TOML a firmware needs)"""
     conf = {}
     pending, start = "", 0
-    for no, line in enumerate(path.read_text().splitlines(), 1):
+    for no, line in enumerate(text.splitlines(), 1):
         line = re.sub(r"\s+#.*$", "", line).strip()
         if not line or line.startswith("#"):
             continue
@@ -682,8 +699,12 @@ def build_app():
             flags.append("-DFM1B_BT_AUDIO=1")
             if CONF.get("bt_log"):                 # its step-by-step lines on the radio's log (fm1_remote.py log)
                 flags.append("-DFM1B_BT_LOG=1")
+        if CONF.get("ble_midi_time"):              # BLE MIDI in by the sender's time (plat_midi_in_t24), transport not held
+            flags.append("-DFM1B_BLE_MIDI_TIME=1")
         if CONF.get("ble_pairing"):                # pairing and an encrypted link (LE legacy, Just Works; the bond kept)
             flags += ["-DBLE_LL_ENC=1", "-DBLE_SMP_LEGACY=1"]
+        if CONF.get("ble_diag") is False:          # the link layer's diagnostics left out (bt/ble/ble_diag.h)
+            flags.append("-DBLE_DIAG=0")
         GEN.mkdir(parents=True, exist_ok=True)    # the radio's start-up program (fm1_ble_rf.h includes it)
         tables = (BSP / "chip" / "ble_rf_tables_v15.h").read_bytes()   # (Apache-2.0: JieLi's rf_init, from V15)
         if not (GEN / "ble_rf_tables.h").exists() or (GEN / "ble_rf_tables.h").read_bytes() != tables:
@@ -708,6 +729,8 @@ def build_app():
             flags.append(f'-D{macro}="{CONF[key]}"')
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
+    if CONF.get("boot_pack"):                     # the app decodes what the start copies into RAM (app_boot_unpack)
+        flags.append("-DFM1B_BOOT_PACK=1")
     if CPU2:
         flags += ["-DFM1_CPU1=1", f"-DFM1B_BUILD={build_id():#010x}u", f"-DFM1_CPU1_FALLBACK={int(bool(CONF.get('cpu2_fallback')))}"]
         flags += cpu2_stack_flags()
@@ -770,6 +793,8 @@ def build_app():
         ld = OUT / ld.name
         ld.write_text(text)
     LAYOUT = memory_regions(ld.read_text())
+    if CONF.get("boot_pack"):                     # the RAM copies' load addresses out of the image: the stream is there
+        ld = pack_script(ld)
     tc("pi32v2/bin/ld", *lto, "--gc-sections", "-e", "_start", "-T", ld, *objs, *b_objs,
        *b_libs, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
@@ -785,6 +810,10 @@ def build_app():
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
     img = bytearray((OUT / "text.bin").read_bytes())
+    if CONF.get("boot_pack"):
+        img += boot_stream(symv("_etext") - APP_XIP - len(img))
+        (OUT / (NAME + ".bin")).write_bytes(img)
+        return bytes(img), syms, dis, rt
     # .ram_text and .data follow .text at their load addresses; crt0 copies them by words
     for sect, lname in (("ramtext.bin", "_rt_load"), ("data.bin", "_data_load")):
         load = symv(lname)
@@ -799,6 +828,41 @@ def build_app():
     img += b"\xff" * (-len(img) % 4)
     (OUT / (NAME + ".bin")).write_bytes(img)
     return bytes(img), syms, dis, rt
+
+
+def pack_script(ld):
+    """-> OUT/NAME_pack.ld: the linker script with the RAM copies' load addresses in a region of their own (PACK, past
+    anything mapped: never written), for a build whose image holds the app's coded stream instead (boot_pack)"""
+    text = ld.read_text()
+    if "AT > XIP" not in text:
+        raise SystemExit(f"build: {ld.name} has no load address in XIP to move (boot_pack)")
+    text = re.sub(r"(\bMEMORY\s*\{)", r"\1\n    PACK   (r)   : ORIGIN = 0x10000000, LENGTH = 0x100000", text, count=1)
+    out = OUT / (NAME + "_pack.ld")
+    out.write_text(text.replace("AT > XIP", "AT > PACK"))
+    return out
+
+
+def boot_stream(gap):
+    """the app's coded stream of .data and .ram_text (fm1.toml boot_pack), padded to the word: what follows the code
+    (gap: _etext's distance from the end of .text.bin, 0 but for the alignment)"""
+    out = OUT / "boot_pack.bin"
+    out.unlink(missing_ok=True)
+    blobs = [OUT / s for s in ("data.bin", "ramtext.bin")]
+    for b in blobs:
+        if not b.exists():
+            b.write_bytes(b"")
+    r = subprocess.run([sys.executable, str(APP / CONF["boot_pack"]), str(out), *map(str, blobs)],
+                       capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    if r.returncode or not out.exists():
+        sys.stderr.write(r.stderr)
+        raise SystemExit(f"build: {CONF['boot_pack']} failed")
+    stream = out.read_bytes()
+    raw = sum(b.stat().st_size for b in blobs)
+    print(f"boot     {raw:,} B copied into RAM at the start (.data, .ram_text), {len(stream):,} B in the image "
+          f"({CONF['boot_pack']})")
+    data = b"\xff" * gap + stream
+    return data + b"\xff" * (-len(data) % 4)
 
 
 def memory_regions(script):
@@ -1090,7 +1154,7 @@ def build_host():
                          out / "o2")
     uac = [*usb_audio_flags(), *(f"-D{f}={os.environ[f]}" for f in ("FM1B_UAC", "FM1B_UAC_OUT") if os.environ.get(f) in ("0", "1"))]
     cmd = [os.environ.get("CC", "cc"), "-O2", "-ffp-contract=off", "-std=c99", "-Wall", "-Wextra",
-           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *uac, *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_WIFI=1"] * WIFI,
+           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *uac, *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * (BLE and OWN and bool(CONF.get("bt_audio"))), *["-DFM1B_WIFI=1"] * WIFI,
            *(f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
            "-o", str(exe), str(SRC / "host" / "plat_host.c"), *o2_objs, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -1190,7 +1254,7 @@ def build_web():
                          emu / "o2")
     parts = emu_parts()
     cmd = ["emcc", "-O2", "-ffp-contract=off", "-std=gnu99", "-Wall", "-Wno-unused-function", "-Wno-unused-parameter",
-           "-Wno-unused-variable", "-DPLAT_HOST", "-DPLAT_WEB", *opt_flags(), *(f"-DFM1B_EMU_{p.upper()}=1" for p in parts), *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_WIFI=1"] * WIFI, *(f'-DAPP_VERSION="{VERSION}"',) * bool(VERSION),
+           "-Wno-unused-variable", "-DPLAT_HOST", "-DPLAT_WEB", *opt_flags(), *(f"-DFM1B_EMU_{p.upper()}=1" for p in parts), *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * (BLE and OWN and bool(CONF.get("bt_audio"))), *["-DFM1B_WIFI=1"] * WIFI, *(f'-DAPP_VERSION="{VERSION}"',) * bool(VERSION),
            *(f"-I{d}" for d in (SRC / "host", SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
            "--no-entry", "-sSTANDALONE_WASM", "-sSTACK_SIZE=1048576", "-sINITIAL_MEMORY=33554432", "-sFILESYSTEM=0",
            "-o", str(emu / "app.wasm"), str(SRC / "web" / "emu" / "emu_web.c"), *o2_objs]
@@ -1236,6 +1300,13 @@ def main():
     a = ap.parse_args()
     APP = a.app.resolve()
     CONF = read_conf(APP / "fm1.toml")
+    if CONF.get("conf_gen"):                      # the app's script (cwd APP_DIR) prints fm1.toml lines over the file's own
+        c = CONF["conf_gen"].split()
+        r = subprocess.run([sys.executable, str(APP / c[0]), *c[1:]], cwd=APP, capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stderr)
+            raise SystemExit(f"build: conf_gen {c[0]} failed")
+        CONF.update(parse_conf(r.stdout, c[0]))
     NAME = CONF.get("name", APP.name).lower()
     BLE = bool(CONF.get("ble")) and not a.no_ble
     OWN = BLE and CONF.get("ble_stack", "jieli") == "own"

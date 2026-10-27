@@ -41,6 +41,8 @@ void app_loop(void);
 void app_tick(void);
 #define APP_BATTERY_RAW                  /* plat_battery_raw: SYSTEM > BATTERY's volts and charge (ui/opt_ui.c) */
 #define APP_CPU_KHZ                      /* plat_cpu_khz: SYSTEM > INFO's CPU MHz, the CPU guard's clock (core/opt_core.c) */
+#define APP_SPLASH                       /* the boot screen: Optimist's (ui/splash.c: the dinghy, the version) */
+void app_splash(void);
 /* USB audio (fm1.toml usb_audio_*): the computer's audio is Optimist's USB input track (APP_USB_PLAY: the render takes
  * it, plat_usb_audio_play), and the USB audio input is Optimist's four capture channels by SYSTEM > USB AUDIO's
  * routing (APP_USB_CAPTURE: app_usb_capture, core/opt_core.c) */

@@ -94,6 +94,15 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
 #include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
 
+/* ---- the boot screen (fm1-base's APP_SPLASH, app.c app_splash: before app_init): Optimist's own, the dinghy logo,
+ * "OPTIMIST" and the version (ui/splash.c, always built in Optimist: main.c boot_splash), on this unit's canvas */
+#include "ui/splash.c"
+void opt_splash(void)
+{
+    opt_cv_init();                               /* (the canvas: app_init has not run yet) */
+    boot_splash();
+}
+
 /* ---- power-on (system/main.c: settings_init, panel_init, felucca_init without a stored project) */
 void opt_core_init(void)
 {

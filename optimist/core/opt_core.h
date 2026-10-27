@@ -24,6 +24,7 @@ int32_t opt_core_dual_stat(uint32_t k);                       /* the second core
                                                               * 1 why (dual_mode.h DUAL_*), 2 jobs joined, 3 posted; -1 */
 
 /* the UI (ui/opt_ui.c): a main loop pass of Optimist's (system/main.c) is opt_ui_frame; between frames opt_ui_input */
+void opt_splash(void);                                       /* the boot screen: Optimist's logo and version */
 void opt_ui_init(void);                                      /* the screen cleared, everything drawn at the next frame */
 void opt_ui_frame(void);                                     /* the panel, the LEDs, the screen */
 /* the web editor (ui/opt_editor.h): a SysEx frame from USB (the bytes between F0 and F7; 1 = the editor's), each main

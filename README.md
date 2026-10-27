@@ -81,6 +81,8 @@ overwritten works the same. The own stack is smaller and does more:
 - With `ble_midi_time = true` each message from Bluetooth comes with the time it was sent, from its BLE-MIDI
   timestamp (`plat_midi_in_t24`): the connection's bunching taken out, for an app that times a clock it follows
   itself. Without it the clock and transport are held to the sender's time (spaced as sent, up to 0.12 s later).
+- `ble_diag = false` leaves out the link layer's diagnostics (its counters and event rings: about 2.4 KB of RAM
+  and some code; the radio log's `BT ll` line). They are kept by default.
 - With `ble_central = true` the FM-1 connects to Bluetooth MIDI devices, as on JieLi's. A device that asks for a
   code gets one on the FM-1's screen (`plat_ble_passkey`).
 - With `bt_audio = true` it sends its sound to headphones and speakers (A2DP, SBC), beside Bluetooth MIDI on the

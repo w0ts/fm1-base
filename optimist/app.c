@@ -90,50 +90,23 @@ void app_loop(void) { opt_ed_poll(); }
 void app_input_only(void) { opt_ui_input(); }
 void app_frame(void) { opt_ui_frame(); }
 
-/* fm1-base's companion services (app.h): the files and the parameters */
-static const plat_file_t OPT_NOTES = {0x93000u, 0x94000u, 0x1000u};
-#define OPT_SETTINGS 0xFC000u                    /* the settings record's copy A (opt_glob_ptr) */
-#define OPT_KITS 0xDA000u                        /* the drum kit bank's copy A (ui/opt_storage.h ST_UKIT_SECTOR) */
-static const uint8_t *opt_sector(uint32_t i)    /* the read-only files' bytes: a whole sector each */
-{
-    return i == 1u ? opt_glob_ptr(OPT_SETTINGS) : i == 2u ? plat_data(OPT_KITS) : 0;
-}
+/* fm1-base's companion services (app.h): the files (Optimist's backup objects and sample slots: core/opt_core.h opt_cf_*,
+ * ui/opt_editor.h) and the parameters */
+uint32_t app_file_count(void) { return opt_cf_count(); }
 int app_file(uint32_t i, plat_file_info_t *f)
 {
-    int n;
-    switch (i) {
-    case 0:
-        n = plat_file_size(&OPT_NOTES);
-        f->name = "notes.txt", f->kind = PLAT_FK_TEXT, f->size = n < 0 ? 0u : (uint32_t)n;
-        f->flags = PLAT_FF_READ | PLAT_FF_WRITE | PLAT_FF_DELETE | PLAT_FF_PLAYING, f->room = OPT_NOTES.n - PLAT_FILE_HEAD;
-        return 0;
-    case 1:
-    case 2:
-        f->name = i == 1u ? "settings.bin" : "kits.bin", f->kind = i == 1u ? PLAT_FK_SETTINGS : PLAT_FK_BANK;
-        f->flags = PLAT_FF_READ, f->size = f->room = opt_sector(i) ? 0x1000u : 0u;
-        return 0;
-    default:
+    uint32_t kind, flags, size, room;
+    if (opt_cf_info(i, &f->name, &kind, &flags, &size, &room))
         return -1;
-    }
-}
-int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n)
-{
-    const uint8_t *p = opt_sector(i);
-    if (i == 0)
-        return plat_file_read(&OPT_NOTES, off, dst, n);
-    if (!p || off > 0x1000u || n > 0x1000u - off)
-        return -1;
-    memcpy(dst, p + off, n);
+    f->kind = (uint8_t)kind, f->flags = (uint8_t)flags, f->size = size, f->room = room;
     return 0;
 }
-int app_file_begin(uint32_t i, uint32_t size) { return i == 0 ? plat_file_begin(&OPT_NOTES, size) : -1; }
-int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n)
-{
-    return i == 0 ? plat_file_write(&OPT_NOTES, off, src, n) : -1;
-}
-int app_file_commit(uint32_t i, uint32_t size, uint32_t crc) { return i == 0 ? plat_file_commit(&OPT_NOTES, size, crc) : -1; }
-int app_file_delete(uint32_t i) { return i == 0 ? plat_file_delete(&OPT_NOTES) : -1; }
-int app_file_busy(void) { return opt_ui_playing() != 0; }
+int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n) { return opt_cf_read(i, off, dst, n); }
+int app_file_begin(uint32_t i, uint32_t size) { return opt_cf_begin(i, size); }
+int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n) { return opt_cf_write(i, off, src, n); }
+int app_file_commit(uint32_t i, uint32_t size, uint32_t crc) { (void)size, (void)crc; return opt_cf_commit(i); }
+int app_file_delete(uint32_t i) { return opt_cf_delete(i); }
+int app_file_busy(void) { return opt_cf_busy(); }
 
 int app_param(uint32_t i, plat_param_t *p)
 {

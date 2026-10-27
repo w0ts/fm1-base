@@ -50,12 +50,12 @@ void app_loop(void);
 #define FM1_CPU1_TIMEOUT_US 1451u
 const int32_t *app_usb_capture(const int32_t *lr, uint32_t n);
 
-/* fm1-base's companion services (fm1.toml companion = true; docs/COMPANION.md), app.c: three files, notes.txt (a
- * text of the player's own, kept by plat_file_* in 0x93000 / 0x94000: XDATA0's two free sectors, Optimist's map keeps
- * them for its app slot's growth, which fm1-base's app area never reaches) and two read only, Optimist's own sectors
- * as they are (settings.bin: the settings record's copy A, 0xFC000; kits.bin: the drum kit bank, ST_UKIT_SECTOR);
- * and 22 parameters from Optimist's tables (ui/opt_ui.c opt_cp_*): BPM, SWING, each track's LVL, PAN, MUTE, DLY, REV.
- * Busy while it plays (song.playing): notes.txt only is written then */
+/* fm1-base's companion services (fm1.toml companion = true; docs/COMPANION.md), app.c: the files are Optimist's own
+ * backup objects and user sample slots, each by its tag (SETT, PJ01, UPR1, UKIT, USR1 ...), read and written through
+ * Optimist's own paths, with BKINFO (their kinds, the build's caps) and BKCTL (the restore's session: end, restart,
+ * check only) beside them (Optimist's io/editor/ed_comp.c: in place of its editor's cmds 43..48 and 11..15; web/
+ * editor.html uses them); and 22 parameters from Optimist's tables (ui/opt_ui.c opt_cp_*): BPM, SWING, each track's
+ * LVL, PAN, MUTE, DLY, REV. Busy while it plays (song.playing): only BKCTL is written then */
 #define APP_COMPANION_EXTRAS "editor=optimist"
 #define APP_FILES
 int app_file(uint32_t i, plat_file_info_t *f);
@@ -65,6 +65,8 @@ int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n);
 int app_file_commit(uint32_t i, uint32_t size, uint32_t crc);
 int app_file_delete(uint32_t i);
 int app_file_busy(void);
+#define APP_FILE_COUNT                   /* (the objects' sizes are costly: a project's walks the section log) */
+uint32_t app_file_count(void);
 #define APP_PARAMS
 #define APP_PARAM_MAX 24
 int app_param(uint32_t i, plat_param_t *p);

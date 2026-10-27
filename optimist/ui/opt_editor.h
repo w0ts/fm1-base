@@ -26,6 +26,12 @@
 #error "the trial's editor: no Bluetooth (ed_mirror.c's Bluetooth link writes RING_PUBLISH's other way)"
 #endif
 #define FELUCCA_OTA 1                           /* (felucca.c: the editor needs the OTA SysEx plumbing, here fm1-base's) */
+/* fm1-base's companion services (fm1.toml companion = true, docs/COMPANION.md): the backup's objects and the sample slots
+ * are its files (Optimist's io/editor/ed_comp.c; app.c app_file_* through opt_cf_*, below), the editor's own cmds 43..48
+ * and 11..15 left out (web/editor.html uses the files when the capability query answers) */
+#if OPT_COMPANION && FELUCCA_FLASH && FELUCCA_BACKUP
+#define FELUCCA_ED_COMPANION 1
+#endif
 #define MIR_BLE 0                               /* (felucca.c: the mirror over Bluetooth needs BLE) */
 #define MBR_PROJ 0
 
@@ -167,6 +173,23 @@ static void opt_ed_forget(void)
 #endif
 }
 
+/* app.c app_file_* (fm1-base's APP_FILES, APP_FILE_COUNT): the companion's files, Optimist's ed_comp.c */
+#if FELUCCA_ED_COMPANION
+uint32_t opt_cf_count(void) { return ED_CP_N; }
+int opt_cf_info(uint32_t i, const char **name, uint32_t *kind, uint32_t *flags, uint32_t *size, uint32_t *room)
+{
+    static char nm[8];                          /* (valid until the next call: plat.h's rule) */
+    *name = nm;
+    return ed_cp_file(i, nm, kind, flags, size, room);
+}
+int opt_cf_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n) { return ed_cp_read(i, off, dst, n); }
+int opt_cf_begin(uint32_t i, uint32_t size) { return ed_cp_begin(i, size); }
+int opt_cf_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n) { return ed_cp_write(i, off, src, n); }
+int opt_cf_commit(uint32_t i) { return ed_cp_commit(i); }
+int opt_cf_delete(uint32_t i) { return ed_cp_delete(i); }
+int opt_cf_busy(void) { return ed_cp_busy(); }
+#endif
+
 /* app.c app_sysex: a frame from USB (the bytes between F0 and F7), 1 = the editor's */
 int opt_ed_frame(const uint8_t *p, uint32_t n)
 {
@@ -227,3 +250,18 @@ void opt_sysex_byte(uint8_t b)
     (void)b;
 #endif
 }
+
+#if !FELUCCA_ED_COMPANION                       /* (no companion, or no editor: no files) */
+uint32_t opt_cf_count(void) { return 0; }
+int opt_cf_info(uint32_t i, const char **name, uint32_t *kind, uint32_t *flags, uint32_t *size, uint32_t *room)
+{
+    (void)i, (void)name, (void)kind, (void)flags, (void)size, (void)room;
+    return -1;
+}
+int opt_cf_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n) { (void)i, (void)off, (void)dst, (void)n; return -1; }
+int opt_cf_begin(uint32_t i, uint32_t size) { (void)i, (void)size; return -1; }
+int opt_cf_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n) { (void)i, (void)off, (void)src, (void)n; return -1; }
+int opt_cf_commit(uint32_t i) { (void)i; return -1; }
+int opt_cf_delete(uint32_t i) { (void)i; return -1; }
+int opt_cf_busy(void) { return 0; }
+#endif

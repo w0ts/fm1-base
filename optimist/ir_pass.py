@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent
-ROOTS = ("opt_core_render", "opt_core_midi", "opt_core_block", "opt_core_panic")   # (called inside the audio interrupt)
+ROOTS = ("opt_core_render", "opt_core_midi", "opt_core_block", "opt_core_panic",   # (called inside the audio interrupt,
+         "opt_core_tick")                                                             # and the timer's: app.c app_tick)
 RAM_ROOT = ' section ".ram_trial_root"'        # (the mark size_fns.py's root test reads: a section named .ram*)
 
 

@@ -100,5 +100,8 @@ else
 fi
 # the simulator's USB audio (usb_play, usb_rec): a computer's signal through the template's MASTER, recorded back
 run host-usb-audio "$PY" tests/host_usb_audio_test.py template/build/host/template_host template/build/tests/usb_audio
+# an app with APP_USB_STATS (plat_usb_audio_stats) while a computer plays and records: tests/usbstats_app
+run usb-stats sh -c "$PY tools/build.py tests/usbstats_app --host && \
+    $PY tests/usb_stats_test.py tests/usbstats_app/build/host/usbstats_host $OUT/usb_stats"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

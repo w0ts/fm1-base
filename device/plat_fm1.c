@@ -208,6 +208,26 @@ int plat_usb_audio_rec(void)
     return 0;
 #endif
 }
+#ifdef APP_USB_STATS
+/* (built for an app that shows them, APP_USB_STATS: another's image stays as it was, byte for byte) */
+void plat_usb_audio_stats(plat_usb_audio_stats_t *s)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof *s; i++)
+        ((uint8_t *)s)[i] = 0;
+#if FELUCCA_UAC
+    s->in_packets = uac.pkts, s->in_underruns = uac.underruns, s->in_overruns = uac.overruns;
+    s->in_missed = uac.missed, s->in_stalls = uac.stalls, s->in_alt = uac.alt;
+#endif
+#if FELUCCA_UAC_OUT
+    s->out_packets = uo.pkts, s->out_frames = uo.frames, s->out_underruns = uo.underruns, s->out_overruns = uo.overruns;
+    s->out_alt = uo.alt;
+#endif
+#if FELUCCA_UAC_OUT_FEEDBACK
+    s->out_feedback = uo.alt ? uo.fb : 0u;
+#endif
+}
+#endif
 int plat_usb_audio_play(int32_t *lr, uint32_t n)
 {
 #if FELUCCA_UAC_OUT && defined APP_USB_PLAY

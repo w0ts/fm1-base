@@ -29,7 +29,7 @@ run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test 
 # byte as before an app's own channels), an app's 4 channels in 24-bit with the output, and the input on the
 # computer's clock (usb_audio_in_host_clock: minutes of a model host and crystal), and the output with its feedback
 # (usb_audio_out_feedback: minutes of a model host that follows it, every sample played as sent), in 24-bit too
-# (usb_audio_out_24bit)
+# (usb_audio_out_24bit), and the two as functions of their own, named (usb_audio_split), with all of these
 run usb-audio sh -c "$CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable \
     -Wno-missing-field-initializers -Ibsp/chip -o $OUT/uac_test bsp/tests/uac_test.c -lm && $OUT/uac_test && \
     $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
@@ -37,7 +37,10 @@ run usb-audio sh -c "$CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function
     $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
     -Ibsp/chip -DTEST_HC=1 -o $OUT/uac_test_hc bsp/tests/uac_test.c -lm && $OUT/uac_test_hc && \
     $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
-    -Ibsp/chip -DTEST_FB=1 -DTEST_O24=1 -o $OUT/uac_test_fb bsp/tests/uac_test.c -lm && $OUT/uac_test_fb"
+    -Ibsp/chip -DTEST_FB=1 -DTEST_O24=1 -o $OUT/uac_test_fb bsp/tests/uac_test.c -lm && $OUT/uac_test_fb && \
+    $CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function -Wno-unused-variable -Wno-missing-field-initializers \
+    -Ibsp/chip -DTEST_SPLIT=1 -DTEST_NAMES=1 -DTEST_FB=1 -DTEST_O24=1 -DTEST_HC=1 -DTEST_CH=4 -DTEST_24=1 \
+    -o $OUT/uac_test_split bsp/tests/uac_test.c -lm && $OUT/uac_test_split"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

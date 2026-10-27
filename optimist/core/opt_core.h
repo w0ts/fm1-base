@@ -74,6 +74,16 @@ void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);
 void opt_lcd_sync(void);
 
+/* the companion's files (ui/opt_editor.h; app.c's APP_FILES): the backup's objects, the sample slots, BKINFO and BKCTL
+ * (Optimist's io/editor/ed_comp.c), as app_file_* (0 / -1); none without the editor's companion part */
+uint32_t opt_cf_count(void);
+int opt_cf_info(uint32_t i, const char **name, uint32_t *kind, uint32_t *flags, uint32_t *size, uint32_t *room);
+int opt_cf_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n);
+int opt_cf_begin(uint32_t i, uint32_t size);
+int opt_cf_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n);
+int opt_cf_commit(uint32_t i);
+int opt_cf_delete(uint32_t i);
+int opt_cf_busy(void);
 /* the companion's parameters (ui/opt_ui.c; app.c's APP_PARAMS): i 0 .. opt_cp_count() - 1 */
 uint32_t opt_cp_count(void);
 int opt_cp_desc(uint32_t i, uint32_t *id, uint32_t *group, int32_t *mn, int32_t *mx, int32_t *df, const char **name,

@@ -39,8 +39,11 @@ cpu2_fallback = true
 cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096
                                # leaves Optimist's own room, 3,840 B: tools/build.py CPU1_STACK_ROOM there)
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
-companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, a few files and
-                               # parameters of Optimist's for a generic page (app.h APP_FILES, APP_PARAMS; app.c)
+companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, Optimist's backup
+                               # objects and sample slots as its files (in place of its editor's own cmds 43..48, 11..15:
+                               # Optimist's io/editor/ed_comp.c), a few of its parameters (app.h APP_FILES, APP_PARAMS; app.c)
+emu = ["port"]                 # the browser emulator as a MIDI port for this site's other pages (web/emu/parts/port.js):
+                               # Optimist's web editor's "fm1-base emulator" device, the companion page
 # The audio path's calls out of RAM code through a pointer (tools/ramcode.py), every one of them Optimist's own: its
 # firmware runs the same functions from RAM (its .ram_hot / .ram_hot2: core.h HOT, HOT2, OVL as HOT without the
 # overlays) and makes the same calls into XIP (FAR, the engines' and effects' function tables), with its rule that HOT

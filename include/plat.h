@@ -487,7 +487,9 @@ uint32_t plat_core(void);
  * Its files (APP_FILES): int app_file(i, plat_file_info_t *f) (file i: 0 = there, -1 past the last), app_file_read(i,
  * off, dst, n), app_file_begin(i, size), app_file_write(i, off, src, n) (in order), app_file_commit(i, size, crc) (all
  * of it came, its CRC-32 checked: make it current), app_file_delete(i) (0 = done each), app_file_busy() (1: no write or
- * delete now, playing). plat_file_* (above) keeps a file in the data area for an app that has nowhere else.
+ * delete now, playing). The name app_file gives stays valid until its next call. APP_FILE_COUNT (optional): uint32_t
+ * app_file_count(void), how many files there are, for an app whose app_file is costly (each request asks it once
+ * then, not once a file). plat_file_* (above) keeps a file in the data area for an app that has nowhere else.
  * Its parameters (APP_PARAMS; APP_PARAM_MAX the most, 64 by default): int app_param(i, plat_param_t *p) (parameter i: 0
  * = there, -1 past the last), const char *app_param_group(g) (0 past the last), int32_t app_param_get(i),
  * int32_t app_param_set(i, v) (v within min .. max; -> the value now). Main loop: a value the render reads is shared

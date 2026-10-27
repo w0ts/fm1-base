@@ -125,6 +125,26 @@ def host_dual(dual, path):
         path.write_text(text + extra)
 
 
+def companion():
+    """1: the build has fm1-base's companion services (fm1.toml companion = true; FM1B_COMPANION=0 / 1 over it, as
+    tools/build.py opt_flags has it): OPT_COMPANION in the trial's header, for the Optimist unit (an o2 unit: on the host
+    and the web it gets none of the platform's -D flags), whose editor then leaves its own backup to the companion's
+    files (ui/opt_editor.h)"""
+    import re
+    env = os.environ.get("FM1B_COMPANION")
+    if env in ("0", "1"):
+        return int(env)
+    return int(bool(re.search(r"(?m)^companion\s*=\s*true\b", (APP / "fm1.toml").read_text())))
+
+
+def companion_define(path):
+    text = path.read_text()
+    extra = ("/* the trial (gen_optimist.py companion): fm1-base's companion services built */\n"
+             f"#define OPT_COMPANION {companion()}\n")
+    if not text.endswith(extra):
+        path.write_text(text + extra)
+
+
 def stamp(tree):
     """Optimist's HEAD and its working tree's changes (a tree with edits gets new headers)"""
     def git(*a):
@@ -137,12 +157,14 @@ def generate(tree):
     GEN.mkdir(parents=True, exist_ok=True)
     prof = profile()
     key = stamp(tree) + (f"profile {prof}\n" + prof.read_text() if prof else "profile none\n")
+    key += f"companion {companion()}\n"
     st = GEN / "stamp"
     outs = [out for _, out in GENERATORS] + ["felucca_config.h", "felucca_config_profile.h"]
     if st.exists() and st.read_text() == key and all((GEN / out).exists() for out in outs):
         return
     st.unlink(missing_ok=True)
     genv = config(tree, prof)
+    companion_define(GEN / "felucca_config.h")
     env = {**os.environ, **genv, "OPTIMIST_BUILD_DIR": str(GEN)}   # (gen_samples.py's cache: here, not in Optimist's tree)
     for tool, out in GENERATORS:
         cmd = [sys.executable, str(tree / "tools" / tool), str(GEN / out)]

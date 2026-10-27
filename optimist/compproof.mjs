@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Henri David
 // The trial in fm1-base's browser emulator, headless, with fm1-base's companion page's client (web/companion/
-// companion.js) as a page would use it through the emulator's port: app.wasm (tools/build.py optimist --web) under
-// node. What Optimist declares (app.c: three files, 22 parameters) is listed, read, written and set; the same values
+// companion.js) as a page would use it through the emulator's port (Optimist's own web editor over the same files: its
+// web/e2e_companion.mjs): app.wasm (tools/build.py optimist --web) under
+// node. What Optimist declares (app.c: its backup objects as files, 22 parameters) is listed, read and set; the same values
 // seen through Optimist's own state (the screen's BPM). Then the host simulator's --serve with tools/fm1_companion.py
 // (optimist/run.sh does not run this; by hand):
 //   node optimist/compproof.mjs optimist/build/emu
@@ -47,13 +48,12 @@ const t0 = performance.now();
 const h = await c.hello();
 check(h.name === "OPTIMIST" && h.identity === "FM-1_7900" && h.extras.editor === "optimist", "the capability query", h);
 const fs = await c.files();
-check(fs.map((f) => `${f.name}:${f.size}`).join() === "notes.txt:0,settings.bin:4096,kits.bin:4096", "Optimist's files", fs);
-const text = new TextEncoder().encode("Optimist on fm1-base: notes kept by plat_file\n".repeat(40));
-await c.write(0, text);
-const back = await c.read(0);
-check(back.length === text.length && back.every((v, k) => v === text[k]), `notes.txt written and read back (${text.length} B)`);
-const settings = await c.read(1);
-check(settings.length === 4096, "settings.bin read whole, CRC-32 checked");
+const names = fs.map((f) => f.name);
+check(names[0] === "SETT" && names.includes("PJ01") && names.includes("USR3") && names.slice(-2).join() === "BKINFO,BKCTL",
+  `Optimist's backup objects as files (${fs.length}: SETT .. USR3, BKINFO, BKCTL)`, names);
+const info = fs.find((f) => f.name === "BKINFO");
+const binfo = await c.read(info.index ?? fs.indexOf(info));
+check(binfo.length === info.size && binfo[1] === fs.length - 2, `BKINFO read whole, CRC-32 checked (${binfo.length} B, ${binfo[1]} objects)`);
 const ps = await c.params();
 check(ps.length === 22 && ps[0].name === "BPM" && ps[4].labels.join() === "OFF,ON", "22 parameters from Optimist's tables",
   ps.slice(0, 5).map((p) => [p.id, p.name, p.min, p.max, p.labels]));

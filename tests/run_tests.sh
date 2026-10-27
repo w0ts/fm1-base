@@ -87,5 +87,7 @@ else
 fi
 run mirror-png "$PY" tools/fm1_mirror.py $OUT/mirror.png --from $OUT/mirror/stream.syx
 run template template/build/host/template_host template/tests/basic.txt template/build/host
+# the simulator's USB audio (usb_play, usb_rec): a computer's signal through the template's MASTER, recorded back
+run host-usb-audio "$PY" tests/host_usb_audio_test.py template/build/host/template_host template/build/tests/usb_audio
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

@@ -554,6 +554,27 @@ def radio_units():
     return units, objs, libs
 
 
+def usb_audio_flags():
+    """fm1.toml's USB audio settings -> flags (the device's build, and the host simulator's: its USB audio model)"""
+    flags = []
+    for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
+        if key in CONF and flag not in os.environ:
+            flags.append(f"-D{flag}={int(bool(CONF[key]))}")
+    if "usb_audio_in_channels" in CONF:
+        ch = CONF["usb_audio_in_channels"]
+        if isinstance(ch, bool) or not isinstance(ch, int) or not 1 <= ch <= 8:
+            raise SystemExit(f"build: usb_audio_in_channels is 1..8, not {ch!r}")
+        flags.append(f"-DFM1B_UAC_CH={ch}")
+    if "usb_audio_in_24bit" in CONF:
+        flags.append(f"-DFM1B_UAC_24={int(bool(CONF['usb_audio_in_24bit']))}")
+    if "usb_audio_in_host_clock" in CONF:
+        flags.append(f"-DFM1B_UAC_HOST_CLOCK={int(bool(CONF['usb_audio_in_host_clock']))}")
+    if "usb_audio_out_feedback" in CONF:
+        flags.append(f"-DFM1B_UAC_OUT_FEEDBACK={int(bool(CONF['usb_audio_out_feedback']))}")
+    if "usb_audio_out_24bit" in CONF:
+        flags.append(f"-DFM1B_UAC_OUT_24={int(bool(CONF['usb_audio_out_24bit']))}")
+    return flags + usb_audio_names()
+
 
 def usb_audio_names():
     """fm1.toml usb_audio_split and the names it gives the two audio functions and the input's channels -> flags"""
@@ -590,23 +611,7 @@ def build_app():
     if WIFI:
         flags += ["-DFM1B_WIFI=1", "-DSHIM_WIFI=1", *inc(SRC / "ble" / "shim")]
     flags += opt_flags()
-    for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
-        if key in CONF and flag not in os.environ:
-            flags.append(f"-D{flag}={int(bool(CONF[key]))}")
-    if "usb_audio_in_channels" in CONF:
-        ch = CONF["usb_audio_in_channels"]
-        if isinstance(ch, bool) or not isinstance(ch, int) or not 1 <= ch <= 8:
-            raise SystemExit(f"build: usb_audio_in_channels is 1..8, not {ch!r}")
-        flags.append(f"-DFM1B_UAC_CH={ch}")
-    if "usb_audio_in_24bit" in CONF:
-        flags.append(f"-DFM1B_UAC_24={int(bool(CONF['usb_audio_in_24bit']))}")
-    if "usb_audio_in_host_clock" in CONF:
-        flags.append(f"-DFM1B_UAC_HOST_CLOCK={int(bool(CONF['usb_audio_in_host_clock']))}")
-    if "usb_audio_out_feedback" in CONF:
-        flags.append(f"-DFM1B_UAC_OUT_FEEDBACK={int(bool(CONF['usb_audio_out_feedback']))}")
-    if "usb_audio_out_24bit" in CONF:
-        flags.append(f"-DFM1B_UAC_OUT_24={int(bool(CONF['usb_audio_out_24bit']))}")
-    flags += usb_audio_names()
+    flags += usb_audio_flags()
     for flag in ("FM1B_CDC", "FM1B_UAC", "FM1B_UAC_OUT", "FM1B_TRS"):
         v = os.environ.get(flag)    # unset: fm1.toml's, the app's (app.h) or the platform's default (device/unity.c)
         if v in ("0", "1"):
@@ -910,8 +915,9 @@ def build_host():
     inc_dirs = [f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))]
     o2_objs = o2_objects(os.environ.get("CC", "cc"), ["-O2", "-ffp-contract=off", "-std=c99", "-w", "-DPLAT_HOST", *inc_dirs],
                          out / "o2")
+    uac = [*usb_audio_flags(), *(f"-D{f}={os.environ[f]}" for f in ("FM1B_UAC", "FM1B_UAC_OUT") if os.environ.get(f) in ("0", "1"))]
     cmd = [os.environ.get("CC", "cc"), "-O2", "-ffp-contract=off", "-std=c99", "-Wall", "-Wextra",
-           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_WIFI=1"] * WIFI,
+           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *uac, *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_WIFI=1"] * WIFI,
            *(f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
            "-o", str(exe), str(SRC / "host" / "plat_host.c"), *o2_objs, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)

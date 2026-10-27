@@ -1,0 +1,15 @@
+# The SD card in the host simulator (plat_sd_*): run_tests.sh makes the image (4 MiB, a boot sector's 55 AA) and
+# starts with it in (FM1B_SD=FILE); sdcheck runs the calls (tests/sd_app/app.c), then the card comes out
+wait 100
+expect sd_present 0
+sdcheck
+expect sd_ok 7
+expect sd_bad 0
+expect sd_present 1
+expect sd_reads 8
+expect sd_writes 6
+sd out
+sdgone
+expect sd_ok 8
+expect sd_bad 0
+expect sd_present 0

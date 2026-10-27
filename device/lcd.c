@@ -23,6 +23,15 @@ static uint8_t mirror_on;
 static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);
 static void mirror_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
 #endif
+#if FM1B_SD
+/* the SD card on this bus (sd.c, fm1_sd_hw.h): the LCD idles selected, the card's CS being its CS inverted, and each
+ * command starts with a CS edge; a card session left open ends before the LCD takes the bus again */
+static uint8_t lcd_up;             /* lcd_init done: a card session sends the LCD a NOP first */
+static void sd_lcd(void);
+#define LCD_IDLE() fm1_lcd_idle()
+#else
+#define LCD_IDLE() fm1_lcd_deselect()
+#endif
 
 static void lcd_spin(uint32_t n)
 {
@@ -32,19 +41,25 @@ static void lcd_spin(uint32_t n)
 
 static void lcd_sync(void)          /* finish the running transfer (before touching its buffer) */
 {
+#if FM1B_SD
+    sd_lcd();
+#endif
     if (!lcd_busy)
         return;
     fm1_lcd_wait();
-    fm1_lcd_deselect();
+    LCD_IDLE();
     lcd_busy = 0;
 }
 
 static void lcd_cmd(uint8_t c)
 {
     lcd_sync();
+#if FM1B_SD
+    fm1_lcd_cs_pulse();
+#endif
     fm1_lcd_send_cmd(c);
     fm1_lcd_wait();
-    fm1_lcd_deselect();
+    LCD_IDLE();
 }
 
 static void lcd_data(const void *p, uint32_t n)
@@ -131,6 +146,11 @@ static void lcd_init(void)
 {
     uint32_t r, x;
     fm1_lcd_hw_init();
+#if FM1B_SD
+    fm1_lcd_idle();                /* (the card off the bus from here on) */
+    (void)plat_sd_init();          /* a card into SPI mode before the screen's first byte: in its own mode it would read
+                                    * the pixels on its command line (no card: a few CMD0s unanswered) */
+#endif
     lcd_spin(2000000u);
     for (r = 0; r < sizeof LCD_SEQ; r += 2u + LCD_SEQ[r + 1u]) {
         if (LCD_SEQ[r] == 0x00u) {                       /* pseudo command: wait */
@@ -146,4 +166,7 @@ static void lcd_init(void)
     fm1_lcd_baud(LCD_BAUD);
     lcd_fill(0, 0, 240, 240, 0);
     lcd_cmd(0x29);
+#if FM1B_SD
+    lcd_up = 1;
+#endif
 }

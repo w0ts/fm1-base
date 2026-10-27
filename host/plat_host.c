@@ -31,6 +31,8 @@
  *   expect WHAT VALUE            check state: exit 1 on mismatch; VALUE "<N" / ">N" is a bound
  *   reboot                       re-run boot from the simulated flash (persistence test)
  *   data FILE OFFSET             a file into the simulated data area (plat_data) at OFFSET (its windows: plat.h)
+ *   sd FILE | sd out             (FM1B_SD) an SD card image in (its 512-byte blocks read and written in place), or the
+ *                                card out; the app finds it at its next plat_sd_init (FM1B_SD=FILE: in from the start)
  *   fbdump FILE                  the screen's pixels raw (240 x 240 RGB565, high byte first) into FILE
  *   flash_fail 0|1               every store save fails (1) or works (0); expect store_tries counts the attempts
  *   clock N [MS]                 N MIDI clocks in (F8) over USB, MS apart (default 21: 119 bpm)
@@ -75,6 +77,9 @@
 #endif
 #ifndef FM1B_CPU2
 #define FM1B_CPU2 0                             /* fm1.toml cpu2 = true */
+#endif
+#ifndef FM1B_SD
+#define FM1B_SD 0                               /* fm1.toml sd = true */
 #endif
 #ifdef __linux__
 #define _GNU_SOURCE                             /* (open_memstream: --serve) */
@@ -501,6 +506,100 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
         data_area[off - DATA_BASE + i] &= ((const uint8_t *)src)[i];
     return 0;
 }
+#if FM1B_SD
+/* the SD card (plat.h plat_sd_*): an image file, its 512-byte blocks read and written in place (FM1B_SD=FILE in the
+ * environment at the start, the script's sd FILE | sd out later; plat_sd_init finds the card then), the runs one at a
+ * time as on the device; expect sd_reads / sd_writes count the blocks, sd_present the card */
+static FILE *sd_img;
+static uint32_t sd_nblk, sd_next, sd_reads, sd_writes;
+static uint8_t sd_up, sd_run;                 /* sd_run: 1 a read run, 2 a write run */
+static int sd_insert(const char *path)        /* 0 = in; an image of whole blocks */
+{
+    long n;
+    if (sd_img)
+        fclose(sd_img);
+    sd_img = 0;
+    sd_up = sd_run = 0;
+    if (!path || !strcmp(path, "out"))
+        return 0;
+    if (!(sd_img = fopen(path, "r+b")))
+        return -1;
+    fseek(sd_img, 0, SEEK_END);
+    n = ftell(sd_img);
+    sd_nblk = n > 0 ? (uint32_t)(n / 512) : 0;
+    return 0;
+}
+int plat_sd_init(void)
+{
+    static int env_done;
+    if (!env_done) {
+        env_done = 1;
+        if (getenv("FM1B_SD") && getenv("FM1B_SD")[0] && sd_insert(getenv("FM1B_SD")))
+            fprintf(stderr, "FM1B_SD %s: no such image\n", getenv("FM1B_SD"));
+    }
+    sd_run = 0;
+    sd_up = sd_img && sd_nblk;
+    return sd_up ? 0 : PLAT_SD_NOCARD;
+}
+int plat_sd_present(void) { return sd_up; }
+uint32_t plat_sd_blocks(void) { return sd_up ? sd_nblk : 0; }
+static int sd_io(uint32_t blk, void *p, uint32_t n, int wr)
+{
+    if (!sd_up)
+        return PLAT_SD_NOCARD;
+    if (blk >= sd_nblk || n > sd_nblk - blk || fseek(sd_img, (long)blk * 512L, SEEK_SET))
+        return PLAT_SD_ERR;
+    if (wr ? fwrite(p, 512, n, sd_img) != n : fread(p, 512, n, sd_img) != n)
+        return PLAT_SD_ERR;
+    if (wr)
+        fflush(sd_img), sd_writes += n;
+    else
+        sd_reads += n;
+    return 0;
+}
+int plat_sd_read(uint32_t blk, void *p, uint32_t n) { return sd_run ? PLAT_SD_BUSY : sd_io(blk, p, n, 0); }
+int plat_sd_write(uint32_t blk, const void *p, uint32_t n)
+{
+    return sd_run ? PLAT_SD_BUSY : sd_io(blk, (void *)p, n, 1);
+}
+int plat_sd_read_open(uint32_t blk)
+{
+    if (sd_run)
+        return PLAT_SD_BUSY;
+    if (!sd_up)
+        return PLAT_SD_NOCARD;
+    if (blk >= sd_nblk)
+        return PLAT_SD_ERR;
+    sd_run = 1;
+    sd_next = blk;
+    return 0;
+}
+int plat_sd_read_next(void *p, uint32_t wait_us)
+{
+    (void)wait_us;
+    if (sd_run != 1)
+        return PLAT_SD_ERR;
+    return sd_io(sd_next++, p, 1, 0);
+}
+int plat_sd_write_open(uint32_t blk)
+{
+    int r = plat_sd_read_open(blk);
+    if (!r)
+        sd_run = 2;
+    return r;
+}
+int plat_sd_write_next(const void *p)
+{
+    if (sd_run != 2)
+        return PLAT_SD_ERR;
+    return p ? sd_io(sd_next++, (void *)p, 1, 1) : 0;
+}
+int plat_sd_close(void)
+{
+    sd_run = 0;
+    return sd_up ? 0 : PLAT_SD_NOCARD;
+}
+#endif
 void plat_sysex_send(const uint8_t *frame, uint32_t n) { (void)frame, (void)n; }
 /* no host to pull from (an app's transfer is tested on its own, or by writing the flash: "data") */
 int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)dst, (void)n; return -1; }
@@ -1072,6 +1171,14 @@ static int expect(const char *what, const char *val)
 #endif
     if (!strcmp(what, "store_writes"))
         got = (int)store_writes;
+#if FM1B_SD
+    else if (!strcmp(what, "sd_reads"))
+        got = (int)sd_reads;
+    else if (!strcmp(what, "sd_writes"))
+        got = (int)sd_writes;
+    else if (!strcmp(what, "sd_present"))
+        got = sd_up;
+#endif
     else if (!strcmp(what, "store_tries"))
         got = (int)store_tries;
 #if FM1B_BACKUP
@@ -1414,6 +1521,15 @@ int main(int argc, char **argv)
             }
             if (df)
                 fclose(df);
+#if FM1B_SD
+        } else if (!strcmp(cmd, "sd")) {          /* sd FILE | sd out: a card image in, or the card out */
+            if (sd_insert(a)) {
+                printf("FAIL sd %s: no such image\n", a);
+                fails++;
+            } else {
+                printf("  ok   sd: %s\n", strcmp(a, "out") ? a : "out");
+            }
+#endif
         } else if (!strcmp(cmd, "reboot")) {
 #ifdef APP_HOST_REBOOT
             app_host_reboot();                  /* the app forgets what RAM would (app.h) */

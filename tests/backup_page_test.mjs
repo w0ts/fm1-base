@@ -257,6 +257,17 @@ const resealed = (b) => {                                      // its CRCs right
   check(got && got.name === "Arturia KeyStep" && PB.others(acc, ["Arturia KeyStep"]).join() === "Launchkey Mini", "picked: found from then on, no longer listed");
 }
 {
+  // an FM-1 under the name of a firmware of the family (Optimist, SLOOP, Melodee, LOOM-8) is asked by itself
+  for (const name of ["Optimist", "SLOOP 2.4", "Melodee", "LOOM-8"]) {
+    const dev = new FakeFM1(img);
+    const port = (n) => ({ name: n, state: "connected", open: async () => {} });
+    const acc = { inputs: new Map([["i", port("Launchkey Mini")], ["j", port(name)]]), outputs: new Map([["o", port("Launchkey Mini")], ["p", port(name)]]) };
+    const asked = [];
+    const got = await PB.find(acc, (i) => { asked.push(i.name); return dev; });
+    check(got && got.name === name && !asked.includes("Launchkey Mini") && !PB.others(acc).includes(name), `family port "${name}": asked by itself, other gear not`);
+  }
+}
+{
   // the firmware's own sections after the backup (EXTRAS): the page's join and split against fm1_backup.py's
   const secs = [{ tag: "LSMP", data: Uint8Array.from({ length: 2304 }, (_, i) => i & 0xFF) }, { tag: "ZZZZ", data: new Uint8Array(0) }];
   const withsec = Uint8Array.from(Buffer.from(tr.withsec, "hex"));

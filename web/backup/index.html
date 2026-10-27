@@ -290,7 +290,7 @@ const PB = (() => {
   // Never probe other gear: only ports with an FM-1's usual names, and the ones in allowed (the user's picks, web/fm1ota.js's
   // allow); with only, that one port
   const NAME_RE = new RegExp(NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-  const USUAL_RE = /fm-?1|felucca|composite|sinco|usb-midi/i;
+  const USUAL_RE = /fm-?1|felucca|composite|sinco|usb-midi|optimist|sloop|melodee|loom-?8/i;   // as fm1ota.js PORT_NAMES
   const askable = (name, allowed) => NAME_RE.test(name || "") || USUAL_RE.test(name || "") || allowed.includes(name);
   // the input port names the page does not ask by itself, that have an output of the same name (for Try)
   function others(access, allowed = []) {

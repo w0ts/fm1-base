@@ -27,7 +27,9 @@ const MVAVE_OPEN_RE = /^FM-1_80000\d\d$/;
 const OPEN_LOADER_RE = /^ota-FM1C_[0-9a-f]+$/;
 // port names asked without being picked (any case, part of the name): any other port only once the page allows it
 // (allow), or when it appears during an update (see watch). "FM1": the Open firmware's "FM1 Community"
-export const PORT_NAMES = ["fm-1", "fm1", "felucca", "ota", "composite", "sinco", "usb-midi"];
+// The FM-1 firmwares of the family name their own port after themselves (an FM-1 running one shows as that name alone):
+// "optimist", "sloop", "melodee", "loom-8" / "loom8", as tools/fm1_install.py asks them too.
+export const PORT_NAMES = ["fm-1", "fm1", "felucca", "ota", "composite", "sinco", "usb-midi", "optimist", "sloop", "melodee", "loom-8", "loom8"];
 // M-VAVE's FM-1 firmware, any version: "FM-1_0" and two digits ("FM-1_016"; fm1-base's dev builds are
 // "FM-1_x00", its releases longer; m-bootloader's installer is FM-1_099). Whether a package is safe to write is the device's to check
 // (felucca-bsp chip/ota.c: a well-made writer, a bootable boot area), not a list of known files

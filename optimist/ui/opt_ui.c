@@ -94,6 +94,15 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
 #include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
 
+/* ---- the boot screen (fm1-base's APP_SPLASH, app.c app_splash: before app_init): Optimist's own, the dinghy logo,
+ * "OPTIMIST" and the version (ui/splash.c, always built in Optimist: main.c boot_splash), on this unit's canvas */
+#include "ui/splash.c"
+void opt_splash(void)
+{
+    opt_cv_init();                               /* (the canvas: app_init has not run yet) */
+    boot_splash();
+}
+
 /* ---- power-on (system/main.c: settings_init, panel_init, felucca_init without a stored project) */
 void opt_core_init(void)
 {
@@ -103,6 +112,7 @@ void opt_core_init(void)
     mir_test_boot = 0;                           /* (once: a crash in the session, and the next start is the user's) */
 #endif
     opt_ed_forget();                             /* (the host's restart: what an FM-1's clears) */
+    cpu_khz = opt_cpu_khz();                     /* the CPU clock (main.c: before the audio), the guard's (core/opt_core.c) */
     tab_expand();                                /* the smooth tables into RAM (core/opt_core.c TAB_CODED_FORCE), first */
     opt_cv_init();                               /* the canvas (the app's unit's), before anything draws */
     persist_boot();                              /* the settings record, the stores found (before settings_init) */
@@ -153,6 +163,21 @@ void opt_core_init(void)
 }
 
 /* ---- the main loop's pass (system/main.c MAIN_LOOP): input, LEDs, the screen; between passes the input and meters */
+/* the battery as main.c reads it (song.batt_raw: ADC channel 3's slow average, its counts): fm1-base's own reading of
+ * the same channel (plat_battery_raw, APP_BATTERY_RAW), SLOOP's bar thresholds and the volts from it (op_project.c) */
+static int32_t opt_batt_raw(void) { return plat_battery_raw(); }
+/* after every ui_input, as main.c does: the effects' lines and the other buffers in the arena (fx/fx_arena.c,
+ * core/arena_bufs.c), the limited inserts' instances after a change of slots or a load (fx/insfx/fxi.c: CHRS ECHO
+ * JUNO FLNG XDLY on a track get an instance here, else they wait unheard), the engines' code a part asked for
+ * (core/overlay.c); those a build leaves out are no-ops */
+static void opt_ui_polls(void)
+{
+    fxm_poll();
+    arb_poll();
+    fxi_poll();
+    rto_poll();
+}
+
 void opt_ui_init(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -167,6 +192,7 @@ void opt_ui_input(void)
     opt_in_scan();
     fm1_ms = plat_ms();
     ui_input();
+    opt_ui_polls();
     meter_tap();
 }
 
@@ -183,7 +209,11 @@ void opt_ui_frame(void)
 #endif
     opt_in_scan();
     fm1_ms = plat_ms();
+    song.batt_raw = opt_batt_raw();               /* SYSTEM > BATTERY, the header's icon (main.c: its own reading) */
+    song.cpu_q8 = plat_cpu_pct() * 256u / 100u;   /* SYSTEM > INFO's CPU LOAD (audio.c's cpu_q8: fm1-base's, the same
+                                                   * smoothing over the whole render, USB audio's work in it) */
     ui_input();
+    opt_ui_polls();
     ui_leds();
     opt_leds_out();
     ui_draw();
@@ -239,6 +269,29 @@ int opt_st_word(uint32_t off, uint32_t *w)       /* the 32-bit little-endian wor
     return 0;
 }
 const char *opt_ui_msg(void) { return ui.msg; }   /* the header's last message */
+/* the parity checks (tests/dev/parity.txt): a track's insert slots and their instances, the transport's beat, CLOCK OUT,
+ * the guard's level, the late halves */
+void opt_ui_ins(uint32_t track, uint32_t slot, uint32_t type) { ins_load(track, slot, type); }   /* (the mixer's INSERT) */
+int32_t opt_ui_fxi(uint32_t track, uint32_t slot) { return (int32_t)fxi_state(track, slot); }   /* fxi.c FXI_*: 1 OK */
+int32_t opt_ui_beat(void) { return (int32_t)clk_beat; }
+void opt_ui_clock_out(uint32_t on)
+{
+#if FELUCCA_MIDI_CLKOUT
+    clko_on = (uint8_t)(on != 0);
+#else
+    (void)on;
+#endif
+}
+int32_t opt_ui_guard(void)
+{
+#if FELUCCA_CPU_GUARD
+    return cg.level;
+#else
+    return -1;
+#endif
+}
+uint32_t opt_ui_drops(void) { return ovl.drops; }
+int32_t opt_ui_batt(void) { return song.batt_raw; }      /* (SYSTEM > BATTERY's reading) */
 #if FELUCCA_USB_AUDIO
 int32_t opt_ui_uad(uint32_t s) { return s < UAS_N ? ua_dst[s] : -1; }   /* SYSTEM > USB AUDIO: source s's channels (UAD_*) */
 #else

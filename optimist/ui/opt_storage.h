@@ -63,6 +63,19 @@ static int st_read(uint32_t off, void *dst, uint32_t n)
     memcpy(dst, p, n);
     return 0;
 }
+/* an erase that held the sound for the whole of it (fm1-base's plat_flash_held grew): Optimist's FL_ERASE_HELD (felucca.c
+ * with LIVE_SAVE: the saves wait for the stop from then on) */
+static int opt_erase_held(int rc)
+{
+#if FELUCCA_LIVE_SAVE
+    static uint32_t opt_held_seen;
+    uint32_t h = plat_flash_held();
+    if (h != opt_held_seen)
+        live_save_off = 1;
+    opt_held_seen = h;
+#endif
+    return rc;
+}
 static int st_erase(uint32_t off)
 {
     if (!FL_STORE_OK(off, 0x1000u))
@@ -70,9 +83,9 @@ static int st_erase(uint32_t off)
     if (st_blank)
         return 0;                               /* (a test session: done, nothing erased) */
     if (PLAT_DATA_OK(off, 0x1000u))
-        return plat_data_erase(off);
+        return opt_erase_held(plat_data_erase(off));
     if (plat_in(off, 0x1000u, OPT_GLOB_LO, OPT_GLOB_HI))
-        return opt_glob_erase(off);
+        return opt_erase_held(opt_glob_erase(off));
     return -8;
 }
 /* Optimist's section log clears bits in place (sec_log.c: a record's state, dead): plat.h promises that plat_data_write

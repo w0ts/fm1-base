@@ -15,10 +15,6 @@ static FILE *render_pcm;                 /* the host's "pcm FILE": every sample 
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    uint32_t pkt;
-    int port;
-    while (plat_midi_in(&pkt, &port))    /* USB, TRS (and Bluetooth): into Optimist's MIDI queue (its checks, its sources) */
-        opt_core_midi(pkt, port);
     keys_seen = plat_keys();
     opt_core_render(lr, n, master_q12, keys_seen);
 #ifdef PLAT_HOST
@@ -27,6 +23,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 #endif
     blocks++;
 }
+
+/* the 1 kHz tick (APP_TICK, the timer interrupt): the MIDI in, USB, TRS (and Bluetooth), into Optimist's queue (its
+ * checks, its sources, its arrival times); CLOCK OUT's packets when due (core/opt_core.c opt_core_tick) */
+void app_tick(void) { opt_core_tick(); }
 
 void app_panic(void) { opt_core_panic(); }
 /* the USB audio input's frames, Optimist's four channels (opt_core_render made them while the computer records) */
@@ -83,6 +83,7 @@ void app_say(const char *a, const char *b)
 uint32_t opt_irq_enabled(void) { return (fm1_icfg() & 0x200u) != 0u; }
 #endif
 
+void app_splash(void) { opt_splash(); }
 void app_ui_init(void) { opt_ui_init(); }
 int app_sysex(const uint8_t *p, uint32_t n) { return opt_ed_frame(p, n); }
 void app_sysex_byte(uint8_t b) { opt_sysex_byte(b); }
@@ -209,6 +210,16 @@ int app_expect(const char *what, int *got)
         *got = opt_st_word((uint32_t)strtoul(what + 2, 0, 0), &w) ? -1 : (int)w;
     } else if (!strncmp(what, "uad.", 4))        /* uad.S: SYSTEM > USB AUDIO's source S (0 MASTER): its channels (3: 1+2) */
         *got = (int)opt_ui_uad((uint32_t)atoi(what + 4));
+    else if (!strncmp(what, "fxi.", 4) && what[4] >= '0' && what[4] <= '3' && what[5] == '.')   /* fxi.T.S: track T's */
+        *got = (int)opt_ui_fxi((uint32_t)(what[4] - '0'), (uint32_t)atoi(what + 6));   /* slot S's instance (1 OK) */
+    else if (!strcmp(what, "beat"))            /* the transport's beat */
+        *got = (int)opt_ui_beat();
+    else if (!strcmp(what, "guard"))           /* the CPU guard's level (-1: not built) */
+        *got = (int)opt_ui_guard();
+    else if (!strcmp(what, "drops"))           /* late halves since power-on (SYSTEM > INFO DROPS) */
+        *got = (int)opt_ui_drops();
+    else if (!strcmp(what, "batt"))            /* SYSTEM > BATTERY's reading (song.batt_raw) */
+        *got = (int)opt_ui_batt();
     else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
     else if (!strcmp(what, "c1up"))            /* the second core takes jobs (1); c1why: why not (dual_mode.h DUAL_*); */
@@ -310,6 +321,18 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         if (a && a[0] && strcmp(a, "stop") && !render_pcm) {
             printf("FAIL pcm %s: not written\n", a);
             app_fails++;
+        }
+        return 1;
+    }
+    if (!strcmp(cmd, "ins") || !strcmp(cmd, "clockout")) {   /* ins T S TYPE: an insert type (FXT_*) into track T's
+                                                 * slot S, as the mixer's INSERT puts it; clockout 0|1: CLOCK OUT */
+        if (cmd[0] == 'i' && (!a || !b || !c || !a[0] || !b[0] || !c[0])) {
+            printf("FAIL ins T S TYPE\n");
+            app_fails++;
+        } else if (cmd[0] == 'i') {
+            opt_ui_ins((uint32_t)atoi(a), (uint32_t)atoi(b), (uint32_t)atoi(c));
+        } else {
+            opt_ui_clock_out(a && atoi(a) != 0);
         }
         return 1;
     }

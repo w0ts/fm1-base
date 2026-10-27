@@ -71,6 +71,13 @@ static uint32_t opt_undo_cap(void)
 #endif
 
 #include "core/core.h"
+#if FELUCCA_LIVE_SAVE
+/* saving while playing (LIVE_SAVE, felucca.c's): fm1-base's erases run in windows of about 1 ms, the sound on between
+ * them (plat.h plat_data_erase: felucca-bsp's sliced erase, the same as Optimist's hal/fm1_flash_slice.h); one that held
+ * the sound for the whole erase (a flash part with no erase suspend: plat_flash_held) makes the saves wait for the stop
+ * again until the next start, as Optimist's FL_ERASE_HELD (ui/opt_storage.h st_erase) */
+static uint8_t live_save_off;
+#endif
 /* HOT / HOT2 (core.h): Optimist's audio path in RAM code (its app.ld .ram_hot / .ram_hot2, copied at boot by its
  * main.c), out of the XIP cache's way. Here both are fm1-base's app RAM code (plat.h PLAT_RAM_CODE: section .app_ram
  * in .ram_text, copied at boot, inside the guard's RAM code window) at the start of fm1-base's packed SRAM (device/
@@ -112,6 +119,10 @@ static int midi_out_open(void) { return 1; }
 #include "seq/seq.c"
 #if FELUCCA_DUAL >= 2
 #include "opt_dual.c"                            /* the second core: Optimist's split on fm1-base's (mix_block) */
+#endif
+#if FELUCCA_CPU_GUARD
+#include "system/cpuguard.c"                     /* the predictive CPU guard (felucca.c's place: after seq.c); the render
+                                                  * below calls it every half, as core/audio.c does */
 #endif
 
 #if FELUCCA_USB_AUDIO
@@ -202,10 +213,113 @@ static volatile uint32_t opt_master_q12;
 static int32_t abuf[2u * HALF_WORDS];
 static volatile uint32_t audio_halves;
 static uint32_t fm1_audio_free_half(void) { return (audio_halves + 1u) & 1u; }   /* (the half written last) */
+
+/* ---- each half's time, as core/audio.c's fm1_alnk0_irq keeps it around its render: fm1-base renders a half a call
+ * (APP_BLOCK = HALF_FRAMES) straight into the I2S half the DMA has just freed, so a half's sample k leaves the DMA
+ * HALF_FRAMES + k samples after the render starts, as on Optimist */
+#include "../app.h"                              /* (APP_BLOCK) */
+_Static_assert(APP_BLOCK == HALF_FRAMES, "a render is one I2S half (app.h APP_BLOCK)");
+/* when the DMA switched halves (core/audio.c sync_anchor, the same): the render's start, as the lower envelope of the
+ * starts one half apart (a start delayed by another interrupt or a lock counts 1/16; earlier than predicted: taken
+ * as is; 1 ms off: taken as is). Each mix block's audio leaves from there (clock_sync.c sync_out_t: following an
+ * external clock, the clock sent out) */
+static uint32_t sync_anchor(uint32_t t0)
+{
+    static uint32_t a;
+    int32_t e;
+    a += (HALF_FRAMES * SY_TPS_Q8) >> 8;
+    e = (int32_t)(t0 - a);
+    if (e < 0 || e > (int32_t)(1000u * FM1_TICKS_PER_US))
+        a = t0;
+    else
+        a += (uint32_t)e >> 4;
+    return a;
+}
+/* the load: the last half's render time (us) into PEAK and DROPS (system/overload.h ovl_half: SYSTEM > INFO, the
+ * header's mark) and the CPU guard (cpuguard.c cg_post; without it audio.c's own rule: two halves in a row over 85 %
+ * shed a voice before the next). A half ran late when fm1-base counted an xrun after it (plat_xruns: the DMA moved on
+ * while it rendered), known at the next render's start: so the last half's measure goes in there, before this half's
+ * cg_pre, the order audio.c has them in. The time is the render's (Optimist's is its interrupt's, its wait for the
+ * interrupt in PEAK too: fm1-base's entry is not the app's to see) */
+#if !FELUCCA_CPU_GUARD
+static volatile uint8_t shed_req;               /* (core/audio.c's: a voice shed before the next half) */
+#endif
+static uint32_t opt_half_us, opt_halves, opt_xr_seen;
+static void opt_half_post(void)
+{
+    uint32_t xr = plat_xruns(), late = xr != opt_xr_seen;
+    opt_xr_seen = xr;
+    if (!opt_halves++)
+        return;                                  /* (no half before this one) */
+    ovl_half(opt_half_us, late, fm1_ms);
+#if FELUCCA_CPU_GUARD
+    cg.late = (uint8_t)late;
+    FAR(cg_post)(opt_half_us);
+#else
+    {
+        static uint8_t over;
+        over = (uint8_t)(over << 1 | (opt_half_us * 100u > OVL_HALF_US * 85u));
+        if ((over & 3u) == 3u)
+            shed_req = 1;
+    }
+#endif
+}
+static void opt_half_pre(void)
+{
+#if FELUCCA_CPU_GUARD
+    FAR(cg_pre)();                               /* the predicted load; a shed it asked for (cpuguard.c) */
+#else
+    if (shed_req) {
+        shed_req = 0;
+        shed_voice();
+    }
+#endif
+}
+
+/* ---- the CPU clock (core.h cpu_khz: the guard's instructions a sample, cpuguard.c cg_pre; SYSTEM > INFO), measured at
+ * power-on as Optimist's main.c does (hal/fm1_clock.h fm1_cpu_khz, the same loop): FM1_CLK_CHAIN dependent adds, a
+ * decrement and a branch, from RAM code, timed by TIMER4 with the interrupts off, the shortest of four tries. The
+ * host: 0, as Optimist's own host (the guard never steps there) */
+#ifndef PLAT_HOST
+#define OPT_CLK_CHAIN 32u
+#define OPT_CLK_PASSES 1000u
+static PLAT_RAM_CODE __attribute__((noinline, used)) uint32_t opt_clk_spin(uint32_t n, uint32_t x)
+{
+#define OPT_ADD4 "%1 = %1 + %2\n\t%1 = %1 + %2\n\t%1 = %1 + %2\n\t%1 = %1 + %2\n\t"
+    __asm__ volatile("1:\n\t" OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4
+                     "%0 += -1\n\t"
+                     "if (%0 != 0) goto 1b"
+                     : "+r"(n), "+r"(x)
+                     : "r"(x | 1u));
+#undef OPT_ADD4
+    return x;
+}
+static uint32_t opt_cpu_khz(void)
+{
+    uint32_t (*volatile spin)(uint32_t, uint32_t) = opt_clk_spin;   /* (XIP to RAM code: through a pointer) */
+    uint32_t k, best = 0xFFFFFFFFu, x = 0;
+    for (k = 0; k < 4u; k++) {
+        uint32_t f = plat_lock(), t0 = plat_ticks24(), t;
+        x += spin(OPT_CLK_PASSES, k);
+        t = plat_ticks24() - t0;
+        plat_unlock(f);
+        if (t < best)
+            best = t;
+    }
+    (void)x;
+    return !best || best == 0xFFFFFFFFu ? 0u : OPT_CLK_PASSES * (OPT_CLK_CHAIN + 2u) * 24000u / best;
+}
+#else
+static uint32_t opt_cpu_khz(void) { return 0; }
+#endif
+
 void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys)
 {
-    uint32_t i, f;
+    uint32_t i, f, t0 = fm1_ticks(), a;
     fm1_ms = plat_ms();
+    a = sync_anchor(t0);
+    opt_half_post();
+    opt_half_pre();
     fm1_in.notes = keys | fm1_rem_note;             /* (the mirror's client's keys too: fm1_compat.h) */
     song.master_q12 = master_q12 > 4096u ? 4096u : master_q12;
     if (opt_master_q12)                              /* (the mirror's client plays MASTER: ui/opt_editor.h) */
@@ -222,6 +336,7 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
 #endif
     for (f = 0; f + CTL <= n; f += CTL) {
         int32_t *o = lr + 2u * f;
+        sync_out_t = a + (((HALF_FRAMES + f) * SY_TPS_Q8) >> 8);   /* (this block's audio leaves then: audio.c's) */
         FAR(mix_block)(o, CTL);                     /* (HOT: RAM code with OPT_HOT_RAM; called as core/audio.c does) */
 #if FELUCCA_USB_AUDIO
         if (opt_cap_on)
@@ -245,6 +360,7 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
         plat_midi_send(midi_out_q[mo_r % MQ], TO_USB);
         mo_r++;
     }
+    opt_half_us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;   /* (into PEAK and the guard at the next render) */
 }
 
 /* a USB-MIDI packet from fm1-base (plat_midi_in, from port PORT_*): Optimist's checks (usb.c usb_midi_rx_packet's, the
@@ -259,6 +375,32 @@ void opt_core_midi(uint32_t pkt, int port)
     }
     if (midi_rx_wanted(pkt))
         (void)midi_in_enqueue(pkt, src, fm1_ticks());
+}
+
+/* fm1-base's 1 kHz tick (app.c app_tick, APP_TICK: the timer interrupt), Optimist's TIMER5 work (system/main.c
+ * fm1_timer5_irq) that the trial has: the MIDI in from fm1-base's queue into Optimist's, stamped within a millisecond of
+ * its arrival (usb_rx_peek / uart_midi_peek: within 0.1 ms; the render's 5.8 ms half before this, which threw the
+ * clock follower's tempo filter off); and CLOCK OUT's packets (io/midi/clock_out.c, rt_out_*: each due when its audio
+ * leaves) sent at the tick nearest their time, ahead of the notes as usb.c ep1_tx sends them (within half a
+ * millisecond: a USB frame is one) */
+#define OPT_TICK_HALF (500u * FM1_TICKS_PER_US)
+void opt_core_tick(void)
+{
+    uint32_t pkt;
+    int port;
+    while (plat_midi_in(&pkt, &port))
+        opt_core_midi(pkt, port);
+#if USB_RT_OUT
+    {
+        uint32_t now = fm1_ticks() + OPT_TICK_HALF - SYNC_PEEK_HALF;   /* (rt_out_ready: due within SYNC_PEEK_HALF) */
+        while (rt_out_ready(now)) {
+            pkt = rt_out_pkt[rt_r % RTQ];
+            RING_PUBLISH();
+            rt_r++;
+            plat_midi_send(pkt, TO_USB);
+        }
+    }
+#endif
 }
 
 void opt_core_panic(void)

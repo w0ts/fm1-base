@@ -13,6 +13,7 @@ uint32_t opt_core_block(void);                               /* Optimist's mix b
 const int32_t *opt_core_capture(uint32_t n);                 /* the last render's USB capture: n frames of Optimist's 4
                                                               * channels, 24-bit; 0 = none (the computer not recording) */
 void opt_core_midi(uint32_t pkt, int port);                  /* a USB-MIDI packet in (channel messages, clock), from PORT_* */
+void opt_core_tick(void);                                    /* fm1-base's 1 kHz tick: the MIDI in (plat_midi_in), CLOCK OUT */
 void opt_core_panic(void);                                   /* every voice off */
 uint32_t opt_core_voices(void);                              /* voices sounding (a check) */
 const char *opt_core_engine(uint32_t part);                  /* the part's engine's name */
@@ -23,6 +24,7 @@ int32_t opt_core_dual_stat(uint32_t k);                       /* the second core
                                                               * 1 why (dual_mode.h DUAL_*), 2 jobs joined, 3 posted; -1 */
 
 /* the UI (ui/opt_ui.c): a main loop pass of Optimist's (system/main.c) is opt_ui_frame; between frames opt_ui_input */
+void opt_splash(void);                                       /* the boot screen: Optimist's logo and version */
 void opt_ui_init(void);                                      /* the screen cleared, everything drawn at the next frame */
 void opt_ui_frame(void);                                     /* the panel, the LEDs, the screen */
 /* the web editor (ui/opt_editor.h): a SysEx frame from USB (the bytes between F0 and F7; 1 = the editor's), each main
@@ -50,6 +52,13 @@ int opt_st_proj_used(uint32_t s);                            /* project slot s (
 uint32_t opt_st_panel_hits(void);                            /* storage.c's object sectors inside 0xD8000..0xD9FFF (0) */
 int opt_st_word(uint32_t off, uint32_t *w);                  /* the flash word at off through st_read; 0 = read */
 const char *opt_ui_msg(void);                                /* the header's last message */
+void opt_ui_ins(uint32_t track, uint32_t slot, uint32_t type);   /* insert type (fx_slots.c FXT_*) into a track's slot */
+int32_t opt_ui_fxi(uint32_t track, uint32_t slot);           /* its instance (fxi.c FXI_*: 0 none, 1 OK, 2 WAIT, 3 FULL) */
+int32_t opt_ui_beat(void);                                   /* the transport's beat (core.h clk_beat) */
+void opt_ui_clock_out(uint32_t on);                          /* the HOME menu's CLOCK OUT */
+int32_t opt_ui_guard(void);                                  /* the CPU guard's level (cpuguard.h CG_L_*; -1 not built) */
+uint32_t opt_ui_drops(void);                                 /* late halves since power-on (overload.h ovl.drops) */
+int32_t opt_ui_batt(void);                                   /* the battery's reading as SYSTEM > BATTERY has it */
 int32_t opt_ui_uad(uint32_t s);                              /* USB AUDIO's source s (0 MASTER): its channels (3: 1+2); -1 none */
 /* the globals' sectors 0xFC000..0xFEFFF: plat.h's PLAT_XDATA2 (app.c, on plat_data*) */
 #define OPT_GLOB_LO 0xFC000u

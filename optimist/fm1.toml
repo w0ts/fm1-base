@@ -46,8 +46,10 @@ companion = true               # fm1-base's companion services (docs/COMPANION.m
 # overlays) and makes the same calls into XIP (FAR, the engines' and effects' function tables), with its rule that HOT
 # code reaches XIP only that way. Safe here for the same reason as there: the XIP flash is on whenever audio renders.
 # The render runs in the audio interrupt, and fm1-base turns the flash off only inside its flash driver with the
-# interrupts off (its erases and writes); the trial saves only while stopped (LIVE_SAVE off in its profile copy). The
-# names are checked to be RAM functions at every build, and every build prints them.
+# interrupts off (each 256-byte page write, each ~1 ms window of a sliced erase: plat.h plat_data_erase); between the
+# windows the erase is suspended and the XIP reads again, so saving while playing (LIVE_SAVE, on in its profile copy)
+# renders with the flash on, as Optimist's own. The names are checked to be RAM functions at every build, and every
+# build prints them.
 ram_code_allow = [
     # the render's block (fx.c): the engines' and drums' hooks, the envelopes' and LFOs' cold parts, the sequencer's
     # events, the resampler's block, the meters' and scope's taps (all XIP on Optimist, called through FAR or a table)

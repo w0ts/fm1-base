@@ -14,7 +14,9 @@
 # build) and the two flashes are compared (optsim.py same: sector by sector, the section log record by
 # record); it also goes over the trial's flash (optsim.py touch) and the trial reads the result (storage_touched.txt).
 # The dev run also plays and records USB audio (usbproof.py: fm1-base's simulator's usb_play / usb_rec, the stems, the
-# routing, the USB input track), renders with the second core (dualproof.py: fm1-base's simulated one, every split of
+# routing, the USB input track), checks the parity with Optimist's own main loop, audio interrupt and timer (tests/dev/
+# parity.txt: the battery, the limited inserts, CLOCK OUT, following a clock, saving while playing), renders with the
+# second core (dualproof.py: fm1-base's simulated one, every split of
 # the jobs the same samples, and one core's with the reverb sends at 0), then checks the web editor (edproof.py): the same SysEx to the trial and to Optimist's simulator built with
 # the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
@@ -37,6 +39,7 @@ run_profile() {                     # $1: dev (the trial's profile copy) or none
     if [ "$1" != none ]; then       # (USB audio: a computer recording and playing, fm1-base's simulator: usbproof.py)
         "$PY" optimist/usbproof.py $H/optimist_host $H/usb
         "$PY" optimist/dualproof.py $H/optimist_host $H/dual single   # (the second core: the same samples, any split)
+        $H/optimist_host $T/parity.txt $H   # (what Optimist's main loop, audio interrupt and timer do: trial-parity.md)
     fi
     if [ "${OPTSIM:-1}" != 0 ]; then
         "$PY" optimist/optsim.py build

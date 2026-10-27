@@ -198,7 +198,8 @@ void plat_usb_audio_full(int on);
  * APP_USB_CAPTURE, APP_USB_PLAY, below). plat_usb_audio_rec: 1, the computer takes the USB audio input this render
  * (read at the render's start: an app makes its stems only then); 0 without FM1B_UAC and in the simulator.
  * plat_usb_audio_play (an app with APP_USB_PLAY, from app_render, once a render with its n): the computer's audio, n
- * stereo frames into lr at unity (24-bit as the render's: a 16-bit sample << 8), resampled to the FM-1's clock; 1 =
+ * stereo frames into lr at unity (24-bit as the render's: a 16-bit sample << 8, a 24-bit one as it is with
+ * usb_audio_out_24bit), resampled to the FM-1's clock (as sent with usb_audio_out_feedback); 1 =
  * there is some, 0 = none (lr silent). Without APP_USB_PLAY (the platform mixes it at MASTER) it is always 0 */
 int plat_usb_audio_rec(void);
 int plat_usb_audio_play(int32_t *lr, uint32_t n);

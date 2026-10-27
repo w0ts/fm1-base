@@ -10,7 +10,13 @@
                     the unit at ROOTS (app.c app_render): those are given to it as roots too. Then every function left
                     without minsize gets optsize, so the unit is built as Optimist builds felucca.c (-Os, the UI at
                     minsize) though fm1-base compiles o2 units at -O2 (OPT_IR_OS=0: the sound side at -O2 instead)
-  anything else     unchanged (the float units at -O2, as Optimist builds them; fm1-base's unity.c)
+  unity.c           (no UNIT: fm1-base's unit) its Bluetooth stack, Optimist's own files (bt/ble, bt/br: the same as
+                    Optimist's ble/, bt/), as Optimist builds them: size_fns.py's lists cut to those files, so their
+                    files built for size there (SIZE_FILES: the pairing's arithmetic, the radio's start, the links'
+                    main-loop halves, bti_poll ...) get minsize, but what an interrupt (*_irq) or RAM code (.ram_text,
+                    .app_ram, .c1_text) reaches, which stays at -Os by the same guard; fm1-base's own files unchanged
+                    (OPT_IR_BT=0: unity.c unchanged)
+  anything else     unchanged (the float units at -O2, as Optimist builds them)
 
 Optimist's tree: gen_optimist.py's (the env OPTIMIST, else the worktree beside the fm1-base clone)."""
 import os
@@ -60,6 +66,24 @@ def size_pass(src, dst):
     return 0
 
 
+def bt_pass(src, dst):
+    """unity.c: Optimist's size_fns.py on the Bluetooth stack's functions alone (see the top)"""
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(tree() / "tools"))
+    import size_fns
+    bt = ("ble/", "bt/")
+    size_fns.SIZE_FILES = [f for f in size_fns.SIZE_FILES if f.startswith(bt)]
+    size_fns.AUDIO_FILES = [f for f in size_fns.AUDIO_FILES if f.startswith(bt)]
+    size_fns.OS_FILES = [f for f in size_fns.OS_FILES if f.startswith(bt)]
+    functions = size_fns.ir_functions
+
+    def unity_functions(ir):                   # fm1-base's RAM code as roots too (its sections: .app_ram, .c1_text)
+        return {n: (head + RAM_ROOT if re.search(r'section "\.(?:app_ram|c1_text)', head) else head, body)
+                for n, (head, body) in functions(ir).items()}
+    size_fns.ir_functions = unity_functions
+    return size_fns.main([str(src), str(dst)])
+
+
 def main(argv):
     if len(argv) not in (2, 3):
         raise SystemExit(__doc__)
@@ -67,6 +91,8 @@ def main(argv):
     unit = argv[2] if len(argv) == 3 else None
     if unit == "core/opt_core.c":
         return size_pass(src, dst)
+    if unit is None and os.environ.get("OPT_IR_BT", "1") != "0":
+        return bt_pass(src, dst)
     shutil.copyfile(src, dst)
     return 0
 

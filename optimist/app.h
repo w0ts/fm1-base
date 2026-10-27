@@ -10,6 +10,10 @@
 #define APP_NAME "OPTIMIST"
 #define APP_SPLASH_RGB RGB(255, 214, 10)
 #define APP_BLOCK 256u                   /* frames per audio block (8 of Optimist's 32-frame mix blocks) */
+/* the canvas: Optimist's own, 240 x 124 (display/gfx.c CV_MAX: its graph strip; every screen of its UI draws in bands
+ * of at most that, as on its own firmware), not fm1-base's 240 x 144: 9,600 B of the SRAM. fm1-base's own screens draw
+ * 64 rows at most (main_fm1.c splash, sys_text.c) */
+#define APP_CANVAS_PX (240u * 124u)
 
 /* the store: only the platform's panel calibration (fm1-base's device/storage.c). Optimist's own data (its projects,
  * section log, presets, kits, snapshots, settings, autosave, drum records) is Optimist's storage at Optimist's addresses

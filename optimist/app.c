@@ -69,6 +69,22 @@ void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { 
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { lcd_blit(x, y, w, h, px); }
 void opt_lcd_sync(void) { lcd_sync(); }
 
+#if FM1B_BOOT_PACK
+/* the start's copies into RAM (fm1.toml boot_pack: boot_pack.py, Optimist's tools/lzb.py): .data's initial values, then
+ * the RAM code, decoded from the image by Optimist's own boot decoder (system/lzb.h: no global, from the flash, its
+ * 6.5 KB model on the start's stack and gone after: not inlined into fm1_cstart, which never returns), as Optimist's
+ * main.c fm1_cstart decodes its own boot stream */
+#include "system/lzb.h"
+extern uint32_t _data_start[], _data_end[], _rt_start[], _rt_end[];
+__attribute__((noinline)) void app_boot_unpack(const uint8_t *src)
+{
+    lzb_t z;
+    lzb_init(&z, src);
+    lzb_expand(&z, (uint8_t *)_data_start, (uint8_t *)_data_end);
+    lzb_expand(&z, (uint8_t *)_rt_start, (uint8_t *)_rt_end);
+}
+#endif
+
 /* the platform's messages (safe mode, an update): over Optimist's screen, which draws itself again after */
 void app_say(const char *a, const char *b)
 {

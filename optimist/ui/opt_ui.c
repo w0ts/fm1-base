@@ -92,6 +92,7 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
 #include "ui/optimist/optimist.c"
 #undef scale
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
+#include "opt_sd.h"                              /* its SD card on fm1-base's (after the storage: felucca.c's order) */
 #include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
 
 /* ---- the boot screen (fm1-base's APP_SPLASH, app.c app_splash: before app_init): Optimist's own, the dinghy logo,
@@ -121,6 +122,7 @@ void opt_core_init(void)
     czb_find();
 #endif
     settings_init();
+    opt_sd_boot();                               /* the card's filesystem (main.c sd_mount_boot, after the settings) */
     panel_init();
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
@@ -194,6 +196,7 @@ void opt_ui_input(void)
     ui_input();
     opt_ui_polls();
     meter_tap();
+    opt_sd_wait();                               /* (the card's runs and the recorder's blocks between passes) */
 }
 
 void opt_ui_frame(void)
@@ -217,7 +220,9 @@ void opt_ui_frame(void)
     ui_leds();
     opt_leds_out();
     ui_draw();
+    opt_sd_poll();                               /* the card's streams and recorder (opt_sd.h) */
     autosave_tick();                             /* the working project into flash, when quiet */
+    opt_sd_mode_poll();                          /* the SD card mode's card after a mount, a save left pending */
 #if BP23_SET
     settings_poll();                             /* a setting changed from a page */
 #endif

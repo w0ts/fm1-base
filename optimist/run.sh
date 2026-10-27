@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# The trial in the host simulator, built and run: optimist/run.sh (from anywhere). Twice: with Optimist's source
-# defaults (OPT_PROFILE=none: tests/), then with the trial's copy of Optimist's dev profile (profiles/
+# The trial in the host simulator, built and run: optimist/run.sh (from anywhere). Three times: with Optimist's source
+# defaults (OPT_PROFILE=none: tests/), with the SD card mode (run_sd: tests/sd), then with the trial's copy of Optimist's dev profile (profiles/
 # dev-171e96a3.config: the device build's switches, the reference profile's data formats and addresses; tests/dev/),
 # which the build is left with.
 # Each run builds with fm1-base's tools/build.py --host (Terminus: X0X_FONTSET, which fm1.toml cannot set yet), then
@@ -21,13 +21,34 @@
 # the trial's own switches (optsim.py build-trial), every reply byte for byte; backup, restore, the mirror, DX7.
 # The screens and the flashes in optimist/build/host. PYTHON: a python with Pillow (fm1-base's font generator), default
 # the first python3 on PATH. OPTSIM=0: without Optimist's simulator (no emcc / node). PROFILES: the runs (default
-# "none dev").
+# "none sd dev"; sd: the SD card mode, run_sd below).
 set -e
 cd "$(dirname "$0")/.."
 PY="${PYTHON:-python3}"
 H=optimist/build/host
 
-run_profile() {                     # $1: dev (the trial's profile copy) or none (Optimist's source defaults)
+# the SD card mode (the profile copy profiles/sd-dev-07efe611.config: Optimist's card code on fm1-base's simulated
+# card, fm1-base's bigger slot FM1B_APP_END=0xCE000): with no card (tests/sd/nocard.txt), then with a card image
+# (optimist/sdcard.py: FAT32 by the system's formatter, Optimist's card zip, two samples; tests/sd/card.txt), the card
+# read back after (sdcard.py check). Without macOS's hdiutil / newfs_msdos no card image: said, the card's checks not run
+run_sd() {
+    echo "optimist/run.sh: profile sd"
+    export OPT_PROFILE=profiles/sd-dev-07efe611.config FM1B_APP_END=0xCE000
+    X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
+    $H/optimist_host optimist/tests/note.txt $H
+    $H/optimist_host optimist/tests/sd/nocard.txt $H
+    if "$PY" optimist/sdcard.py $H/sd/card0.img; then
+        cp $H/sd/card0.img $H/sd/card.img
+        FM1B_SD=$H/sd/card.img $H/optimist_host optimist/tests/sd/card.txt $H
+        "$PY" optimist/sdcard.py check $H/sd/card.img
+    else
+        echo "optimist/run.sh: the card's checks NOT run (no card image)"
+    fi
+    unset OPT_PROFILE FM1B_APP_END
+}
+
+run_profile() {                     # $1: dev (the trial's profile copy), none (Optimist's source defaults) or sd
+    if [ "$1" = sd ]; then run_sd; return; fi
     if [ "$1" = none ]; then T=optimist/tests; export OPT_PROFILE=none; else T=optimist/tests/dev; unset OPT_PROFILE; fi
     echo "optimist/run.sh: profile $1"
     X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
@@ -61,8 +82,8 @@ run_profile() {                     # $1: dev (the trial's profile copy) or none
     fi
 }
 
-for p in ${PROFILES:-none dev}; do
+for p in ${PROFILES:-none sd dev}; do
     run_profile "$p"
 done
 unset OPT_PROFILE
-echo "optimist/run.sh: every check passed (${PROFILES:-none dev})"
+echo "optimist/run.sh: every check passed (${PROFILES:-none sd dev})"

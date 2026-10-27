@@ -43,7 +43,8 @@
  *   FM1B_COMPANION 0        the companion services over USB (fm1.toml companion = true: companion.c)
  *   FM1B_ERASE_SLICED 1     the store's and plat_data's erases in windows of about 1 ms, the sound on (felucca-bsp's
  *                           FL_ERASE_SLICED); 0: in one window, the sound silenced (the fm1-emulator: it has no
- *                           erase suspend) */
+ *                           erase suspend)
+ *   FM1B_SD 0               an SD card on the LCD's bus (fm1.toml sd = true: sd.c, felucca-bsp's fm1_sd_hw.h) */
 #include <stdint.h>
 #include "plat.h"
 #include "app.h"                  /* first: the scan's hooks below may call the app */
@@ -68,6 +69,9 @@
 #include "fm1_audio.h"
 #include "fm1_adc.h"
 #include "fm1_lcd_hw.h"
+#if FM1B_SD
+#include "fm1_sd_hw.h"
+#endif
 #if FM1B_WIFI || FM1B_BLE
 #define FL_UID 1                          /* the flash's unique ID: the WiFi MAC, the Bluetooth name (plat_chip_uid) */
 #endif
@@ -84,6 +88,9 @@ static uint32_t flash_held;               /* erases that held the sound for the 
 
 #include "libc.c"
 #include "lcd.c"
+#if FM1B_SD
+#include "sd.c"                 /* the SD card on the LCD's bus: plat_sd_* */
+#endif
 #include "gfx.c"
 
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR) */

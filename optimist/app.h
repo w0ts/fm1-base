@@ -18,8 +18,15 @@
  * flash map, 2026-10-18; nothing in its tree writes there: the snapshots and the CZ collection end below 0xD8000, the
  * drum kit bank is 0xDA000 / 0xDB000: opt_storage.h checks it, and tests/storage.txt "panel_hits"). Not 0xDC000
  * (milestone 1's): Optimist's user preset bank A, which an FM-1's presets would have lost */
+/* With Optimist's SD card mode (its LAYOUT 1: the store from 0xD0000, the presets' FM6 voices at 0xD8000) the build has
+ * fm1-base's bigger slot (app_end, FM1B_APP_END=0xCE000: gen_optimist.py checks it) and OBJ_PANEL takes the two sectors
+ * just above it, 0xCE000 / 0xCF000 (ui/opt_storage.h checks it) */
 enum { OBJ_PANEL, OBJ_NOBJ };
+#if FM1B_APP_END > 0x97000u
+#define APP_STORE_MAP {FM1B_APP_END}
+#else
 #define APP_STORE_MAP {0xD8000u}
+#endif
 
 void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);

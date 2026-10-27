@@ -231,9 +231,14 @@ void plat_log(const char *line);
  * looks for records below 0xFC000 only, so no 0xF00 rule here. Store objects may sit there too (the template's
  * settings pair is 0xFC000 / 0xFD000): with the window on, plat_data_erase and plat_data_write refuse a store
  * object's sectors in it, so an app with this window puts its objects elsewhere (or keeps to the rest) */
-#define PLAT_DATA_LO 0x97000u
+/* An app with a bigger slot (fm1.toml app_end: FM1B_APP_END, its code past 0x93000): the data area starts at its end,
+ * and XDATA0 is what is left of 0x93000..0x96FFF above it (none from 0x97000 on) */
+#ifndef FM1B_APP_END
+#define FM1B_APP_END 0x93000u
+#endif
+#define PLAT_DATA_LO (FM1B_APP_END > 0x97000u ? FM1B_APP_END : 0x97000u)
 #define PLAT_DATA_HI 0xE0000u
-#define PLAT_XDATA0_LO 0x93000u
+#define PLAT_XDATA0_LO (FM1B_APP_END < 0x97000u ? FM1B_APP_END : 0x97000u)
 #define PLAT_XDATA0_HI 0x97000u
 #define PLAT_XDATA1_LO 0xE5000u
 #define PLAT_XDATA1_HI 0xFC000u
@@ -285,6 +290,44 @@ int plat_sysex_end(void);              /* the last packet out, the ring free aga
 uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; else a number that changes at every new
                                         * one (a bus reset, the cable out and in): what an app keeps for a connection
                                         * (a client's session) it drops when this changes */
+/* An SD card on the LCD's bus (fm1.toml sd = true: FM1B_SD 1; a hardware mod, felucca-bsp docs/SD.md): its clock and
+ * data in on the LCD's, its data out on the LCD's D/C line, its chip select the LCD's through an inverter, so it is
+ * selected whenever the screen is not. The screen then idles selected, and each call below takes the bus from it and
+ * gives it back. Main loop only (never the render: a call waits on the card, a write's busy up to 500 ms). Blocks of
+ * 512 bytes from 0, whatever the card's addressing. p: RAM; 4-byte aligned for the DMA (else through a bounce block). A
+ * card that fails a call is taken as gone (plat_sd_present 0) until plat_sd_init starts it again. Without FM1B_SD none
+ * of this is built; the screen is as before.
+ *   plat_sd_init()             the card's start-up: 0 = ready, PLAT_SD_NOCARD (nothing answers), PLAT_SD_ERR (it
+ *                              answers but does not start: the wrong voltage, an MMC)
+ *   plat_sd_present()          1 while a started card answers
+ *   plat_sd_blocks()           its size (its CSD), 0 when unknown
+ *   plat_sd_read(blk, p, n)    n blocks from blk into p (one multi-block read), each block's CRC16 checked (a failure
+ *                              read again, twice at most: then PLAT_SD_CRC); 0 = done
+ *   plat_sd_write(blk, p, n)   n blocks from p to blk (one multi-block write for n > 1), the card's busy waited for
+ * Runs, for streaming (one at a time; the other calls answer PLAT_SD_BUSY meanwhile):
+ *   plat_sd_read_open(blk)     a multi-block read from blk: the bus stays the card's (the screen waits) until
+ *   plat_sd_read_next(p, us)   the next block into p: 0, PLAT_SD_BUSY (not come within us: call again), PLAT_SD_CRC
+ *                              (its CRC16 failed: close and read again), PLAT_SD_ERR
+ *   plat_sd_write_open(blk)    a multi-block write from blk; the bus the screen's between its blocks
+ *   plat_sd_write_next(p)      the next block: 0 sent, PLAT_SD_BUSY (the card still writes the one before: nothing
+ *                              sent, call again), PLAT_SD_ERR (refused, or busy past 500 ms); p 0: nothing sent, 0
+ *                              when the card would take a block now
+ *   plat_sd_close()            the run ended (a write's last block waited for): 0 = done
+ * The host simulator: the card is an image file (FM1B_SD=FILE in the environment; the script's sd FILE | sd out) */
+#define PLAT_SD_NOCARD (-1)
+#define PLAT_SD_ERR (-2)
+#define PLAT_SD_BUSY (-3)
+#define PLAT_SD_CRC (-4)
+int plat_sd_init(void);
+int plat_sd_present(void);
+uint32_t plat_sd_blocks(void);
+int plat_sd_read(uint32_t blk, void *p, uint32_t n);
+int plat_sd_write(uint32_t blk, const void *p, uint32_t n);
+int plat_sd_read_open(uint32_t blk);
+int plat_sd_read_next(void *p, uint32_t wait_us);
+int plat_sd_write_open(uint32_t blk);
+int plat_sd_write_next(const void *p);
+int plat_sd_close(void);
 
 /* the app's own commands in the update's SysEx framing (F0 pack7(00 59 cmd len24 body ~sum) F7: felucca-bsp ota.c),
  * an app with APP_USB_CMD: app_usb_cmd(d, n) gets each frame whose cmd the platform does not take (d: the decoded

@@ -114,20 +114,32 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 #if FELUCCA_NB_LIST
 #include "storage/nbank.c"                      /* the FM6 / CZ native collections in PRESETS */
 #endif
-/* the platform's own store object OBJ_PANEL sits at 0xD8000 / 0xD9000 (app.h APP_STORE_MAP): nothing of Optimist's there.
+/* the platform's own store object OBJ_PANEL sits at 0xD8000 / 0xD9000 (app.h APP_STORE_MAP; the SD card mode: 0xCE000 /
+ * 0xCF000): nothing of Optimist's there.
  * The areas that end at it: the user sample slots (USR3 ends at SMP_USR3_END), the snapshots and the CZ collection
  * below SMP_BANKS; the kit bank starts above it. The objects' own sectors: opt_storage_hits_panel (the host's check) */
+#if FELUCCA_LAYOUT == 1
+/* the SD card mode (LAYOUT 1): OBJ_PANEL above fm1-base's bigger slot (app.h), below Optimist's squeezed store */
+#define OPT_PANEL_LO FM1B_APP_END
+#define OPT_PANEL_HI (FM1B_APP_END + 0x2000u)
+_Static_assert(FM1B_APP_END == 0xCE000u && OPT_PANEL_HI <= FL_DATA_LO && PLAT_DATA_LO == FM1B_APP_END,
+               "the SD card mode on fm1-base's slot to 0xCE000: OBJ_PANEL at 0xCE000 / 0xCF000, Optimist's store above");
+#else
 #define OPT_PANEL_LO 0xD8000u
 #define OPT_PANEL_HI 0xDA000u
+_Static_assert(FM1B_APP_END == 0x93000u, "the normal layout on fm1-base's normal slot");
 _Static_assert(SMP_USR3_END <= OPT_PANEL_LO && SMP_BANKS == OPT_PANEL_LO && ST_UKIT_SECTOR >= OPT_PANEL_HI,
                "Optimist's data off the platform's OBJ_PANEL (0xD8000 / 0xD9000)");
+#endif
 #if FELUCCA_SNAPSHOTS
 _Static_assert(SN_TOP <= OPT_PANEL_LO, "the snapshots below OBJ_PANEL");
 #endif
-#if SEC_LOGGED
+#if SEC_LOGGED && FELUCCA_LAYOUT == 1
+_Static_assert(SEC_LOG_BASE >= OPT_PANEL_HI, "the section log above OBJ_PANEL (the SD card mode)");
+#elif SEC_LOGGED
 _Static_assert(SEC_LOG_BASE + SEC_LOG_SECTORS * ST_SECTOR <= OPT_PANEL_LO, "the section log below OBJ_PANEL");
 #endif
-static uint32_t opt_storage_hits_panel(void)    /* storage.c's objects whose copy A or B is in 0xD8000..0xD9FFF */
+static uint32_t opt_storage_hits_panel(void)    /* storage.c's objects whose copy A or B is on OBJ_PANEL's two */
 {
     uint32_t o, c, n = 0;
     for (o = 0; o < OBJ_COUNT; o++)

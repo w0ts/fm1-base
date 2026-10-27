@@ -107,9 +107,42 @@ def config(tree, prof):
         configure.write_header(cfg, name, GEN / out)
         if out == "felucca_config.h":
             host_dual(configure.flags(cfg)[0].get("FELUCCA_DUAL", 0), GEN / out)
+            host_sd(configure.flags(cfg)[0], GEN / out)
+            slot_check(configure.flags(cfg)[0].get("FELUCCA_LAYOUT", 0), prof)
         if env is None:
             env = configure.flags(cfg)[1]       # (the trial's: its sample sets, SLICE)
     return env
+
+
+SD_APP_END = 0xCE000                           # the SD card mode's slot (LAYOUT 1): fm1-base's app_end, OBJ_PANEL above it
+
+
+def slot_check(layout, prof):
+    """the build's app slot as the profile's flash layout needs it: Optimist's SD card mode (LAYOUT 1: its code past
+    0x93000, its store from 0xD0000) on fm1-base's bigger slot, FM1B_APP_END=0xCE000 in the environment (app.h puts
+    OBJ_PANEL at 0xCE000 then); the normal layout on the normal slot"""
+    v = os.environ.get("FM1B_APP_END", "")
+    end = int(v, 0) if v else 0x93000
+    want = SD_APP_END if layout == 1 else 0x93000
+    if end != want:
+        raise SystemExit(f"gen_optimist: {prof.name} (LAYOUT {layout}) needs FM1B_APP_END={want:#x}"
+                         f" in the environment, not {end:#x}")
+
+
+SD_ITEMS = ("FELUCCA_SDCARD", "FELUCCA_LAYOUT", "FELUCCA_FAR_OK", "FELUCCA_SD_RING_KB", "FELUCCA_SD_REC_KB")
+
+
+def host_sd(flags, path):
+    """the profile's SD card mode (FM-1-only items: the header sets them under __PI32V2__ alone) on the host too: the
+    card is fm1-base's simulated one there (host/plat_host.c, a card image), so the host runs the FM-1's card code"""
+    items = [(k, flags[k]) for k in SD_ITEMS if flags.get(k)]
+    if not items:
+        return
+    text = path.read_text()
+    extra = "/* the trial (gen_optimist.py host_sd): the profile's SD card mode on the host too */\n" + "".join(
+        f"#if defined(PLAT_HOST) && !defined({k})\n#define {k} {v}\n#endif\n" for k, v in items)
+    if not text.endswith(extra):
+        path.write_text(text + extra)
 
 
 def host_dual(dual, path):

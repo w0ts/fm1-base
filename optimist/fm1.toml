@@ -6,11 +6,12 @@ name = "optimist"
 id_prefix = "FM-1_79"          # a trial identity (dev FM-1_7900), not Optimist's FM-1_700
 usb_manufacturer = "Optimist"
 usb_product = "Optimist trial FM-1"
-o2 = ["core/opt_core.c", "core/opt_fpu_*.c"]
+o2 = ["core/opt_core.c", "core/opt_fpu_*.c", "core/opt_ff.c", "core/opt_ffuni.c"]
                                # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
                                # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it); opt_fpu_*: ACID, ANALOG
                                # 2's filter models and the X0X kits, float units of their own on the FM-1 (as Optimist
-                               # builds them), empty on the host (inside opt_core.c there)
+                               # builds them), empty on the host (inside opt_core.c there); opt_ff / opt_ffuni: ChaN's
+                               # FatFs for the SD card, its own two units as Optimist builds them (empty without the card)
 o2_include = ["build/optgen/felucca_config.h"]   # the build's switches (gen_optimist.py: the profile copy through Optimist's builder)
 include = ["build/optimist/firmware/src", "build/optgen"]   # Optimist's tree (gen_optimist.py links it), its headers
 ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI at minsize, the rest -Os: as Optimist builds felucca.c)
@@ -39,6 +40,16 @@ cpu2 = true
 cpu2_fallback = true
 cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096
                                # leaves Optimist's own room, 3,840 B: tools/build.py CPU1_STACK_ROOM there)
+app_end = 0x93000              # the normal slot, said: the update loader compares slots before an install (fm1-base's
+                               # LDR_SLOT_SWITCH), so a normal build over the SD card mode's erases its code above
+                               # 0x93000. The SD card mode (its profile copy: LAYOUT 1) builds with FM1B_APP_END=0xCE000
+                               # (gen_optimist.py checks it): its code to 0xCE000, OBJ_PANEL at 0xCE000 (app.h)
+app_clear_end = 0xDA000        # an SD card mode install over a normal one erases [0xCE000, 0xDA000) first: Optimist's
+                               # squeezed store's sectors (its one project's section log, autosave A, the presets' FM6
+                               # voices), which the normal layout used for user samples (as Optimist's own loader does)
+sd = true                      # the SD card on the LCD's bus (fm1-base's plat_sd_*: a hardware mod), Optimist's SD card
+                               # mode on it (ui/opt_sd.h, core/opt_sd_mmc.c; the profile copy's SD items); without a
+                               # card it finds none
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
 companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, Optimist's backup
                                # objects and sample slots as its files (in place of its editor's own cmds 43..48, 11..15:

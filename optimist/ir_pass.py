@@ -10,6 +10,7 @@
                     the unit at ROOTS (app.c app_render): those are given to it as roots too. Then every function left
                     without minsize gets optsize, so the unit is built as Optimist builds felucca.c (-Os, the UI at
                     minsize) though fm1-base compiles o2 units at -O2 (OPT_IR_OS=0: the sound side at -O2 instead)
+  core/opt_ff.c, core/opt_ffuni.c   FatFs (the SD card): every function at optsize, as Optimist builds them (-Os)
   anything else     unchanged (the float units at -O2, as Optimist builds them; fm1-base's unity.c)
 
 Optimist's tree: gen_optimist.py's (the env OPTIMIST, else the worktree beside the fm1-base clone)."""
@@ -60,6 +61,24 @@ def size_pass(src, dst):
     return 0
 
 
+def os_pass(src, dst):
+    """every definition at optsize (a unit Optimist builds at -Os)"""
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(tree() / "tools"))
+    import size_fns
+    ir, n = Path(src).read_text(), 0
+
+    def optsize(m):
+        nonlocal n
+        if re.search(r"\b(minsize|optnone|optsize)\b", m.group(1)):
+            return m.group(0)
+        n += 1
+        return m.group(1) + " optsize" + m.group(3)
+    Path(dst).write_text(size_fns.IR_DEF.sub(optsize, ir))
+    print(f"ir_pass: {n} functions at optsize (-Os, as Optimist's FatFs units)")
+    return 0
+
+
 def main(argv):
     if len(argv) not in (2, 3):
         raise SystemExit(__doc__)
@@ -67,6 +86,8 @@ def main(argv):
     unit = argv[2] if len(argv) == 3 else None
     if unit == "core/opt_core.c":
         return size_pass(src, dst)
+    if unit in ("core/opt_ff.c", "core/opt_ffuni.c"):
+        return os_pass(src, dst)
     shutil.copyfile(src, dst)
     return 0
 

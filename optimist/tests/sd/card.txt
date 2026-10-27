@@ -1,0 +1,158 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial's SD card mode with a card in (run.sh's sd run: the profile copy profiles/sd-dev-07efe611.config, the
+# build with FM1B_APP_END=0xCE000; the card optimist/build/host/sd/card.img, made by optimist/sdcard.py: FAT32,
+# Optimist's card zip with every factory preset, SAMPLES/kick.wav and loops/tone.wav), on fm1-base's simulated card
+# (FM1B_SD=FILE). Optimist's card code unchanged on plat_sd_*: the card mounted at power-on, its samples used and
+# streamed, a factory preset loaded from it, a project saved to it by name and loaded back, the master recorded to it.
+#   FM1B_SD=optimist/build/host/sd/card.img optimist/build/host/optimist_host optimist/tests/sd/card.txt OUT
+wait 2000
+# the power-on: the card mounted (fm1-base's start-up, then Optimist's sd_mount_boot): read, and the SD card mode's own
+# files made where missing (SYSTEM/INDEX.BIN, the samples' index)
+expect sd_present 1
+expect sd_reads >10
+expect sd_writes >0
+msg SD
+shot sd-boot.png
+# PROJECT's rows on the card: PROJECT (the card's projects), PRESETS, KITS, SAMPLES
+tap SAVE
+wait 300
+expect scr 3
+expect row 0
+# SAMPLES: loops/ (key 1), kick.wav (key 2); key 2 asks USE, key 2 again uses it on track 1 (SAMPLE, its CARD set)
+spin SELECT 3
+wait 200
+expect row 3
+shot sd-samples.png
+key w1 down
+wait 50
+key w1 up
+wait 200
+key w1 down
+wait 50
+key w1 up
+wait 500
+msg kick.wav
+tap HOME
+wait 300
+# track 1 plays the card's kick: streamed from the card (no sample set is built in: the sound can only be the card's)
+peakreset
+key 12 down
+wait 400
+expect voices >0
+expect peak_db_min -40
+key 12 up
+wait 300
+# a factory preset from the card: PRESETS, FACTORY/ (key 1), ANALOG/ (key 2), the first preset asked, loaded
+tap SAVE
+wait 300
+spin SELECT -2
+wait 200
+expect row 1
+key w0 down
+wait 50
+key w0 up
+wait 300
+key w1 down
+wait 50
+key w1 up
+wait 300
+shot sd-presets.png
+key w0 down
+wait 50
+key w0 up
+wait 300
+key w0 down
+wait 50
+key w0 up
+wait 500
+msg LOADED
+tap HOME
+wait 300
+tap HOME
+wait 300
+tap HOME
+wait 300
+# a project saved to the card by name: track 1's ENV, DEC up 4 (its value seen: gv2), PROJECT's ACTION SAVE, key 1,
+# the NAME page's SAVE
+tap ENV
+wait 100
+turn K2 4
+wait 100
+expect gv2 116
+tap HOME
+wait 300
+tap SAVE
+wait 300
+spin SELECT -1
+wait 200
+expect row 0
+turn K2 1
+wait 100
+key w0 down
+wait 50
+key w0 up
+wait 300
+tap SAVE
+wait 600
+msg SAVED
+tap HOME
+wait 300
+# the work changed (DEC 4 more), then the card's project loaded: key 1 asks to save the changed work first, HOME (no),
+# then the LOAD asked, SAVE (yes): DEC as saved
+tap ENV
+wait 100
+turn K2 4
+wait 100
+expect gv2 120
+tap HOME
+wait 300
+tap SAVE
+wait 300
+key w0 down
+wait 50
+key w0 up
+wait 300
+shot sd-load-ask.png
+tap HOME
+wait 300
+tap SAVE
+wait 800
+msg LOADED
+tap ENV
+wait 100
+expect gv2 116
+shot sd-project.png
+tap HOME
+wait 300
+# the master recorded to the card: REC tapped, then pressed again and held (op_input.c's gesture): a take starts;
+# a note; the same gesture stops it (RECORD/REC-0001.WAV: run.sh reads it back)
+press REC
+wait 100
+release REC
+wait 100
+press REC
+wait 700
+release REC
+wait 200
+msg CARD
+key 7 down
+wait 1500
+key 7 up
+wait 500
+press REC
+wait 100
+release REC
+wait 100
+press REC
+wait 700
+release REC
+wait 1000
+msg STOP
+expect sd_writes >200
+expect sd_present 1
+shot sd-rec.png
+reboot
+wait 2000
+# a restart with the card still in: mounted again, nothing lost (sdcard.py check reads the card after)
+expect sd_present 1
+expect blocks >100

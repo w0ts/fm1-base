@@ -6,6 +6,10 @@
  * fm1-base's never meet; the app sees only opt_core.h. The include list is tests/hostsim.c's (Optimist's host render):
  * the same subset of firmware/src/felucca.c; its UI follows (ui/opt_ui.c, the end of this file). */
 #define FELUCCA_ARRANGER 1               /* (felucca.c: always; SONG, the scenes and the chain are the UI's too) */
+/* the factory presets' tables kept in the image with the SD card mode too (core.h PRESETS_CARD: Optimist's SD card mode
+ * reads them from the card's PRESETS/FACTORY files instead, to save its flash): without a card the presets are there
+ * as on the trial without the mode; the card's files still listed and loaded from PROJECT's PRESETS row */
+#define PRESETS_CARD 0
 #ifndef FELUCCA_USB_AUDIO
 #define FELUCCA_USB_AUDIO 1              /* (felucca.c's default: Optimist's USB audio; on fm1-base's here, below) */
 #endif
@@ -281,6 +285,9 @@ static void opt_half_pre(void)
  * never steps, as on Optimist's own host). Optimist's main.c measures it with a timed loop (hal/fm1_clock.h) */
 static uint32_t opt_cpu_khz(void) { return plat_cpu_khz(); }
 
+#if FELUCCA_SD_REC
+static void sdr_feed(const int32_t *q15, uint32_t n);    /* storage/sd/sd_rec.c (ui/opt_sd.h) */
+#endif
 void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys)
 {
     uint32_t i, f, t0 = fm1_ticks(), a;
@@ -309,6 +316,9 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
 #if FELUCCA_USB_AUDIO
         if (opt_cap_on)
             opt_cap_block(o, f, CTL);               /* (audio.c ua_block: the channels, the master before the shift) */
+#endif
+#if FELUCCA_SD_REC
+        sdr_feed(o, CTL);                           /* the master into the card's ring (audio.c audio_block's place) */
 #endif
         for (i = 0; i < 2u * CTL; i++)
             o[i] <<= OUT_SHIFT;

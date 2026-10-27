@@ -143,6 +143,15 @@ __attribute__((used, visibility("default"))) uint32_t web_store_writes(void) { r
 __attribute__((used, visibility("default"))) uint32_t web_nobj(void) { return OBJ_NOBJ; }
 __attribute__((used, visibility("default"))) uint32_t web_store_max(void) { return PLAT_STORE_MAX; }
 
+#ifdef FM1B_EMU_DATA
+/* the data area (plat_data, its windows: plat.h) for the page to keep (the emulator's data part, fm1.toml emu): its
+ * web_data_len bytes from web_data(), the device's address web_data_base() first; written before boot, it is what
+ * the app finds */
+__attribute__((used, visibility("default"))) uint8_t *web_data(void) { data_init(); return data_area; }
+__attribute__((used, visibility("default"))) uint32_t web_data_len(void) { return sizeof data_area; }
+__attribute__((used, visibility("default"))) uint32_t web_data_base(void) { return DATA_BASE; }
+#endif
+
 #ifdef APP_WEB
 #include "web.c"                        /* the app's own exports for its page (app.h APP_WEB) */
 #endif

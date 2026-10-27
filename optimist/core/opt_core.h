@@ -59,3 +59,10 @@ uint16_t *opt_canvas(uint32_t n);
 void opt_lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
 void opt_lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);
 void opt_lcd_sync(void);
+
+/* the companion's parameters (ui/opt_ui.c; app.c's APP_PARAMS): i 0 .. opt_cp_count() - 1 */
+uint32_t opt_cp_count(void);
+int opt_cp_desc(uint32_t i, uint32_t *id, uint32_t *group, int32_t *mn, int32_t *mx, int32_t *df, const char **name,
+                const char *const **names);
+int32_t opt_cp_get(uint32_t i);
+int32_t opt_cp_set(uint32_t i, int32_t v);

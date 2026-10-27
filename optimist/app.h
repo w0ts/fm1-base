@@ -45,6 +45,28 @@ void app_loop(void);
 #define APP_USB_STATS                    /* plat_usb_audio_stats: SYSTEM > INFO's USB counters (core/opt_core.c) */
 const int32_t *app_usb_capture(const int32_t *lr, uint32_t n);
 
+/* fm1-base's companion services (fm1.toml companion = true; docs/COMPANION.md), app.c: three files, notes.txt (a
+ * text of the player's own, kept by plat_file_* in 0x93000 / 0x94000: XDATA0's two free sectors, Optimist's map keeps
+ * them for its app slot's growth, which fm1-base's app area never reaches) and two read only, Optimist's own sectors
+ * as they are (settings.bin: the settings record's copy A, 0xFC000; kits.bin: the drum kit bank, ST_UKIT_SECTOR);
+ * and 22 parameters from Optimist's tables (ui/opt_ui.c opt_cp_*): BPM, SWING, each track's LVL, PAN, MUTE, DLY, REV.
+ * Busy while it plays (song.playing): notes.txt only is written then */
+#define APP_COMPANION_EXTRAS "editor=optimist"
+#define APP_FILES
+int app_file(uint32_t i, plat_file_info_t *f);
+int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n);
+int app_file_begin(uint32_t i, uint32_t size);
+int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n);
+int app_file_commit(uint32_t i, uint32_t size, uint32_t crc);
+int app_file_delete(uint32_t i);
+int app_file_busy(void);
+#define APP_PARAMS
+#define APP_PARAM_MAX 24
+int app_param(uint32_t i, plat_param_t *p);
+const char *app_param_group(uint32_t g);
+int32_t app_param_get(uint32_t i);
+int32_t app_param_set(uint32_t i, int32_t v);
+
 /* the host simulator's checks (host/plat_host.c "expect"): voices (sounding), blocks (rendered), keys (held, as the
  * render saw them); the UI's: scr (Optimist's SCR_*: 0 the mixer, 1 SOUND, 2 FX, 5 STEP, 7 TEMPO, 9 GLOBAL), row (its
  * cursor row), track (selected, 3 the drums), bpm, playing, gv1..gv4 (the cursor row's cards: their values), pT.ID

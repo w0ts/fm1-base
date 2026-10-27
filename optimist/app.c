@@ -81,6 +81,73 @@ void app_loop(void) { opt_ed_poll(); }
 void app_input_only(void) { opt_ui_input(); }
 void app_frame(void) { opt_ui_frame(); }
 
+/* fm1-base's companion services (app.h): the files and the parameters */
+static const plat_file_t OPT_NOTES = {0x93000u, 0x94000u, 0x1000u};
+#define OPT_SETTINGS 0xFC000u                    /* the settings record's copy A (opt_glob_ptr) */
+#define OPT_KITS 0xDA000u                        /* the drum kit bank's copy A (ui/opt_storage.h ST_UKIT_SECTOR) */
+static const uint8_t *opt_sector(uint32_t i)    /* the read-only files' bytes: a whole sector each */
+{
+    return i == 1u ? opt_glob_ptr(OPT_SETTINGS) : i == 2u ? plat_data(OPT_KITS) : 0;
+}
+int app_file(uint32_t i, plat_file_info_t *f)
+{
+    int n;
+    switch (i) {
+    case 0:
+        n = plat_file_size(&OPT_NOTES);
+        f->name = "notes.txt", f->kind = PLAT_FK_TEXT, f->size = n < 0 ? 0u : (uint32_t)n;
+        f->flags = PLAT_FF_READ | PLAT_FF_WRITE | PLAT_FF_DELETE | PLAT_FF_PLAYING, f->room = OPT_NOTES.n - PLAT_FILE_HEAD;
+        return 0;
+    case 1:
+    case 2:
+        f->name = i == 1u ? "settings.bin" : "kits.bin", f->kind = i == 1u ? PLAT_FK_SETTINGS : PLAT_FK_BANK;
+        f->flags = PLAT_FF_READ, f->size = f->room = opt_sector(i) ? 0x1000u : 0u;
+        return 0;
+    default:
+        return -1;
+    }
+}
+int app_file_read(uint32_t i, uint32_t off, uint8_t *dst, uint32_t n)
+{
+    const uint8_t *p = opt_sector(i);
+    if (i == 0)
+        return plat_file_read(&OPT_NOTES, off, dst, n);
+    if (!p || off > 0x1000u || n > 0x1000u - off)
+        return -1;
+    memcpy(dst, p + off, n);
+    return 0;
+}
+int app_file_begin(uint32_t i, uint32_t size) { return i == 0 ? plat_file_begin(&OPT_NOTES, size) : -1; }
+int app_file_write(uint32_t i, uint32_t off, const uint8_t *src, uint32_t n)
+{
+    return i == 0 ? plat_file_write(&OPT_NOTES, off, src, n) : -1;
+}
+int app_file_commit(uint32_t i, uint32_t size, uint32_t crc) { return i == 0 ? plat_file_commit(&OPT_NOTES, size, crc) : -1; }
+int app_file_delete(uint32_t i) { return i == 0 ? plat_file_delete(&OPT_NOTES) : -1; }
+int app_file_busy(void) { return opt_ui_playing() != 0; }
+
+int app_param(uint32_t i, plat_param_t *p)
+{
+    uint32_t id, group;
+    int32_t mn, mx, df;
+    const char *name;
+    const char *const *names;
+    if (opt_cp_desc(i, &id, &group, &mn, &mx, &df, &name, &names))
+        return -1;
+    p->id = (uint16_t)id, p->group = (uint8_t)group, p->flags = 0;
+    p->type = names ? PLAT_PT_ENUM : PLAT_PT_NUMBER;
+    p->min = mn, p->max = mx, p->def = df, p->name = name, p->labels = names;
+    p->unit = id == 0x100u ? "BPM" : 0;          /* (G_BPM: Optimist's F_BPM) */
+    return 0;
+}
+const char *app_param_group(uint32_t g)
+{
+    static const char *const G[] = {"SONG", "TRACK 1", "TRACK 2", "TRACK 3", "DRUMS"};
+    return g < sizeof G / sizeof G[0] ? G[g] : 0;
+}
+int32_t app_param_get(uint32_t i) { return opt_cp_get(i); }
+int32_t app_param_set(uint32_t i, int32_t v) { return opt_cp_set(i, v); }
+
 /* Optimist's globals, 0xFC000..0xFEFFF (its settings A/B, its autosave's copy B: ui/opt_storage.h): outside every
  * plat_data window, so here, in the app's unit, on felucca-bsp's own driver (fl_erase4k / fl_write, whose FL_RANGE_OK
  * allows FL_GLOB) and its XIP window, as plat_fm1.c's plat_data_* do for the windows. A gap plat.h would close with a

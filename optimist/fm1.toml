@@ -31,6 +31,8 @@ usb_audio_in_name = "Optimist In"
 usb_audio_out_name = "Optimist Out"
 usb_audio_in_channel_names = ["CH1", "CH2", "CH3", "CH4"]
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
+companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, a few files and
+                               # parameters of Optimist's for a generic page (app.h APP_FILES, APP_PARAMS; app.c)
 # The audio path's calls out of RAM code through a pointer (tools/ramcode.py), every one of them Optimist's own: its
 # firmware runs the same functions from RAM (its .ram_hot / .ram_hot2: core.h HOT, HOT2, OVL as HOT without the
 # overlays) and makes the same calls into XIP (FAR, the engines' and effects' function tables), with its rule that HOT

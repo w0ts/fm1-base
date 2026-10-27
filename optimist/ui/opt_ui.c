@@ -230,3 +230,45 @@ int32_t opt_ui_uad(uint32_t s) { return s < UAS_N ? ua_dst[s] : -1; }   /* SYSTE
 #else
 int32_t opt_ui_uad(uint32_t s) { (void)s; return -1; }
 #endif
+
+/* ---- the companion's parameters (app.c: fm1-base's APP_PARAMS, device/companion.c): a few of Optimist's own, as its
+ * tables describe them (core/params.c GP, TP): the song's BPM and SWING, each track's LVL, PAN, MUTE, DLY, REV. A set
+ * writes the value as the web editor's SET does (io/editor/editor.c ED_SET: clamped, the screen drawn again) */
+#define OPT_CP_G 0xFFu                          /* (a global: song.g) */
+static const uint8_t OPT_CP[][2] = {
+    {OPT_CP_G, G_BPM}, {OPT_CP_G, G_SWING},
+#define OPT_CP_TRK(t) {t, P_LEVEL}, {t, P_PAN}, {t, P_MUTE}, {t, P_DLY}, {t, P_REV}
+    OPT_CP_TRK(0), OPT_CP_TRK(1), OPT_CP_TRK(2), OPT_CP_TRK(3),
+};
+#define OPT_CP_N (sizeof OPT_CP / sizeof OPT_CP[0])
+uint32_t opt_cp_count(void) { return OPT_CP_N; }
+/* parameter i: its id (globals 0x0100 + G_*, track t's (t + 2) << 8 | P_*), its group (0 the song, 1 + t a track), its
+ * range, default, label and names (0: a number) -> 0; -1 past the last */
+int opt_cp_desc(uint32_t i, uint32_t *id, uint32_t *group, int32_t *mn, int32_t *mx, int32_t *df, const char **name,
+                const char *const **names)
+{
+    const param_desc_t *d;
+    if (i >= OPT_CP_N)
+        return -1;
+    d = OPT_CP[i][0] == OPT_CP_G ? &GP[OPT_CP[i][1]] : &TP[OPT_CP[i][1]];
+    *id = OPT_CP[i][0] == OPT_CP_G ? 0x100u + OPT_CP[i][1] : (OPT_CP[i][0] + 2u) << 8 | OPT_CP[i][1];
+    *group = OPT_CP[i][0] == OPT_CP_G ? 0u : 1u + OPT_CP[i][0];
+    *mn = d->min, *mx = d->max, *df = d->def, *name = d->label;
+    *names = d->fmt == F_ENUM ? pd_names(d) : 0;
+    return 0;
+}
+static int16_t *opt_cp_at(uint32_t i)
+{
+    return OPT_CP[i][0] == OPT_CP_G ? &song.g[OPT_CP[i][1]] : &trk[OPT_CP[i][0]].p[OPT_CP[i][1]];
+}
+int32_t opt_cp_get(uint32_t i) { return i < OPT_CP_N ? *opt_cp_at(i) : 0; }
+int32_t opt_cp_set(uint32_t i, int32_t v)
+{
+    const param_desc_t *d;
+    if (i >= OPT_CP_N)
+        return 0;
+    d = OPT_CP[i][0] == OPT_CP_G ? &GP[OPT_CP[i][1]] : &TP[OPT_CP[i][1]];
+    *opt_cp_at(i) = (int16_t)clamp(v, d->min, d->max);
+    ui.force = 1;
+    return *opt_cp_at(i);
+}

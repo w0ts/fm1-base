@@ -276,42 +276,10 @@ static void opt_half_pre(void)
 #endif
 }
 
-/* ---- the CPU clock (core.h cpu_khz: the guard's instructions a sample, cpuguard.c cg_pre; SYSTEM > INFO), measured at
- * power-on as Optimist's main.c does (hal/fm1_clock.h fm1_cpu_khz, the same loop): FM1_CLK_CHAIN dependent adds, a
- * decrement and a branch, from RAM code, timed by TIMER4 with the interrupts off, the shortest of four tries. The
- * host: 0, as Optimist's own host (the guard never steps there) */
-#ifndef PLAT_HOST
-#define OPT_CLK_CHAIN 32u
-#define OPT_CLK_PASSES 1000u
-static PLAT_RAM_CODE __attribute__((noinline, used)) uint32_t opt_clk_spin(uint32_t n, uint32_t x)
-{
-#define OPT_ADD4 "%1 = %1 + %2\n\t%1 = %1 + %2\n\t%1 = %1 + %2\n\t%1 = %1 + %2\n\t"
-    __asm__ volatile("1:\n\t" OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4 OPT_ADD4
-                     "%0 += -1\n\t"
-                     "if (%0 != 0) goto 1b"
-                     : "+r"(n), "+r"(x)
-                     : "r"(x | 1u));
-#undef OPT_ADD4
-    return x;
-}
-static uint32_t opt_cpu_khz(void)
-{
-    uint32_t (*volatile spin)(uint32_t, uint32_t) = opt_clk_spin;   /* (XIP to RAM code: through a pointer) */
-    uint32_t k, best = 0xFFFFFFFFu, x = 0;
-    for (k = 0; k < 4u; k++) {
-        uint32_t f = plat_lock(), t0 = plat_ticks24(), t;
-        x += spin(OPT_CLK_PASSES, k);
-        t = plat_ticks24() - t0;
-        plat_unlock(f);
-        if (t < best)
-            best = t;
-    }
-    (void)x;
-    return !best || best == 0xFFFFFFFFu ? 0u : OPT_CLK_PASSES * (OPT_CLK_CHAIN + 2u) * 24000u / best;
-}
-#else
-static uint32_t opt_cpu_khz(void) { return 0; }
-#endif
+/* ---- the CPU clock (core.h cpu_khz: SYSTEM > INFO's CPU MHz, the guard's instructions a sample, cpuguard.c cg_pre):
+ * fm1-base's (plat_cpu_khz, APP_CPU_KHZ: the stock 360 MHz its start sets, 0 unknown and on the host, where the guard
+ * never steps, as on Optimist's own host). Optimist's main.c measures it with a timed loop (hal/fm1_clock.h) */
+static uint32_t opt_cpu_khz(void) { return plat_cpu_khz(); }
 
 void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys)
 {

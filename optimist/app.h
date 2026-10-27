@@ -40,6 +40,7 @@ void app_loop(void);
 #define APP_TICK                         /* 1 kHz, the timer interrupt: the MIDI in, CLOCK OUT (core/opt_core.c) */
 void app_tick(void);
 #define APP_BATTERY_RAW                  /* plat_battery_raw: SYSTEM > BATTERY's volts and charge (ui/opt_ui.c) */
+#define APP_CPU_KHZ                      /* plat_cpu_khz: SYSTEM > INFO's CPU MHz, the CPU guard's clock (core/opt_core.c) */
 /* USB audio (fm1.toml usb_audio_*): the computer's audio is Optimist's USB input track (APP_USB_PLAY: the render takes
  * it, plat_usb_audio_play), and the USB audio input is Optimist's four capture channels by SYSTEM > USB AUDIO's
  * routing (APP_USB_CAPTURE: app_usb_capture, core/opt_core.c) */

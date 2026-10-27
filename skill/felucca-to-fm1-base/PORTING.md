@@ -147,6 +147,7 @@ Before writing a feature into the app, look for it in fm1-base (`include/plat.h`
 | USB audio input on the computer's clock (resampled, a synchronous endpoint) | `usb_audio_in_host_clock` |
 | USB audio output asynchronous, played as sent (explicit feedback: the computer follows the FM-1's clock) | `usb_audio_out_feedback` |
 | USB audio output in 24-bit too | `usb_audio_out_24bit` |
+| USB audio input and output as two named devices (two functions), the input's channels named | `usb_audio_split`, `usb_audio_in_name`, `usb_audio_out_name`, `usb_audio_in_channel_names` |
 | lower case in the big fonts | `font_full = ["L"]` |
 | its own exports in the browser build | `APP_WEB` (the app's `web.c`), and its own page in `app/web/emu/` |
 | its own second core (hardware code that cannot go into felucca-bsp: another licence, not tried there yet) | `asm = [...]` (its entry assembled), `vendored = [...]` (the register check leaves it), its RAM loop in section `.c1_text` (copied and guarded with `.ram_text`, left out of the RAM-calls check), `APP_CSTART` (held first thing at a start), `APP_FAULT` (a crash on it, or beside it) |

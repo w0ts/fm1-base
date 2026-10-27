@@ -9,6 +9,9 @@
 
 static volatile uint32_t blocks;         /* rendered (a check: the render runs) */
 static volatile uint32_t keys_seen;      /* the keys as the last render saw them */
+#ifdef PLAT_HOST
+static FILE *render_pcm;                 /* the host's "pcm FILE": every sample as rendered (24-bit in int32, L R), raw */
+#endif
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
@@ -18,6 +21,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         opt_core_midi(pkt, port);
     keys_seen = plat_keys();
     opt_core_render(lr, n, master_q12, keys_seen);
+#ifdef PLAT_HOST
+    if (render_pcm)
+        fwrite(lr, sizeof *lr, 2u * n, render_pcm);
+#endif
     blocks++;
 }
 
@@ -47,6 +54,8 @@ void app_init(void)
         printf("  ok power-on with the flash of %s (%u sectors)\n", img, (unsigned)n);
     }
     first = 0;
+    if (getenv("OPT_DUAL_PARTS"))                /* the second core's fixed jobs (core/opt_dual.c: the host's ticks */
+        opt_core_dual_parts((uint32_t)strtoul(getenv("OPT_DUAL_PARTS"), 0, 0));   /* measure no load to split by) */
 #endif
     opt_core_init();
 }
@@ -245,6 +254,14 @@ int app_expect(const char *what, int *got)
         *got = (int)opt_ui_uad((uint32_t)atoi(what + 4));
     else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
+    else if (!strcmp(what, "c1up"))            /* the second core takes jobs (1); c1why: why not (dual_mode.h DUAL_*); */
+        *got = (int)opt_core_dual_stat(0);     /* c1jobs: its jobs joined; c1posts: handed over (-1: no DUAL) */
+    else if (!strcmp(what, "c1why"))
+        *got = (int)opt_core_dual_stat(1);
+    else if (!strcmp(what, "c1jobs"))
+        *got = (int)opt_core_dual_stat(2);
+    else if (!strcmp(what, "c1posts"))
+        *got = (int)opt_core_dual_stat(3);
     else
         return 0;
     return 1;
@@ -327,6 +344,25 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         else
             printf("  ok flash_dump %s\n", a);
         app_fails += rc != 0;
+        return 1;
+    }
+    if (!strcmp(cmd, "pcm")) {                   /* pcm FILE: the render's samples from now into FILE (a path as is); */
+        if (render_pcm)                          /* pcm stop: closed */
+            fclose(render_pcm);
+        render_pcm = a && a[0] && strcmp(a, "stop") ? fopen(a, "wb") : 0;
+        if (a && a[0] && strcmp(a, "stop") && !render_pcm) {
+            printf("FAIL pcm %s: not written\n", a);
+            app_fails++;
+        }
+        return 1;
+    }
+    if (!strcmp(cmd, "param")) {                 /* param T ID V: track T's value ID (Optimist's P_*) set to V, as is */
+        if (!a || !b || !c || !a[0] || !b[0] || !c[0]) {
+            printf("FAIL param T ID V\n");
+            app_fails++;
+            return 1;
+        }
+        opt_ui_param_set((uint32_t)atoi(a), (uint32_t)atoi(b), (int32_t)atoi(c));
         return 1;
     }
     if (strcmp(cmd, "cells"))

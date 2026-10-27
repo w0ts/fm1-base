@@ -30,6 +30,12 @@ usb_audio_split = true
 usb_audio_in_name = "Optimist In"
 usb_audio_out_name = "Optimist Out"
 usb_audio_in_channel_names = ["CH1", "CH2", "CH3", "CH4"]
+# The second core: Optimist's DUAL (the profile's: its split of the render, core/opt_dual.c) on fm1-base's (plat_cpu2_*,
+# felucca-bsp's chip/fm1_cpu1.h). Optimist's rule on a failure: one core from then on, never a restart (cpu2_fallback)
+cpu2 = true
+cpu2_fallback = true
+cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096
+                               # leaves Optimist's own room, 3,840 B: tools/build.py CPU1_STACK_ROOM there)
 ble = false                    # milestone 1: no Bluetooth (fm1-base's own stack is Optimist's: a later step)
 companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, a few files and
                                # parameters of Optimist's for a generic page (app.h APP_FILES, APP_PARAMS; app.c)
@@ -55,6 +61,10 @@ ram_code_allow = [
     # the USB input track (fx.c ut_mix): the computer's audio through FAR(ua_take), RAM code here (core/opt_core.c, HOT;
     # usb_audio_stream.c's, XIP, on Optimist), so the call stays in RAM; the checker cannot see a pointer's target
     "ut_mix",
+    # the second core's split (core/opt_dual.c, system/dual.c's): dual_run renders a block's jobs on either core, the
+    # parts (mix_part inlined: the same calls as mix_block's) and the drums (their hooks, the SCOPE's taps), and times
+    # each through plat_ticks24 (FAR: the clock is flash code); dual_job, the second core's job, the same clock
+    "dual_run", "dual_job",
 ]
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"

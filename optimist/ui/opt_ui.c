@@ -147,6 +147,9 @@ void opt_core_init(void)
     layers_init();
     go_home();
     ui.force = 1;
+#if FELUCCA_DUAL >= 2
+    opt_dual_start();                            /* the second core, after the settings (2ND CORE): core/opt_dual.c */
+#endif
 }
 
 /* ---- the main loop's pass (system/main.c MAIN_LOOP): input, LEDs, the screen; between passes the input and meters */
@@ -158,6 +161,9 @@ void opt_ui_init(void)
 
 void opt_ui_input(void)
 {
+#if FELUCCA_DUAL >= 2
+    opt_dual_loop();                             /* (a main loop pass: core/opt_dual.c's starvation check) */
+#endif
     opt_in_scan();
     fm1_ms = plat_ms();
     ui_input();
@@ -172,6 +178,9 @@ void opt_ui_frame(void)
     usb.config = plat_battery() == 4;            /* (opt_stubs.h: a USB host powers the FM-1) */
 #endif
     opt_ua_poll();                               /* (USB audio's counters, for SYSTEM > INFO: core/opt_core.c) */
+#if FELUCCA_DUAL >= 2
+    opt_dual_loop();                             /* (a main loop pass: core/opt_dual.c's starvation check) */
+#endif
     opt_in_scan();
     fm1_ms = plat_ms();
     ui_input();
@@ -197,6 +206,11 @@ uint32_t opt_ui_scr(void) { return ui.scr; }
 uint32_t opt_ui_row(void) { return ui.row[ui.scr]; }
 uint32_t opt_ui_track(void) { return song.sel; }
 int32_t opt_ui_param(uint32_t track, uint32_t id) { return track < NTRK && id < P_COUNT ? trk[track].p[id] : 0; }
+void opt_ui_param_set(uint32_t track, uint32_t id, int32_t v)   /* (the host's "param": a value as is, no hook) */
+{
+    if (track < NTRK && id < P_COUNT)
+        trk[track].p[id] = (int16_t)v;
+}
 int32_t opt_ui_bpm(void) { return song.g[G_BPM]; }
 uint32_t opt_ui_playing(void) { return song.playing; }
 /* the cursor row's cell k (the cards KNOB 1..4 edit): its value as its form draws it (cell_t gv), its label and text */

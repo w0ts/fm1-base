@@ -16,6 +16,11 @@ void opt_core_midi(uint32_t pkt, int port);                  /* a USB-MIDI packe
 void opt_core_panic(void);                                   /* every voice off */
 uint32_t opt_core_voices(void);                              /* voices sounding (a check) */
 const char *opt_core_engine(uint32_t part);                  /* the part's engine's name */
+void opt_core_dual_parts(uint32_t jobs);                     /* the host: a fixed set of jobs for the second core (bit p:
+                                                              * part p, NPART the drums, NPART + 1 the reverb's kept block;
+                                                              * 0 the split by load); core/opt_dual.c. No-op without DUAL */
+int32_t opt_core_dual_stat(uint32_t k);                       /* the second core's figures for the host's checks: 0 up,
+                                                              * 1 why (dual_mode.h DUAL_*), 2 jobs joined, 3 posted; -1 */
 
 /* the UI (ui/opt_ui.c): a main loop pass of Optimist's (system/main.c) is opt_ui_frame; between frames opt_ui_input */
 void opt_ui_init(void);                                      /* the screen cleared, everything drawn at the next frame */
@@ -32,6 +37,7 @@ uint32_t opt_ui_scr(void);                                   /* the screen shown
 uint32_t opt_ui_row(void);                                   /* its cursor row */
 uint32_t opt_ui_track(void);                                 /* the track selected (0..3, 3 the drums) */
 int32_t opt_ui_param(uint32_t track, uint32_t id);           /* a track's value (Optimist's P_*) */
+void opt_ui_param_set(uint32_t track, uint32_t id, int32_t v);   /* the host: a track's value set as is (no hook) */
 int32_t opt_ui_bpm(void);
 uint32_t opt_ui_playing(void);
 int32_t opt_ui_cell(uint32_t k, const char **label, char *val, uint32_t n);   /* the cursor row's card k (0..3): its value

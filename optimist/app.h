@@ -43,6 +43,11 @@ void app_loop(void);
 #define APP_USB_PLAY
 #define APP_USB_CAPTURE
 #define APP_USB_STATS                    /* plat_usb_audio_stats: SYSTEM > INFO's USB counters (core/opt_core.c) */
+/* the second core (fm1.toml cpu2, cpu2_fallback: Optimist's DUAL on fm1-base's, core/opt_dual.c): a job not back within
+ * two of Optimist's 32-frame mix blocks retires it, as Optimist's own join bound (system/dual.c DUAL_JOIN_US: 1,451 us at
+ * 44.1 kHz; opt_dual.c checks the two agree), instead of felucca-bsp's 8 ms default (chip/fm1_cpu1.h, a bound per job:
+ * the trial hands it one a mix block, eight a render) */
+#define FM1_CPU1_TIMEOUT_US 1451u
 const int32_t *app_usb_capture(const int32_t *lr, uint32_t n);
 
 /* fm1-base's companion services (fm1.toml companion = true; docs/COMPANION.md), app.c: three files, notes.txt (a

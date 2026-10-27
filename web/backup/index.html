@@ -291,16 +291,19 @@ const PB = (() => {
   // allow); with only, that one port
   const NAME_RE = new RegExp(NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
   const USUAL_RE = /fm-?1|felucca|composite|sinco|usb-midi/i;
-  const askable = (name, allowed) => NAME_RE.test(name || "") || USUAL_RE.test(name || "") || allowed.includes(name);
+  // never a Bluetooth MIDI port: an FM-1 paired over Bluetooth shows one beside its USB port and it never answers
+  const BLUETOOTH_RE = /bluetooth/i;
+  const askable = (name, allowed) => !BLUETOOTH_RE.test(name || "") &&
+    (NAME_RE.test(name || "") || USUAL_RE.test(name || "") || allowed.includes(name));
   // the input port names the page does not ask by itself, that have an output of the same name (for Try)
   function others(access, allowed = []) {
     const outs = new Set([...access.outputs.values()].filter((p) => p.state !== "disconnected").map((p) => p.name));
     return [...new Set([...access.inputs.values()].filter((p) => p.state !== "disconnected" && outs.has(p.name) &&
-      !askable(p.name, allowed)).map((p) => p.name))];
+      !askable(p.name, allowed) && !BLUETOOTH_RE.test(p.name || "")).map((p) => p.name))];
   }
   async function find(access, makeLink, allowed = [], only = null) {
     const ins = [...access.inputs.values()].filter((p) => p.state !== "disconnected" &&
-      (only != null ? p.name === only : askable(p.name, allowed)));
+      !BLUETOOTH_RE.test(p.name || "") && (only != null ? p.name === only : askable(p.name, allowed)));
     ins.sort((a, b) => NAME_RE.test(b.name) - NAME_RE.test(a.name));
     const outs = [...access.outputs.values()];
     const base = (s) => (s || "").replace(/\s+\d+$/, "");

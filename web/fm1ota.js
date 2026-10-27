@@ -16,6 +16,10 @@ const MAXDATA = 512;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const IS_OTA = (id) => /^ota-/i.test(id.model);
 
+// an FM-1 paired over Bluetooth MIDI shows a port named "... Bluetooth" beside its USB one: it never answers an update
+// (and a Mac lists the paired one first), so no port with that word is asked, picked, listed or tried
+export const IS_BLUETOOTH = (name) => /bluetooth/i.test(name || "");
+
 // M-VAVE's FM1 Open firmware (V10, 2026-10): its updater takes only a package it has been told about
 // first (cmd 49 reads its state, cmd 50 arms it with the image length and the package's SHA-256); then
 // the update runs as usual. Only M-VAVE's own FM-1 firmware is installed over it: its loader rewrites the
@@ -178,11 +182,12 @@ export class Updater {
   ports() {
     const live = (m) => [...m.values()].filter((p) => p.state !== "disconnected").map((p) => p.name || "");
     const outs = new Set(live(this.access.outputs));
-    return [...new Set(live(this.access.inputs))].filter((n) => outs.has(n));
+    return [...new Set(live(this.access.inputs))].filter((n) => outs.has(n) && !IS_BLUETOOTH(n));
   }
 
-  // never probe other gear: a usual name, a port the user allowed, or one that appeared during an update
-  askable(name) { return this.usual(name) || this.allowed.has(name) || (!!this.baseline && !this.baseline.has(name || "")); }
+  // never probe other gear: a usual name, a port the user allowed, or one that appeared during an update; never a
+  // Bluetooth MIDI port
+  askable(name) { return !IS_BLUETOOTH(name) && (this.usual(name) || this.allowed.has(name) || (!!this.baseline && !this.baseline.has(name || ""))); }
 
   // ask one port who it is (allowing it): -> its identity, or null
   async probe(name) {
@@ -198,7 +203,7 @@ export class Updater {
     const outs = [...this.access.outputs.values()];
     for (const input of this.access.inputs.values()) {
       if (input.state === "disconnected") continue;
-      if (only != null ? input.name !== only : !this.askable(input.name)) continue;
+      if (IS_BLUETOOTH(input.name) || (only != null ? input.name !== only : !this.askable(input.name))) continue;
       const output = outs.find((o) => o.name === input.name) || (outs.length === 1 ? outs[0] : null);
       if (!output) continue;
       try { await input.open(); await output.open(); } catch (_) { continue; }

@@ -134,6 +134,7 @@ macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 """
 import argparse
 import hashlib
+import json
 import os
 import platform
 import re
@@ -642,6 +643,17 @@ def cpu2_stack_flags():
     if not isinstance(n, int) or isinstance(n, bool) or n % 8 or not 1024 <= n <= 16384:
         raise SystemExit(f"fm1.toml cpu2_stack {n!r}: bytes, a multiple of 8, 1024..16384")
     return [f"-DFM1_CPU1_USTACK_BYTES={n}"]
+
+
+def write_sizes(img, syms):
+    """OUT/sizes.json: this build's budgets, whether or not it fits (a caller that sizes configurations reads it, as
+    Optimist's builder does): flash = the app image against the app slot, ram = .data+.bss, pool, ramtext = the RAM code"""
+    def sym(name):
+        mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
+        return int(mm.group(1), 16) if mm else 0
+    sizes = {"flash": len(img), "ram": sym("_bss_end") - sym("_data_start"), "pool": sym("_pool_end") - sym("_pool_start"),
+             "ramtext": sym("_rt_end") - sym("_rt_start"), "app_slot": APP_SLOT}
+    (OUT / "sizes.json").write_text(json.dumps(sizes, indent=1) + "\n")
 
 
 def build_app():
@@ -1213,6 +1225,7 @@ def main():
         gen.result()
         ota = ldr.result()
     img, syms, dis, rt = build_app()
+    write_sizes(img, syms)
     errors, notes = check(img, syms, dis, rt)
     hal_err = mmio_check()
     errors += hal_err

@@ -16,6 +16,9 @@
    tools/build.py setup_config makes it; every unit includes it first (fm1.toml o2_include). The copy's lines down to
    its trial marker are the profile as an FM-1 runs it: build/optgen/felucca_config_profile.h (optsim.py: Optimist's
    own simulator). OPT_PROFILE=none: Optimist's source defaults (core/registry.h), both headers empty, every sample set
+   OPT_CONFIG=FILE (an absolute path): the release build's configuration, a .config of Optimist's builder (the one its
+   build writes: tools/optimist.py build), instead of the profile copy: the felucca_config.h is FILE with RELEASE_OFF
+   (below) appended, felucca_config_profile.h FILE as it is (the profile as Optimist's own firmware would run it)
    as Optimist's host tests have them.
 3. build/optgen: Optimist's generated headers for the audio core (tables, samples, drum kits, the 909 samples,
    wavetables), in the profile's environment (its sample sets); made again only when Optimist's HEAD, its working
@@ -32,6 +35,10 @@ GEN = BUILD / "optgen"
 # Optimist's tests/run_tests.sh headers (tools/build.py HOST_ENV): every sample set, the slicer off (OPT_PROFILE=none)
 HOST_ENV = {"FELUCCA_SAMPLES_SKIP": "", "FELUCCA_SLICE": "0"}
 PROFILE = "profiles/dev-171e96a3.config"       # (Optimist's config/profiles/dev.config at 171e96a3, the trial's block after)
+# what the release leaves off whatever the configuration says, for lack of support in fm1-base's platform (the trial's
+# block in the profile copy says the same, with DUAL 2): never a data format or an address
+RELEASE_OFF = ("# ---- the release: off for lack of support on fm1-base (its own Bluetooth stack is not wired yet, its app.ld and "
+               "boot are its own)\nBLE=0\nBT_AUDIO=0\nCACHE_RAM=0\n")
 MARKER = "# ---- the trial:"                   # (the copy's line where the trial's own changes start)
 # the audio core's and the UI's headers (Optimist tools/build.py generate(): its colours for the UI; its fonts are not
 # used (fm1-base's canvas draws with fm1-base's), its icons nowhere, the help lines off (gen_param_help.py would also
@@ -74,7 +81,13 @@ def link(tree):
 
 
 def profile():
-    """-> the profile copy's path, or None (OPT_PROFILE=none: the source defaults)"""
+    """-> the configuration's path (OPT_CONFIG, else the profile copy's), or None (OPT_PROFILE=none: the source defaults)"""
+    c = os.environ.get("OPT_CONFIG")
+    if c:
+        p = Path(c).resolve()
+        if not p.is_file():
+            raise SystemExit(f"gen_optimist: no configuration {p} (OPT_CONFIG)")
+        return p
     v = os.environ.get("OPT_PROFILE", PROFILE)
     if v == "none":
         return None
@@ -94,10 +107,14 @@ def config(tree, prof):
     sys.path.insert(0, str(tree / "tools" / "builder"))
     import configure
     text = prof.read_text()
-    if MARKER not in text:
+    if os.environ.get("OPT_CONFIG"):
+        parts = ((text.rstrip("\n") + "\n" + RELEASE_OFF, "felucca_config.h"), (text, "felucca_config_profile.h"))
+    elif MARKER not in text:
         raise SystemExit(f"gen_optimist: {prof} has no line {MARKER!r}")
+    else:
+        parts = ((text, "felucca_config.h"), (text.split(MARKER)[0], "felucca_config_profile.h"))
     env = None
-    for part, out in ((text, "felucca_config.h"), (text.split(MARKER)[0], "felucca_config_profile.h")):
+    for part, out in parts:
         cfg, name = configure.parse(part)
         err, warn, _ = configure.validate(cfg)
         for w in warn:

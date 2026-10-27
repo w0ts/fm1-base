@@ -85,6 +85,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              NAME_worklet.js in the worklet, each file saying what it does; a part's own needs come
                              with it; FM1B_EMU_NAME=1 for the C. FM1B_EMU="midi data" in the environment instead (""
                              for none). Without any, the page, the worklet and app.wasm are what they were
+  xdata2 = true              a fourth plat_data window, PLAT_XDATA2 0xFC000..0xFEFFF (FM1B_XDATA2: plat.h; Felucca's
+                             globals' sectors, for an app that was a Felucca firmware); the store's objects there are
+                             refused to plat_data_erase / plat_data_write
 Optional parts: only what an fm1.toml asks for is built in (Bluetooth, USB audio; an app's lib/touch by APP_TOUCH in
 app.h); the build prints what it has.
   ble_stack = "own"          with ble: Optimist's own Bluetooth stack (bt/: Henri David's, docs/bt/BLE-STACK.md;
@@ -1000,7 +1003,8 @@ def build_id():
 
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
-    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"))
+    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"),
+                                                       ("xdata2", "FM1B_XDATA2"))
              if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
     if "-DFM1B_COMPANION=1" in flags and PRODUCT:
         flags.append(f'-DFELUCCA_ID="{PRODUCT}"')   # (the capability query's identity in the simulator and the browser too;

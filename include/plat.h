@@ -216,16 +216,31 @@ void plat_log(const char *line);
  * a sector there (bsp/loader/ldr_core.c: "AT" at bytes 0xF06..0xF07, a nonzero CRC-16 at 0xF00 over the 78 bytes
  * from 0xF02), so in these two an app keeps bytes 0xF00..0xF07 of every sector erased (0xFF), or else makes sure
  * those bytes never read as a record: never "AT" at 0xF06 (LOOM-8's sample bank moves its data so, and refuses a
- * bank that has it) */
+ * bank that has it).
+ * A fourth, on request (fm1.toml xdata2 = true: FM1B_XDATA2): PLAT_XDATA2, the three sectors 0xFC000..0xFEFFF
+ * (12 KiB) between the SDK's last area (USR, up to 0xFBFFF) and its key_mac sector (0xFF000, never written), where
+ * Felucca keeps its globals: an app that was a Felucca firmware reads and writes its own bytes there. The update loader
+ * looks for records below 0xFC000 only, so no 0xF00 rule here. Store objects may sit there too (the template's
+ * settings pair is 0xFC000 / 0xFD000): with the window on, plat_data_erase and plat_data_write refuse a store
+ * object's sectors in it, so an app with this window puts its objects elsewhere (or keeps to the rest) */
 #define PLAT_DATA_LO 0x97000u
 #define PLAT_DATA_HI 0xE0000u
 #define PLAT_XDATA0_LO 0x93000u
 #define PLAT_XDATA0_HI 0x97000u
 #define PLAT_XDATA1_LO 0xE5000u
 #define PLAT_XDATA1_HI 0xFC000u
+#define PLAT_XDATA2_LO 0xFC000u
+#define PLAT_XDATA2_HI 0xFF000u
+#if FM1B_XDATA2
+#define PLAT_DATA_OK(off, n) (plat_in((off), (n), PLAT_DATA_LO, PLAT_DATA_HI) || \
+                              plat_in((off), (n), PLAT_XDATA0_LO, PLAT_XDATA0_HI) || \
+                              plat_in((off), (n), PLAT_XDATA1_LO, PLAT_XDATA1_HI) || \
+                              plat_in((off), (n), PLAT_XDATA2_LO, PLAT_XDATA2_HI))
+#else
 #define PLAT_DATA_OK(off, n) (plat_in((off), (n), PLAT_DATA_LO, PLAT_DATA_HI) || \
                               plat_in((off), (n), PLAT_XDATA0_LO, PLAT_XDATA0_HI) || \
                               plat_in((off), (n), PLAT_XDATA1_LO, PLAT_XDATA1_HI))
+#endif
 static inline int plat_in(uint32_t off, uint32_t n, uint32_t lo, uint32_t hi)   /* [off, off + n) in [lo, hi) */
 {
     return off >= lo && off <= hi && n <= hi - off;
@@ -239,7 +254,6 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n);   /* src in RAM;
  * bits taken one by one. Guaranteed on the device (felucca-bsp's fl_write: page program, no erase, no read-back) and
  * in the host simulator (the same AND). A 1 written over a 0 stays 0, and is not an error: plat_data_write does not
  * read back; an app that must know reads plat_data after. */
-void plat_sysex_send(const uint8_t *frame, uint32_t n);   /* a whole SysEx frame (F0 .. F7) out over USB */
 /* SysEx to the computer over USB (main loop): whole frames, F0 .. F7, into felucca-bsp's SysEx ring (sent before
  * the notes), which the USB interrupt empties as the computer reads. plat_sysex_room, plat_sysex_queued and
  * plat_usb_session (and plat_sysex_send's -1 without a computer) are built for an app with APP_SYSEX (below) */

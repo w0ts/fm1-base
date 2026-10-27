@@ -76,5 +76,11 @@ run sysex-app sh -c "$PY tools/build.py tests/sysex_app --host && \
     tests/sysex_app/build/host/sxtest_host tests/sysex_app/tests/sysex.txt tests/sysex_app/build/host"
 # the companion services (device/companion.c) in the host simulator, through tools/fm1_companion.py: tests/companion_app
 run companion "$PY" tests/companion_test.py $OUT/companion
+# and in the browser emulator (web/emu/emu_web.c web_sx_in, web_sx_out_*), its app.wasm under node
+if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+    run emu-sysex sh -c "$PY tools/build.py tests/sysex_app --web && node tests/sysex_web_test.mjs tests/sysex_app/build/emu"
+else
+    echo "  skip emu-sysex (no emcc or node)"
+fi
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

@@ -281,7 +281,8 @@ static int sd_read_one(uint32_t blk, uint8_t *p, uint32_t dma)   /* CMD17, in a 
 
 static void sd_dma_probe(void)                       /* block 0 by bytes, then by DMA: DMA only when they agree */
 {
-    static uint8_t a[512] __attribute__((aligned(4)));
+    uint8_t *a = sd_bounce;                          /* (the unaligned blocks' page: free here, aligned, so the DMA
+                                                      * reads into it directly) */
     uint16_t c;
     sd.dma = 0;
     if (sd.mode == FM1_SD_HW_GPIO || sd_read_one(0, a, 0) != 0)

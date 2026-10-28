@@ -98,5 +98,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip emu (no emcc or node)"
 fi
+# SysEx between the computer and an app (APP_SYSEX, plat_sysex_send) in the host simulator: tests/sysex_app
+run sysex-app sh -c "$PY tools/build.py tests/sysex_app --host && \
+    tests/sysex_app/build/host/sxtest_host tests/sysex_app/tests/sysex.txt tests/sysex_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

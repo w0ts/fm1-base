@@ -25,6 +25,10 @@ run() {
 }
 run encoder sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -o $OUT/encoder_test tests/encoder_test.c && $OUT/encoder_test"
 run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test tests/trs_test.c && $OUT/trs_test"
+# plat_console_* (device/console.c) over the CDC rings, the interrupt's side simulated; and without the console
+run console sh -c "$CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -o $OUT/console_test tests/console_test.c && \
+    $OUT/console_test && $CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -DFM1B_CDC=0 -o $OUT/console_test0 \
+    tests/console_test.c && $OUT/console_test0"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

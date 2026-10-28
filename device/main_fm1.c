@@ -201,6 +201,9 @@ static int data_erase(uint32_t off)
 }
 
 /* ------------------------------------------------------------ timer --- */
+#ifndef FM1B_CRK_UIHALF
+#define FM1B_CRK_UIHALF 1                           /* (variant F: see the UI's passes in fm1_main) */
+#endif
 static uint8_t usb_due;
 static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 300 us:
                                                      * the key and light scan held up (the log reads and clears) */
@@ -943,6 +946,9 @@ static void fm1_main(void)
     int32_t knob = 512 * 16;
     uint32_t batt_t = 0;                            /* (the battery's last reading, fm1_ms) */
     uint32_t last_frame = 0;
+#if FM1B_CRK_UIHALF
+    uint32_t last_input = 0;                        /* (variant F: the last input-only pass, fm1_ms) */
+#endif
     {
         uint32_t f = irq_save();
         rails_boot[0] = fm1_p33_read(FM1_P3_ANA_CON6);
@@ -1115,6 +1121,21 @@ static void fm1_main(void)
         }
         if (usb.uboot_req)
             enter_uboot("UBOOT (USB)");
+#if FM1B_CRK_UIHALF
+        /* FM1B_CRK_UIHALF (crackle hunt, variant F): the UI at half its rate, its work per pass bounded: a frame every
+         * 33 ms (~30 frames/s, was 16 ms), the input-only pass at most once a millisecond (was every pass of the
+         * loop); in between the loop only feeds the watchdog and polls its radios and USB as above */
+        if (fm1_ms - last_frame >= 33u) {
+            last_frame = fm1_ms;
+            fm1b_dbg.ui_frames++;
+            fm1b_dbg.stage = 5;
+            app_frame();
+        } else if (fm1_ms != last_input) {
+            last_input = fm1_ms;
+            fm1b_dbg.stage = 6;
+            app_input_only();
+        }
+#else
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */
             last_frame = fm1_ms;
             fm1b_dbg.ui_frames++;
@@ -1124,6 +1145,7 @@ static void fm1_main(void)
             fm1b_dbg.stage = 6;
             app_input_only();
         }
+#endif
     }
 }
 

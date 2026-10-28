@@ -15,6 +15,11 @@
  *               editor and USB audio are in: opt_editor.h, core/opt_core.c)
  * The composition follows Optimist's host UI test (tests/ui_optimist_test.c) and its main loop (system/main.c). */
 
+/* OPT_CRK_NOSCREEN (crackle hunt, variant G, the FM-1 only: the host's screens stay checked): the screen frozen after
+ * its first 5 s (opt_ui_frame) */
+#if !defined OPT_CRK_NOSCREEN && !defined PLAT_HOST
+#define OPT_CRK_NOSCREEN 1
+#endif
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
 static void lcd_sync(void) { opt_lcd_sync(); }
 #if FELUCCA_ED_MIRROR
@@ -236,6 +241,11 @@ void opt_ui_frame(void)
     opt_ui_polls();
     ui_leds();
     opt_leds_out();
+#if defined OPT_CRK_NOSCREEN && OPT_CRK_NOSCREEN
+    if (plat_ms() < 5000u)                       /* OPT_CRK_NOSCREEN (crackle hunt, variant G): the screen drawn and sent
+                                                  * for the first 5 s only, then frozen: no drawing, no LCD transfer; the
+                                                  * buttons, keys, knobs and LEDs as before */
+#endif
     ui_draw();
     opt_sd_poll();                               /* the card's streams and recorder (opt_sd.h) */
     autosave_tick();                             /* the working project into flash, when quiet */

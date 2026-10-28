@@ -95,6 +95,12 @@ void plat_dim_ns(uint32_t ns)                       /* any width of the dim puls
     }
 }
 #endif
+/* FM1B_CRK_NOGLOW (crackle hunt, variant D): no dim LED pulses: fm1_led_dim stays dark, so each TIMER5 tick of the key
+ * and light scan is the shift, the latch and the rows' read alone (no pulse, no wait for its width: up to a pulse's
+ * time of busy-waiting a tick, inside the audio render it nests into). The lit LEDs and the mid level as before. */
+#ifndef FM1B_CRK_NOGLOW
+#define FM1B_CRK_NOGLOW 1
+#endif
 /* the dim ones: felucca-bsp's glow, a short pulse on every scan frame, in two strengths (fm1_led_dim_level) */
 void plat_lights(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t dim_keys, int glow)
 {
@@ -134,7 +140,7 @@ void plat_lights(uint32_t buttons, uint32_t keys, uint32_t dim_buttons, uint32_t
         dl[8] |= 1u << 1;
     for (c = 0; c < FM1_NCOL; c++) {
         fm1_led[c] = nl[c];
-        fm1_led_dim[c] = dl[c];
+        fm1_led_dim[c] = FM1B_CRK_NOGLOW ? 0u : dl[c];
     }
     {   /* the mirror's view: PLAY lit (either LED), and bit 15 PLAY lit red */
         uint32_t play = 1u << B_PLAY, lit = buttons & ((1u << NB) - 1u);

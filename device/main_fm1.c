@@ -201,6 +201,9 @@ static int data_erase(uint32_t off)
 }
 
 /* ------------------------------------------------------------ timer --- */
+#ifndef FM1B_CRK_T5LEAN
+#define FM1B_CRK_T5LEAN 1                           /* (variant E: see the app's tick in fm1_timer5_irq) */
+#endif
 static uint8_t usb_due;
 static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 300 us:
                                                      * the key and light scan held up (the log reads and clears) */
@@ -244,11 +247,31 @@ void fm1_timer5_irq(void)
         midi_stamp_poll(fm1_ticks());               /* what these polls queued came in within the last 0.5 ms (midi_stamp.h) */
     }
 #ifdef APP_TICK
+#if FM1B_CRK_T5LEAN
+    /* FM1B_CRK_T5LEAN (crackle hunt, variant E): inside the audio render TIMER5 runs only the key and light scan and
+     * USB audio's service, its RAM-light part; the app's 1 kHz tick (MIDI in, CLOCK OUT, Bluetooth's and Link's
+     * ticks: most of TIMER5's flash-resident code) is counted and caught up at the first tick after the render, one
+     * call per millisecond missed, so none of it can evict the render's code from the XIP cache mid-half */
+    {
+        static uint8_t tick_owed;
+        if (sub == 0u && tick_owed < 255u)
+            tick_owed++;
+        if (tick_owed && !fm1b_dbg.in_audio) {
+            in_tick = 1;
+            while (tick_owed) {
+                tick_owed--;
+                app_tick();
+            }
+            in_tick = 0;
+        }
+    }
+#else
     if (sub == 0u) {                                /* 1 kHz: the app's tick (a clock, a sequencer) */
         in_tick = 1;
         app_tick();
         in_tick = 0;
     }
+#endif
 #endif
     if (++sub == 10u)
         sub = 0;

@@ -86,5 +86,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# the dim lights at any brightness (APP_DIM_LEVELS, plat_dim_ns) in the host simulator: tests/dim_app
+run dim-app sh -c "$PY tools/build.py tests/dim_app --host && \
+    tests/dim_app/build/host/dimtest_host tests/dim_app/tests/dim.txt tests/dim_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

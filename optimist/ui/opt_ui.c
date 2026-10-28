@@ -15,6 +15,16 @@
  *               editor and USB audio are in: opt_editor.h, core/opt_core.c)
  * The composition follows Optimist's host UI test (tests/ui_optimist_test.c) and its main loop (system/main.c). */
 
+/* OPT_CRK_NOAUTOSAVE (crackle hunt, variant H, the FM-1 only: the host's storage stays checked): no autosave and no
+ * live sections' flush from the main loop (opt_ui_frame), so no flash erase or write follows a press or a turn (SAVE's
+ * own path untouched) */
+#ifndef OPT_CRK_NOAUTOSAVE
+#ifdef PLAT_HOST
+#define OPT_CRK_NOAUTOSAVE 0
+#else
+#define OPT_CRK_NOAUTOSAVE 1
+#endif
+#endif
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
 static void lcd_sync(void) { opt_lcd_sync(); }
 #if FELUCCA_ED_MIRROR
@@ -238,12 +248,14 @@ void opt_ui_frame(void)
     opt_leds_out();
     ui_draw();
     opt_sd_poll();                               /* the card's streams and recorder (opt_sd.h) */
-    autosave_tick();                             /* the working project into flash, when quiet */
+    if (!OPT_CRK_NOAUTOSAVE)
+        autosave_tick();                         /* the working project into flash, when quiet */
     opt_sd_mode_poll();                          /* the SD card mode's card after a mount, a save left pending */
 #if BP23_SET
     settings_poll();                             /* a setting changed from a page */
 #endif
-    sections_flush();                            /* live sections / the recorded song, when quiet */
+    if (!OPT_CRK_NOAUTOSAVE)
+        sections_flush();                        /* live sections / the recorded song, when quiet */
 #if SEC_LOGGED
     sec_service();                               /* the next section staged for the audio (sections.c) */
 #endif

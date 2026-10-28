@@ -84,5 +84,8 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# an app with APP_BLE_PEERS (its own list: the scan's reports, plat_ble_connect_peer) in the host simulator
+run peers-app sh -c "$PY tools/build.py tests/peers_app --host && \
+    tests/peers_app/build/host/peertest_host tests/peers_app/tests/peers.txt tests/peers_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

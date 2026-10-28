@@ -7,6 +7,15 @@
  * a write to its source buffer (lcd_sync), waits for it, so the main loop works
  * while the last strip of a frame goes out. */
 /* pins and SPI1: hal/fm1_lcd_hw.h */
+/* FM1B_CRK_LCD30 (crackle hunt, variant C): the panel's SPI at 30 MHz (BAUD 1) instead of 60, as Optimist's own firmware
+ * sends it: the same polled DMA strips, the interrupts never masked, half the DMA's rate on the bus while a strip goes
+ * out. 0: 60 MHz as before. */
+#ifndef FM1B_CRK_LCD30
+#define FM1B_CRK_LCD30 1
+#endif
+#if FM1B_CRK_LCD30 && !defined LCD_BAUD
+#define LCD_BAUD 1u
+#endif
 #ifndef LCD_BAUD
 #define LCD_BAUD 0u                /* lsb/(BAUD+1): 0 = 60 MHz (~44 MHz effective, measured). Felucca's
                                     * 4 (12 MHz) took 23 ms for a 240x72 strip, longer than the panel's

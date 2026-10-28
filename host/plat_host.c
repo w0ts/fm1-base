@@ -520,6 +520,12 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
     return 0;
 }
 void plat_sysex_send(const uint8_t *frame, uint32_t n) { (void)frame, (void)n; }
+/* no USB serial console on the host (plat.h: never open) */
+int plat_console_open(void) { return 0; }
+int plat_console_read(void) { return -1; }
+uint32_t plat_console_room(void) { return 0; }
+uint32_t plat_console_write(const void *p, uint32_t n) { (void)p, (void)n; return 0; }
+void plat_console_present(int on) { (void)on; }
 /* no host to pull from (an app's transfer is tested on its own, or by writing the flash: "data") */
 int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)dst, (void)n; return -1; }
 void plat_host_patience(uint32_t try_ms, uint32_t total_ms) { (void)try_ms, (void)total_ms; }

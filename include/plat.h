@@ -204,6 +204,18 @@ int plat_data_erase(uint32_t off);        /* the 4 KiB sector at off (aligned); 
 int plat_data_write(uint32_t off, const void *src, uint32_t n);   /* into erased flash, src in RAM; 0 = done */
 void plat_sysex_send(const uint8_t *frame, uint32_t n);   /* a whole SysEx frame (F0 .. F7) out over USB */
 
+/* the USB serial console (fm1.toml usb_console = true: FM1B_CDC 1): a CDC-ACM function beside USB MIDI, for the app's
+ * own text (logs, a command line): the platform carries the bytes, the app says what they mean. Main loop only. Not with
+ * usb_audio_out_feedback or usb_audio_split (they take the console's endpoint, EP3). Without it, and on the host: never
+ * open, nothing read, nothing written */
+int plat_console_open(void);              /* a computer has the port open (its DTR) */
+int plat_console_read(void);              /* the next byte from the computer; -1 none */
+uint32_t plat_console_room(void);         /* the bytes plat_console_write takes now (0 while not open) */
+uint32_t plat_console_write(const void *p, uint32_t n);   /* -> the bytes taken (at most the room: never waits) */
+void plat_console_present(int on);        /* the console presented (the default) or not, e.g. from a setting: in app_init
+                                           * before USB starts; later, the FM-1 leaves the bus and comes back as the
+                                           * other device */
+
 /* the app's own commands in the update's SysEx framing (F0 pack7(00 59 cmd len24 body ~sum) F7: felucca-bsp ota.c),
  * an app with APP_USB_CMD: app_usb_cmd(d, n) gets each frame whose cmd the platform does not take (d: the decoded
  * frame, cmd d[2], the body from d + 6). Inside it the app may pull data from the host as an update does: */

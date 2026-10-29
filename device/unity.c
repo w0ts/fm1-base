@@ -25,7 +25,8 @@
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
  *   FM1B_MIRROR 0           the screen and panel mirrored over USB (fm1.toml mirror = true: mirror.c)
  *   FM1B_BACKUP 0           backup and restore of the app's objects over USB (fm1.toml backup = true: backup.c)
- *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h) */
+ *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h)
+ *   FM1B_SD 0               an SD card on the LCD's bus (fm1.toml sd = true: sd.c, felucca-bsp's fm1_sd_hw.h) */
 #include <stdint.h>
 #include "plat.h"
 #include "app.h"                  /* first: the scan's hooks below may call the app */
@@ -50,6 +51,9 @@
 #include "fm1_audio.h"
 #include "fm1_adc.h"
 #include "fm1_lcd_hw.h"
+#if FM1B_SD
+#include "fm1_sd_hw.h"
+#endif
 #if FM1B_WIFI || FM1B_BLE
 #define FL_UID 1                          /* the flash's unique ID: the WiFi MAC, the Bluetooth name (plat_chip_uid) */
 #endif
@@ -60,6 +64,9 @@
 
 #include "libc.c"
 #include "lcd.c"
+#if FM1B_SD
+#include "sd.c"                 /* the SD card on the LCD's bus: plat_sd_* */
+#endif
 #include "gfx.c"
 
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR) */

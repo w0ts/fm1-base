@@ -82,5 +82,12 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# the SD card on the LCD's bus (device/sd.c) against a card in SPI mode byte by byte (start-ups, reads, writes, runs,
+# CRC failures, the read modes, the bus back with the LCD after every call); then an app on plat_sd_* in the host
+# simulator with a card image (tests/sd_app)
+run sd sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -Idevice -o $OUT/sd_test tests/sd_test.c && $OUT/sd_test"
+run sd-app sh -c "$PY tools/build.py tests/sd_app --host && \
+    head -c 4194304 /dev/zero > $OUT/sd_card.img && printf '\125\252' | dd of=$OUT/sd_card.img bs=1 seek=510 conv=notrunc 2>/dev/null && \
+    FM1B_SD=$OUT/sd_card.img tests/sd_app/build/host/sdtest_host tests/sd_app/tests/sd.txt tests/sd_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

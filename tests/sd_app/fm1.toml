@@ -1,0 +1,10 @@
+# The SD test app's build settings (tools/build.py): an app on the SD card (sd = true, plat_sd_*), for
+# tests/run_tests.sh in the host simulator with a card image (tests/sd_app/tests/sd.txt)
+name = "SDTEST"
+id_prefix = "FM-1_14"          # package identity: dev FM-1_1400
+usb_manufacturer = "fm1-base"
+usb_product = "SDTEST FM-1"
+o2 = []
+words = "words.tsv"
+sd = true
+licence = "MPL-2.0"

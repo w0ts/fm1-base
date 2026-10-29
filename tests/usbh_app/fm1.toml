@@ -8,3 +8,4 @@ o2 = []
 words = "words.tsv"
 licence = "MPL-2.0"
 usb_host = true
+usb_host_audio = true          # (tests/usbh_app/tests/usbha.txt)

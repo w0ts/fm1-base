@@ -440,6 +440,42 @@ int plat_usb_lost(void)
     midi_usb_lost = 0;
     return 1;
 }
+#if FELUCCA_USB_HOST_AUDIO
+void plat_usb_host_audio(int on, int wide) { usb_host_audio((uint32_t)(on != 0), (uint32_t)(wide != 0)); }
+int plat_usb_host_audio_state(void)
+{
+    uint32_t s = usb_host_audio_state();
+    if (usb_host_audio_bits())
+        return USBHA_PLAYING;
+    if (s == UHA_OK)
+        return USBHA_READY;
+    if (s == UHA_UAC2)
+        return USBHA_UNSUPPORTED_UAC2;
+    if (s == UHA_NO_RATE)
+        return USBHA_NO_RATE;
+    return s == UHA_NO_OUT || usb_host_audio_seen() ? USBHA_NO_AUDIO : USBHA_NONE;   /* (a device without audio: NO
+                                                     * AUDIO; nothing answered: NONE) */
+}
+void plat_usb_host_audio_stats(plat_usb_host_audio_stats_t *s)
+{
+    uha_stats_t u;
+    usb_host_audio_stats(&u);
+    s->bits = u.bits, s->ch = u.ch, s->alt = u.alt;
+    s->packets = u.pkts, s->frames = u.frames, s->tx_errors = u.tx_errors, s->underruns = u.underruns;
+    s->overruns = u.overruns, s->catchups = u.catchups, s->late = u.late, s->wait_max = u.wait_max;
+    s->feedback = u.fb, s->fb_reads = u.fb_reads, s->fb_errors = u.fb_errors, s->ppm = u.ppm;
+    s->fill = u.fill, s->sofs = u.sofs, s->starts = u.starts;
+}
+#else
+void plat_usb_host_audio(int on, int wide) { (void)on, (void)wide; }
+int plat_usb_host_audio_state(void) { return USBHA_NONE; }
+void plat_usb_host_audio_stats(plat_usb_host_audio_stats_t *s)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof *s; i++)
+        ((uint8_t *)s)[i] = 0;
+}
+#endif
 #ifdef APP_USB_HOST_NAME                        /* (built for an app that shows it: another's image stays as it was) */
 #if FELUCCA_USB_HOST
 const char *plat_usb_host_name(void) { return usb_host_name(); }

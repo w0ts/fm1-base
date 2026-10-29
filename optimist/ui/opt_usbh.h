@@ -13,18 +13,36 @@
  *   MIDI out      TO_USB as before: fm1-base sends it to the device while the port is a host (notes, CLOCK OUT)
  *   a lost device plat_usb_lost (the 1 kHz tick, before the packets): what the port's notes still hold is let go
  *                 (usbh_held: the notes and pedals that came in on PORT_USB, released through the input ring)
+ *   audio out     (USB_HOST_AUDIO: fm1.toml usb_host_audio = true; plat_usb_host_audio) SYSTEM > USB's AUDIO OUT OFF /
+ *                 MASTER: the master into the device's USB audio output (another FM-1, a DAC; 16-bit), and its
+ *                 line (usbha_status): PLAYING 16BIT, READY, NO AUDIO OUT, UNSUPPORTED USB AUDIO 2.0 / NOT 44.1 KHZ,
+ *                 POWERED HUB? NO DEVICE. Never kept, as MODE: every boot is OFF (and DEVICE sets it OFF)
  * Included by ui/opt_ui.c before Optimist's UI; core/opt_core.c's tick calls usbh_tick_lost and usbh_note. */
 #pragma once
 #if FELUCCA_USB_HOST
 #define OPT_HAS_USBH 1
 static uint8_t usbh_want;                       /* MODE: 0 DEVICE, 1 HOST (asked; not kept) */
 static uint8_t usbh_said;                       /* the last NO MIDI / LOW SPEED (USBH_MSG_*), 0: none */
+#if FELUCCA_USB_HOST_AUDIO
+#define OPT_HAS_USBHA 1
+static uint8_t usbha_want;                      /* AUDIO OUT: 0 OFF, 1 MASTER (asked; not kept) */
+static uint32_t usbha_mode(void) { return usbha_want; }
+static void usbha_set(uint32_t on)
+{
+    usbha_want = (uint8_t)(on != 0u);
+    plat_usb_host_audio((int)usbha_want, 0);
+}
+#endif
 static uint32_t usbh_mode(void) { return usbh_want; }
 static void usbh_set(uint32_t on)
 {
     usbh_want = (uint8_t)(on != 0u);
     usbh_said = 0;
     plat_usb_host((int)usbh_want);
+#if FELUCCA_USB_HOST_AUDIO
+    if (!usbh_want)
+        usbha_set(0);                           /* (DEVICE: no audio out to keep asking for) */
+#endif
 }
 /* the DEVICE line: its text and 1 when connected (green); main loop */
 static const char *usbh_device(uint32_t *ok)
@@ -44,6 +62,34 @@ static const char *usbh_device(uint32_t *ok)
         return usbh_want ? "STARTING" : "NONE";
     return usbh_said == USBH_MSG_NOMIDI ? "NO MIDI" : usbh_said == USBH_MSG_LOW ? "LOW SPEED" : "NONE";
 }
+#if FELUCCA_USB_HOST_AUDIO
+/* the AUDIO line: its label and text, *col 1 when playing (green), 2 when the device cannot (warning); main loop */
+static const char *usbha_status(const char **label, uint32_t *col)
+{
+    int st = plat_usb_host_audio_state();
+    *label = "AUDIO";
+    *col = 0;
+    if (!usbh_want)
+        return "NEEDS HOST";
+    if (st == USBHA_PLAYING) {
+        plat_usb_host_audio_stats_t s;
+        plat_usb_host_audio_stats(&s);
+        *col = 1;
+        return s.bits == 24u ? "PLAYING 24BIT" : "PLAYING 16BIT";
+    }
+    if (st == USBHA_READY)
+        return usbha_want ? "STARTING" : "READY";
+    *col = 2;
+    if (st == USBHA_UNSUPPORTED_UAC2 || st == USBHA_NO_RATE) {
+        *label = "UNSUPPORTED";
+        return st == USBHA_NO_RATE ? "NOT 44.1 KHZ" : "USB AUDIO 2.0";
+    }
+    if (st == USBHA_NO_AUDIO)
+        return "NO AUDIO OUT";
+    *label = "POWERED HUB?";                 /* (nothing answers: the FM-1 gives the port no power) */
+    return "NO DEVICE";
+}
+#endif
 /* the notes and pedals the port's input holds (channel x note; tick only), let go when its session ends */
 static uint32_t usbh_held[16][4];
 static uint16_t usbh_pedal;

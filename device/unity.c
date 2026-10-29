@@ -177,6 +177,22 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #define FM1B_USB_HOST 0
 #endif
 #define FELUCCA_USB_HOST FM1B_USB_HOST /* the USB MIDI host (plat_usb_host) */
+#ifndef FM1B_USB_HOST_AUDIO
+#define FM1B_USB_HOST_AUDIO 0
+#endif
+#ifndef FM1B_UHA_PROBE
+#define FM1B_UHA_PROBE 0         /* 1: the USB host audio bench probe (device/uha_probe.h) */
+#endif
+#define FELUCCA_USB_HOST_AUDIO (FM1B_USB_HOST && FM1B_USB_HOST_AUDIO)   /* its device's audio output (plat_usb_host_audio) */
+#ifndef FM1B_USB_HOST_AUDIO_POOL
+#define FM1B_USB_HOST_AUDIO_POOL 0       /* 1: its 8 KB ring in the pool, not in RAM */
+#endif
+#if FM1B_UHA_PROBE
+#define FELUCCA_USB_HOST_AUDIO_TICKS() fm1_ticks()   /* the bench probe's measures against TIMER4 (device/uha_probe.h) */
+#endif
+#if FM1B_USB_HOST_AUDIO_POOL
+#define FELUCCA_USB_HOST_AUDIO_RING_ATTR PLAT_POOL
+#endif
 #ifndef FM1B_MIDI_STAMP
 #define FM1B_MIDI_STAMP 1         /* MIDI in stamped where it lands, USB and the jack (plat_midi_in_t24; 0: when read) */
 #endif

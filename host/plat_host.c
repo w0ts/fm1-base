@@ -64,6 +64,10 @@
  *   usbh midi B0 B1 B2 | usbh clock N [MS]   its MIDI in (PORT_USB), its clocks. While the port is a host there is no
  *                                computer: "midi USB" and "clock" are dropped, nothing goes out to it; what goes to
  *                                the device: expect_out USBH ..., expect usbh_out, usbh_clocks (expect usbh: USBH_*)
+ *   usbh plug NAME audio|dac|uac2|rate48 [PPM] | usbh wav FILE | usbh wavstop   (usb_host_audio) a device with a USB
+ *                                audio output (an FM-1, a DAC without MIDI, USB Audio 2.0 only, 48 kHz only), its clock
+ *                                PPM off; what it receives into FILE (expect usbh_audio: USBHA_*, usbh_audio_frames,
+ *                                usbh_audio_bits, usbh_audio_ppm)
  *   said_none                    nothing was said since the last "said" (or "listen"): else a failure
  *   mirror FILE|off|refresh|nokeep|unplug   (FM1B_MIRROR) the screen and panel mirrored over USB (device/mirror.c)
  *                                as a viewer asks for it, the device's SysEx into FILE at USB's pace; nokeep: the
@@ -323,6 +327,27 @@ uint32_t plat_midi_out_link(void) { return usb_links; }
 #endif
 #define USBH_CONNECT_MS 150u
 #define TO_USBH_SIM (1u << 5)                  /* (the out log's tag: sent to the host's device, not to a computer) */
+/* the device's USB audio output (FM1B_USB_HOST_AUDIO, plat_usb_host_audio): "usbh plug NAME audio [PPM]" an FM-1 (MIDI
+ * both ways, the output 16-bit, 24 too), "dac [PPM]" a DAC (no MIDI, 16-bit), "uac2" (USB Audio 2.0 only, no MIDI),
+ * "rate48" (MIDI, an output at 48 kHz only). PPM: the device's clock against this FM-1's, as its feedback says. While
+ * it plays, each render's block (the master, as main_fm1.c taps it) goes to it: the frames it takes counted at its rate
+ * (the FM-1 resamples to it: here only counted), the samples into "usbh wav FILE" as they are (16 or 24-bit, not
+ * resampled). expect usbh_audio: USBHA_*; usbh_audio_frames, usbh_audio_bits, usbh_audio_ppm */
+enum { UHK_NONE, UHK_AUDIO, UHK_DAC, UHK_UAC2, UHK_RATE48 };
+#ifndef FM1B_USB_HOST_AUDIO
+#define FM1B_USB_HOST_AUDIO 0
+#endif
+static struct {
+    uint8_t kind, want, wide, on;
+    double ppm, acc;
+    uint64_t frames;
+    uint32_t starts;
+    FILE *wav;
+    uint32_t wav_frames, wav_bits;
+} uha_s;
+static void wav_header(FILE *f, uint32_t nch, uint32_t bits, uint32_t frames);
+static int usbh_audio_ok(void) { return uha_s.kind == UHK_AUDIO || uha_s.kind == UHK_DAC; }
+static void usbh_audio_step(void);
 static struct {
     uint8_t want, on, plugged, midi_in, midi_out, conn, msg, lost, said;
     uint32_t t_plug, in, out, clocks;
@@ -342,9 +367,9 @@ static void usbh_step(void)                     /* the mode and the connection, 
     }
     if (uhs.on && uhs.plugged && !uhs.conn && !uhs.said && now_ms - uhs.t_plug >= USBH_CONNECT_MS) {
         uhs.said = 1;
-        if (uhs.midi_in || uhs.midi_out) {
+        if (uhs.midi_in || uhs.midi_out || (FM1B_USB_HOST_AUDIO && usbh_audio_ok())) {   /* (a DAC: its audio) */
             uhs.conn = 1;
-            uhs.msg = USBH_MSG_MIDI;
+            uhs.msg = uhs.midi_in || uhs.midi_out ? USBH_MSG_MIDI : USBH_MSG_AUDIO;
             usb_links++;
         } else {
             uhs.msg = USBH_MSG_NOMIDI;
@@ -353,6 +378,7 @@ static void usbh_step(void)                     /* the mode and the connection, 
 }
 static void usbh_reboot(void)                   /* the script's reboot: the port a device again, what is plugged in stays */
 {
+    uha_s.want = uha_s.on = 0;
     uhs.want = uhs.on = uhs.conn = uhs.lost = uhs.said = 0;
     uhs.msg = USBH_MSG_NONE;
     uhs.t_plug = now_ms;
@@ -390,6 +416,88 @@ const char *plat_usb_host_name(void)
     usbh_step();
     return uhs.conn ? uhs.name : "";
 }
+static void usbh_audio_step(void)               /* playing: asked, and a device that has it connected */
+{
+    uint8_t on;
+    usbh_step();
+    on = (uint8_t)(FM1B_USB_HOST_AUDIO && uha_s.want && uhs.conn && usbh_audio_ok());
+    if (on && !uha_s.on)
+        uha_s.starts++;
+    uha_s.on = on;
+}
+void plat_usb_host_audio(int on, int wide)
+{
+    uha_s.want = (uint8_t)(FM1B_USB_HOST_AUDIO && on);
+    uha_s.wide = (uint8_t)(wide != 0);
+    usbh_audio_step();
+}
+int plat_usb_host_audio_state(void)
+{
+    usbh_audio_step();
+    if (!FM1B_USB_HOST_AUDIO || !uhs.on || !uhs.plugged || (!uhs.conn && !uhs.said))
+        return USBHA_NONE;
+    if (uha_s.on)
+        return USBHA_PLAYING;
+    return usbh_audio_ok() ? USBHA_READY : uha_s.kind == UHK_UAC2 ? USBHA_UNSUPPORTED_UAC2 :
+           uha_s.kind == UHK_RATE48 ? USBHA_NO_RATE : USBHA_NO_AUDIO;
+}
+static uint32_t usbh_audio_bits(void) { return uha_s.on ? (uha_s.wide && uha_s.kind == UHK_AUDIO ? 24u : 16u) : 0u; }
+void plat_usb_host_audio_stats(plat_usb_host_audio_stats_t *s)
+{
+    memset(s, 0, sizeof *s);
+    usbh_audio_step();
+    if (uha_s.on)
+        s->bits = usbh_audio_bits(), s->ch = 2, s->alt = s->bits == 24u ? 2u : 1u;
+    s->frames = (uint32_t)uha_s.frames;
+    s->feedback = uha_s.on ? (uint32_t)(722824.0 * (1.0 + uha_s.ppm * 1e-6)) : 0u;
+    s->ppm = (int32_t)uha_s.ppm;
+    s->starts = uha_s.starts;
+}
+static void usbh_audio_put(const int32_t *lr, uint32_t n)   /* a render's block, while it plays */
+{
+    uint32_t i, bits;
+    usbh_audio_step();
+    if (!uha_s.on)
+        return;
+    uha_s.acc += n * (1.0 + uha_s.ppm * 1e-6);      /* (the frames the device takes for them, at its rate) */
+    uha_s.frames += (uint64_t)uha_s.acc;
+    uha_s.acc -= (double)(uint64_t)uha_s.acc;
+    bits = usbh_audio_bits();
+    if (!uha_s.wav)
+        return;
+    if (!uha_s.wav_bits)
+        uha_s.wav_bits = bits;
+    for (i = 0; i < 2u * n; i++) {
+        int32_t v = lr[i] > 8388607 ? 8388607 : lr[i] < -8388608 ? -8388608 : lr[i];
+        uint8_t b[3] = {(uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16)};
+        if (uha_s.wav_bits == 16u) {
+            int32_t s = (v + 128) >> 8;
+            s = s > 32767 ? 32767 : s;
+            b[0] = (uint8_t)s, b[1] = (uint8_t)(s >> 8);
+        }
+        fwrite(b, 1, uha_s.wav_bits / 8u, uha_s.wav);
+    }
+    uha_s.wav_frames += n;
+}
+static void usbh_wav_close(void)
+{
+    if (!uha_s.wav)
+        return;
+    fseek(uha_s.wav, 0, SEEK_SET);
+    wav_header(uha_s.wav, 2, uha_s.wav_bits ? uha_s.wav_bits : 16u, uha_s.wav_frames);
+    fclose(uha_s.wav);
+    uha_s.wav = 0;
+}
+static int usbh_wav_open(const char *path)      /* the script's usbh wav FILE: what the device receives */
+{
+    usbh_wav_close();
+    uha_s.wav = fopen(path, "wb");
+    if (!uha_s.wav)
+        return 1;
+    wav_header(uha_s.wav, 2, 16, 0);
+    uha_s.wav_frames = uha_s.wav_bits = 0;
+    return 0;
+}
 static uint32_t mk_pkt(const char *a, const char *b, const char *c);
 /* the script's usbh: plug NAME [in|out|nomidi] (both ways by default; _ in NAME a space), unplug, midi B0 B1 B2 (from the device) */
 static int usbh_cmd(const char *a, const char *b, const char *c, const char *d)
@@ -401,8 +509,11 @@ static int usbh_cmd(const char *a, const char *b, const char *c, const char *d)
             if (*p == '_')
                 *p = ' ';                       /* (the script's words: "Launchkey_Mini" is "Launchkey Mini") */
         uhs.plugged = 1;
-        uhs.midi_in = (uint8_t)(strcmp(c, "out") && strcmp(c, "nomidi"));
-        uhs.midi_out = (uint8_t)(strcmp(c, "in") && strcmp(c, "nomidi"));
+        uha_s.kind = !strcmp(c, "audio") ? UHK_AUDIO : !strcmp(c, "dac") ? UHK_DAC : !strcmp(c, "uac2") ? UHK_UAC2 :
+                     !strcmp(c, "rate48") ? UHK_RATE48 : UHK_NONE;
+        uha_s.ppm = d[0] ? atof(d) : 0.0;
+        uhs.midi_in = (uint8_t)(strcmp(c, "out") && strcmp(c, "nomidi") && strcmp(c, "dac") && strcmp(c, "uac2"));
+        uhs.midi_out = (uint8_t)(strcmp(c, "in") && strcmp(c, "nomidi") && strcmp(c, "dac") && strcmp(c, "uac2"));
         uhs.t_plug = now_ms;
         uhs.said = 0;
         return 0;
@@ -425,7 +536,8 @@ static int usbh_cmd(const char *a, const char *b, const char *c, const char *d)
         uhs.in++;
         return 0;
     }
-    printf("FAIL usbh %s: plug NAME [in|out|nomidi], unplug, midi B0 B1 B2\n", a);
+    printf("FAIL usbh %s: plug NAME [in|out|nomidi|audio|dac|uac2|rate48] [PPM], unplug, midi B0 B1 B2, wav FILE, "
+           "wavstop\n", a);
     return 1;
 }
 static void usbh_sent(uint32_t pkt)             /* plat_midi_send's TO_USB while the port is a host */
@@ -446,6 +558,14 @@ static int usbh_expect(const char *what, int *got)    /* the model's state for e
         *got = (int)uhs.out;
     else if (!strcmp(what, "usbh_clocks"))     /* F8s out to it */
         *got = (int)uhs.clocks;
+    else if (!strcmp(what, "usbh_audio"))      /* its audio output: USBHA_* */
+        *got = plat_usb_host_audio_state();
+    else if (!strcmp(what, "usbh_audio_frames"))   /* the frames it took */
+        *got = (int)uha_s.frames;
+    else if (!strcmp(what, "usbh_audio_bits"))
+        *got = (int)usbh_audio_bits();
+    else if (!strcmp(what, "usbh_audio_ppm"))
+        *got = (int)uha_s.ppm;
     else
         return 0;
     return 1;
@@ -2049,6 +2169,8 @@ static void run_ms(uint32_t ms)
                 usb_rec_put(blk, APP_BLOCK);
 #endif
             }
+            if (FM1B_USB_HOST_AUDIO && uha_s.want)  /* the USB host's device's audio output: the master, as main_fm1.c */
+                usbh_audio_put(blk, APP_BLOCK);
             if (uac_full) {                         /* (the USB audio input took it at full level) the speaker: MASTER */
                 const float g = (float)APP_GAIN(master) * (1.0f / 4096.0f);
                 for (k = 0; k < 2u * APP_BLOCK; k++)
@@ -2634,6 +2756,11 @@ int main(int argc, char **argv)
                 fails += usbh_cmd("midi", "F8", "", "");
                 run_ms((uint32_t)gap);
             }
+        } else if (!strcmp(cmd, "usbh") && !strcmp(a, "wav")) {   /* usbh wav FILE: what its audio output receives */
+            snprintf(out, sizeof out, "%s/%s", dir, b);
+            fails += usbh_wav_open(out);
+        } else if (!strcmp(cmd, "usbh") && !strcmp(a, "wavstop")) {
+            usbh_wav_close();
         } else if (!strcmp(cmd, "usbh")) {
             fails += usbh_cmd(a, b, c, d);
             run_ms(2);

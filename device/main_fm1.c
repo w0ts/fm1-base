@@ -13,6 +13,7 @@ void app_boot_unpack(const uint8_t *src);    /* (the stream at _etext: fm1_guard
 /* --------------------------------------------------------------- audio --- */
 /* HALF_FRAMES (unity.c, from APP_BLOCK): the I2S half buffer, 256 frames = 5.8 ms at 44.1 kHz by default */
 #define HALF_WORDS (HALF_FRAMES * 2u)
+#include "uha_probe.h"                 /* (FM1B_UHA_PROBE: the USB host audio bench probe) */
 #define FS 44100u
 #define REND_FRAMES HALF_FRAMES             /* app_render's frames per call */
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
@@ -51,6 +52,10 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
                                                      * so, returning to a garbled address, 0.6 s into each start) */
         uac_render_start();
 #endif
+#if FELUCCA_USB_HOST_AUDIO
+    if (!radio_quiet)
+        usb_host_audio_render_start();              /* the USB host's device's audio: its ring primed or steered */
+#endif
     {
         uint32_t k, gain = APP_GAIN(master_pos);
 #if FELUCCA_UAC
@@ -84,6 +89,10 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
 #else
             uac_tap(o + 2u * k, REND_FRAMES);       /* the USB audio input: the same master output */
 #endif
+#endif
+#if FELUCCA_USB_HOST_AUDIO
+            usb_host_audio_tap(UHA_PROBE_SRC(o + 2u * k, REND_FRAMES), REND_FRAMES);   /* the USB host's device's
+                                                     * audio output: the master (the probe: its sine) */
 #endif
             if (full) {                             /* the speaker and headphones: MASTER after the tap */
                 const float g = (float)gain * (1.0f / 4096.0f);
@@ -249,6 +258,10 @@ void fm1_timer5_irq(void)
          * the consumer side of its ring, and usb_poll never runs nested, so the two never interleave */
         if (fm1b_dbg.in_audio)
             uac_service();
+#endif
+#if FELUCCA_USB_HOST_AUDIO
+        if (fm1b_dbg.in_audio)
+            usb_host_audio_service();               /* (the same for the host's stream: host EP4 / EP2 only) */
 #endif
     }
     if (usb_due && !fm1b_dbg.in_audio) {
@@ -474,6 +487,9 @@ static int log_frame(const uint8_t *p, uint32_t n)
         *q = 0;
         log_line_send(b);
     }
+#if FM1B_UHA_PROBE && FELUCCA_USB_HOST_AUDIO
+    uha_probe_log(log_line_send);                   /* the USB host audio probe's records */
+#endif
     for (k = (int)plat_ble_log_total() - 1; k >= 0; k--) {
         if (!plat_ble_log_line(k)[0])
             continue;                                /* (beyond what the log keeps) */
@@ -1171,6 +1187,9 @@ static void fm1_main(void)
         fm1_wdt_feed();
 #if FELUCCA_USB_HOST
         usb_host_task(fm1_ms);                      /* the host's mode change and connecting (plat_usb_host) */
+#if FM1B_UHA_PROBE && FELUCCA_USB_HOST_AUDIO
+        uha_probe_step(fm1_ms);
+#endif
 #endif
         usb_retry(fm1_ms);
         if (fm1_ms > 30000u && bootguard.pending) {     /* a crash or hang in the first 30 s counts */

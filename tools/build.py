@@ -75,6 +75,12 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_host = true            the USB port as a MIDI host when the app asks (FM1B_USB_HOST: felucca-bsp's
                              FELUCCA_USB_HOST, docs/USB_HOST.md; plat_usb_host in plat.h): a USB-MIDI controller or
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
+  usb_host_audio = true      with usb_host: the master into the host's device's USB audio output too (FM1B_USB_HOST_AUDIO:
+                             felucca-bsp's FELUCCA_USB_HOST_AUDIO; plat_usb_host_audio in plat.h): another FM-1, a USB
+                             Audio 1.0 DAC; 44.1 kHz 16/24-bit, its clock followed (+~8 KB RAM: FM1B_USB_HOST_AUDIO_POOL=1
+                             puts its ring in the pool)
+  usb_host_audio_probe = true   its bench probe (FM1B_UHA_PROBE, device/uha_probe.h): a 1 kHz sine instead of the
+                             master, 30 s at 16-bit then 24-bit measured, read over the LG log readout
   sd = true                  an SD card on the LCD's bus (a hardware mod; FM1B_SD: device/sd.c, felucca-bsp's
                              fm1_sd_hw.h; plat_sd_* in plat.h, felucca-bsp docs/SD.md): the screen idles selected,
                              the card's chip select being its own inverted; the host simulator reads a card image
@@ -1194,7 +1200,7 @@ def slot_flags():
 
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
-    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"),
+    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("usb_host_audio", "FM1B_USB_HOST_AUDIO"), ("usb_host_audio_probe", "FM1B_UHA_PROBE"), ("companion", "FM1B_COMPANION"),
                                                        ("xdata2", "FM1B_XDATA2"), ("sd", "FM1B_SD"), ("crk_diag", "FM1B_CRK_DIAG"))
              if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
     if "-DFM1B_COMPANION=1" in flags and PRODUCT:
@@ -1452,6 +1458,7 @@ def main():
              ("USB audio out", on("usb_audio_out", "FM1B_UAC_OUT", True) and on("usb_audio_in", "FM1B_UAC", True)),
              ("screen mirroring", bool(CONF.get("mirror")) or os.environ.get("FM1B_MIRROR") == "1"), ("backup and restore", bool(CONF.get("backup")) and os.environ.get("FM1B_BACKUP") != "0"),
              ("the second core", CPU2), ("USB MIDI host", on("usb_host", "FM1B_USB_HOST", False)),
+             ("USB host audio out", on("usb_host", "FM1B_USB_HOST", False) and on("usb_host_audio", "FM1B_USB_HOST_AUDIO", False)),
              ("companion services", on("companion", "FM1B_COMPANION", False)),
              ("the SD card", on("sd", "FM1B_SD", False)),
              ("velocity and pressure", any(re.search(r"^#define APP_TOUCH\b", f.read_text(errors="ignore"), re.M)

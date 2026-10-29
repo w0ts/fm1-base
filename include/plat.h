@@ -124,7 +124,8 @@ uint32_t plat_midi_out_link(void);     /* a number that changes at each new USB 
  * USB session ended (a device lost, the mode changed): release what its notes hold. Without FM1B_USB_HOST all stay
  * USBH_OFF / 0. */
 enum { USBH_OFF, USBH_LOOKING, USBH_CONNECTED };
-enum { USBH_MSG_NONE, USBH_MSG_ON, USBH_MSG_OFF, USBH_MSG_MIDI, USBH_MSG_NOMIDI, USBH_MSG_LOW, USBH_MSG_LOST };
+enum { USBH_MSG_NONE, USBH_MSG_ON, USBH_MSG_OFF, USBH_MSG_MIDI, USBH_MSG_NOMIDI, USBH_MSG_LOW, USBH_MSG_LOST,
+       USBH_MSG_AUDIO };                 /* (AUDIO: a device with audio and no MIDI connected: usb_host_audio) */
 void plat_usb_host(int on);
 int plat_usb_host_state(void);
 int plat_usb_host_msg(void);
@@ -134,6 +135,26 @@ int plat_usb_lost(void);
  * APP_USB_HOST_NAME (below): felucca-bsp's FELUCCA_USB_HOST_NAME reads it at the connection (another app's image stays
  * as it was, byte for byte). Main loop */
 const char *plat_usb_host_name(void);
+/* USB host audio (fm1.toml usb_host_audio = true, with usb_host: FM1B_USB_HOST_AUDIO 1; felucca-bsp's
+ * FELUCCA_USB_HOST_AUDIO, docs/USB_HOST.md): the master (as the render gives it, at MASTER) played into the host's
+ * device's USB Audio 1.0 output (another FM-1, a DAC): 44.1 kHz, 16-bit (24 where the device has it and wide is
+ * asked), its clock followed (resampled to the rate its feedback asks), beside its MIDI. plat_usb_host_audio (main
+ * loop) asks; it starts once a device that has it is connected (a few frames of the stream go missing meanwhile)
+ * and stops when asked, unplugged or the mode changes; asked again after. plat_usb_host_audio_state: USBHA_NONE
+ * (nothing connected), READY (it has it, not asked), PLAYING, UNSUPPORTED_UAC2 (USB Audio 2.0 only), NO_AUDIO (no
+ * audio output), NO_RATE (an output but none at 44.1 kHz 16/24-bit 1-2 ch). Without FM1B_USB_HOST_AUDIO: NONE */
+enum { USBHA_NONE, USBHA_READY, USBHA_PLAYING, USBHA_UNSUPPORTED_UAC2, USBHA_NO_AUDIO, USBHA_NO_RATE };
+void plat_usb_host_audio(int on, int wide);
+int plat_usb_host_audio_state(void);
+typedef struct {
+    uint32_t bits, ch, alt;              /* while playing: its sample size, channels, alt setting (else 0) */
+    uint32_t packets, frames, tx_errors, underruns, overruns;   /* sent; the ring ran dry / overflowed */
+    uint32_t catchups, late, wait_max;   /* packets that made up a missed frame; polls the last one had not gone */
+    uint32_t feedback, fb_reads, fb_errors;   /* the device's last feedback (10.14 frames a ms) */
+    int32_t ppm;                         /* the device's clock against this FM-1's I2S (from the feedback) */
+    uint32_t fill, sofs, starts;         /* the ring at a render's start; USB frames counted; streams started */
+} plat_usb_host_audio_stats_t;
+void plat_usb_host_audio_stats(plat_usb_host_audio_stats_t *s);   /* main loop */
 uint32_t plat_midi_count(int port, int out);   /* messages through port PORT_* since the start (out: sent), real-time (clock...) left out */
 uint32_t plat_midi_ago(int port, int out);     /* ms since the last one (0xFFFFFFFF: none yet) */
 

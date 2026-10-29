@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Henri David */
 /* The USB host test app: see app.h */
-static int uh_on, uh_msg;
+static int uh_on, uh_msg, uh_aud, uh_wide;
+static uint32_t uh_ph;
 static uint32_t uh_prev, uh_lost, uh_in;
 
 static void uh_input(void)
@@ -11,6 +12,11 @@ static void uh_input(void)
     if ((b & ~uh_prev) & (1u << B_SEL)) {
         uh_on = !uh_on;
         plat_usb_host(uh_on);
+    }
+    if ((b & ~uh_prev) & (1u << B_PLAY | 1u << B_REC)) {   /* PLAY: the master to the device's audio; REC: 24-bit */
+        uh_aud = (b & ~uh_prev) & (1u << B_PLAY) ? !uh_aud : uh_aud;
+        uh_wide = (b & ~uh_prev) & (1u << B_REC) ? !uh_wide : uh_wide;
+        plat_usb_host_audio(uh_aud, uh_wide);
     }
     uh_prev = b;
     m = plat_usb_host_msg();
@@ -32,8 +38,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     uint32_t i;
     (void)master_q12;
-    for (i = 0; i < 2u * n; i++)
-        lr[i] = 0;
+    for (i = 0; i < n; i++, uh_ph++) {             /* with the audio asked: a 1 kHz triangle at half scale */
+        int32_t t = (int32_t)(uh_ph % 44u), v = uh_aud ? (t < 22 ? t : 44 - t) * 190650 - 2097152 : 0;
+        lr[2u * i] = lr[2u * i + 1u] = v;
+    }
 }
 void app_panic(void) {}
 void app_ui_init(void) { lcd_fill(0, 0, 240, 240, C_BLACK); }
@@ -51,6 +59,17 @@ int app_expect(const char *what, int *got)
         *got = (int)uh_in;
     else if (!strcmp(what, "app_host"))
         *got = uh_on;
+    else if (!strcmp(what, "app_audio"))      /* plat_usb_host_audio_state */
+        *got = plat_usb_host_audio_state();
+    else if (!strcmp(what, "app_abits")) {    /* plat_usb_host_audio_stats: the sample size playing */
+        plat_usb_host_audio_stats_t s;
+        plat_usb_host_audio_stats(&s);
+        *got = (int)s.bits;
+    } else if (!strcmp(what, "app_appm")) {   /* ... the device's clock (ppm) */
+        plat_usb_host_audio_stats_t s;
+        plat_usb_host_audio_stats(&s);
+        *got = s.ppm;
+    }
     else if (!strcmp(what, "app_name")) {
         for (nm = plat_usb_host_name(), *got = 0; nm[*got]; (*got)++)
             ;

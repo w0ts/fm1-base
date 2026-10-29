@@ -75,6 +75,7 @@ int32_t opt_ui_lights(void);                                 /* SYSTEM > LIGHTS'
 void opt_ui_lights_set(uint32_t v);                          /* the host: that level set, as the menu's step does */
 int32_t opt_ui_usbh(void);                                   /* SYSTEM > USB's MODE (0 DEVICE, 1 HOST; -1 not built: USB_HOST) */
 void opt_ui_usbh_reboot(void);                               /* the host: a reboot, MODE DEVICE again (as RAM is cleared) */
+int32_t opt_ui_usbha(void);                                  /* SYSTEM > USB's AUDIO OUT (0 OFF, 1 MASTER; -1 not built) */
 #endif
 int32_t opt_ui_batt(void);                                   /* the battery's reading as SYSTEM > BATTERY has it */
 int32_t opt_ui_uad(uint32_t s);                              /* USB AUDIO's source s (0 MASTER): its channels (3: 1+2); -1 none */

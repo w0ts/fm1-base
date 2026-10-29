@@ -1,0 +1,81 @@
+# The USB host test app's audio out (usb_host_audio, plat_usb_host_audio) in the host simulator (tests/run_tests.sh):
+#   tests/usbh_app/build/host/usbhtest_host tests/usbh_app/tests/usbha.txt tests/usbh_app/build/host
+# its device's USB audio output: asked before anything is there, playing once an FM-1 is connected (16-bit, then
+# 24-bit asked), the frames it takes at its own clock, what it receives in a WAV; stopped, unplugged, a DAC without
+# MIDI, USB Audio 2.0 only, 48 kHz only, a keyboard without audio
+wait 300
+expect app_audio 0
+# the port a host, the audio asked: nothing there yet
+tap SEL
+wait 50
+tap PLAY
+wait 50
+expect usbh 1
+expect app_audio 0
+expect app_abits 0
+# another FM-1 (MIDI and audio), its clock 300 ppm fast: playing 16-bit, its MIDI too
+usbh wav usbha.wav
+usbh plug FM-1 audio 300
+wait 300
+expect usbh 2
+expect app_msg 3
+expect app_audio 2
+expect usbh_audio 2
+expect app_abits 16
+expect usbh_audio_bits 16
+expect app_appm 300
+usbh midi 90 40 64
+wait 20
+expect app_in 1
+expect usbh_out 1
+# a second: its 44,130.9 frames (44,117.6 + 300 ppm), less what the first block missed
+expect usbh_audio_frames <40000
+wait 1000
+expect usbh_audio_frames >44000
+# 24-bit asked: alt 2
+tap REC
+wait 50
+expect app_abits 24
+# stopped: READY, nothing more taken
+tap PLAY
+wait 50
+expect app_audio 1
+expect app_abits 0
+usbh wavstop
+# asked again, then unplugged: nothing
+tap PLAY
+wait 50
+expect app_audio 2
+usbh unplug
+wait 50
+expect app_audio 0
+expect usbh 1
+# a DAC without MIDI: connected for its audio, plays at once (still asked)
+usbh plug USB_DAC dac -50
+wait 300
+expect usbh 2
+expect app_msg 7
+expect app_audio 2
+expect app_appm -50
+usbh unplug
+wait 50
+# USB Audio 2.0 only: never connected, said
+usbh plug UAC2_DAC uac2
+wait 300
+expect usbh 1
+expect app_msg 4
+expect app_audio 3
+usbh unplug
+wait 50
+# an output at 48 kHz only: MIDI connected, its audio not
+usbh plug Synth48 rate48
+wait 300
+expect usbh 2
+expect app_audio 5
+usbh unplug
+wait 50
+# a keyboard: MIDI, no audio
+usbh plug Test_Keys_25
+wait 300
+expect usbh 2
+expect app_audio 4

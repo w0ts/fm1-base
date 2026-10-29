@@ -311,6 +311,8 @@ int app_expect(const char *what, int *got)
         *got = (int)opt_ui_lights();
     else if (!strcmp(what, "usbh_mode"))       /* SYSTEM > USB's MODE: 0 DEVICE, 1 HOST (-1: no USB_HOST) */
         *got = (int)opt_ui_usbh();
+    else if (!strcmp(what, "usbha_mode"))      /* SYSTEM > USB's AUDIO OUT: 0 OFF, 1 MASTER (-1: no USB_HOST_AUDIO) */
+        *got = (int)opt_ui_usbha();
     else if (!strcmp(what, "panel_hits"))      /* Optimist's object sectors on OBJ_PANEL's 0xD8000..0xD9FFF */
         *got = (int)opt_st_panel_hits();
     else if (!strcmp(what, "bta_out"))         /* Bluetooth audio: the sound to the device (1) or the FM-1's own (0) */

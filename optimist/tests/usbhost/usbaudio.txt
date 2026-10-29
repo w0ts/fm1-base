@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Optimist's USB host audio out in the trial (USB_HOST_AUDIO: profiles/dev-usbaudio.config, optimist/run.sh's usbaudio
+# run; ui/opt_usbh.h) on fm1-base's host simulator's USB audio devices (usbh plug NAME audio ...). SYSTEM > USB: AUDIO
+# OUT OFF at boot, MASTER from the page; nothing plugged in: POWERED HUB? NO DEVICE; another FM-1: PLAYING 16BIT, the
+# master's frames taken at its clock, its MIDI as before; OFF: READY; a USB Audio 2.0 device, one at 48 kHz only, a
+# keyboard: said; back to DEVICE: OFF too; a restart is OFF
+wait 1500
+master 2048
+wait 100
+expect usbha_mode 0
+expect usbh_audio 0
+# SYSTEM > USB (GLO twice, the third page): MODE, DEVICE, AUDIO OUT, AUDIO
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+spin SELECT 1
+wait 100
+cells
+# MODE HOST, AUDIO OUT MASTER (KNOB 3): nothing plugged in
+spin K1 1
+wait 200
+spin K3 1
+wait 200
+cells
+expect usbh_mode 1
+expect usbha_mode 1
+expect usbh_audio 0
+# another FM-1 (its clock 200 ppm slow) behind a powered hub: connected, playing 16-bit, a note's sound goes to it
+usbh wav usbaudio.wav
+usbh plug Optimist_FM-1 audio -200
+wait 400
+cells
+expect usbh 2
+expect usbh_audio 2
+expect usbh_audio_bits 16
+expect usbh_audio_ppm -200
+midi 90 3C 64
+expect voices 0
+usbh midi 90 3C 64
+wait 300
+expect voices >0
+usbh midi 80 3C 00
+wait 1000
+expect usbh_audio_frames >50000
+usbh wavstop
+# AUDIO OUT OFF: READY, the device kept (its MIDI too)
+spin K3 -1
+wait 200
+cells
+expect usbha_mode 0
+expect usbh_audio 1
+expect usbh 2
+# MASTER again, then pulled out: NO DEVICE
+spin K3 1
+wait 200
+expect usbh_audio 2
+usbh unplug
+wait 300
+expect usbh_audio 0
+expect usbh 1
+# USB Audio 2.0 only: UNSUPPORTED USB AUDIO 2.0
+usbh plug UAC2_DAC uac2
+wait 400
+cells
+expect usbh_audio 3
+usbh unplug
+wait 300
+# an output at 48 kHz only (its MIDI connected): UNSUPPORTED NOT 44.1 KHZ
+usbh plug Synth48 rate48
+wait 400
+cells
+expect usbh 2
+expect usbh_audio 5
+usbh unplug
+wait 300
+# a keyboard (MIDI, no audio): NO AUDIO OUT
+usbh plug Test_Keys_25
+wait 400
+cells
+expect usbh 2
+expect usbh_audio 4
+usbh unplug
+wait 300
+# a DAC without MIDI: connected for its audio, playing (AUDIO OUT still MASTER)
+usbh plug USB_DAC dac 50
+wait 400
+cells
+expect usbh 2
+expect usbh_audio 2
+usbh unplug
+wait 300
+# back to DEVICE (KNOB 1): AUDIO OUT OFF too, then a restart: OFF, DEVICE
+spin K1 -1
+wait 200
+cells
+expect usbh_mode 0
+expect usbha_mode 0
+spin K1 1
+wait 200
+spin K3 1
+wait 200
+expect usbha_mode 1
+reboot
+wait 1500
+expect usbh_mode 0
+expect usbha_mode 0

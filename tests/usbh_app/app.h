@@ -4,7 +4,10 @@
  * messages, plat_usb_lost, plat_usb_host_name). SEL tapped switches the port between device and host; every note in
  * goes out again an octave up to TO_USB (the computer, or the host's device). Its own checks for the script (expect):
  * app_msg (the last plat_usb_host_msg other than NONE), app_lost (plat_usb_lost's 1s), app_in (notes in), app_name
- * (plat_usb_host_name's length), app_host (what it asked). No sound, a black screen. */
+ * (plat_usb_host_name's length), app_host (what it asked). With usb_host_audio: PLAY asks for the master into the
+ * device's USB audio output (plat_usb_host_audio), REC for 24-bit; the sound is then a 1 kHz triangle (silence
+ * otherwise); app_audio (plat_usb_host_audio_state), app_abits (the sample size playing), app_appm (the device's
+ * clock). A black screen. */
 #pragma once
 #include <stdint.h>
 #include "plat.h"

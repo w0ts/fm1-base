@@ -371,10 +371,18 @@ void opt_ui_lights_set(uint32_t v) { (void)v; }
 #endif
 #ifdef OPT_HAS_USBH
 int32_t opt_ui_usbh(void) { return (int32_t)usbh_mode(); }       /* SYSTEM > USB's MODE: 0 DEVICE, 1 HOST */
+#ifdef OPT_HAS_USBHA
+void opt_ui_usbh_reboot(void) { usbh_want = 0; usbh_said = 0; usbha_want = 0; }   /* (a restart: RAM cleared, MODE
+                                                                  * DEVICE, AUDIO OUT OFF) */
+int32_t opt_ui_usbha(void) { return (int32_t)usbha_mode(); }     /* SYSTEM > USB's AUDIO OUT: 0 OFF, 1 MASTER */
+#else
 void opt_ui_usbh_reboot(void) { usbh_want = 0; usbh_said = 0; }   /* (a restart: RAM cleared, MODE DEVICE) */
+int32_t opt_ui_usbha(void) { return -1; }                        /* (not built) */
+#endif
 #else
 int32_t opt_ui_usbh(void) { return -1; }                         /* (not built) */
 void opt_ui_usbh_reboot(void) {}
+int32_t opt_ui_usbha(void) { return -1; }
 #endif
 #endif
 #if FELUCCA_USB_AUDIO

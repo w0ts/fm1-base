@@ -393,12 +393,25 @@ static void con_ovl(void)                       /* the overlays (core/overlay.c)
 }
 #endif
 
+/* `gpio`: the GPIO probe (system/gpio_probe.h): `gpio watch` starts it (5 s hands off: the noisy bits learnt), `gpio reset`
+ * starts it again, `gpio` prints the state, the ports and the last changes */
+static void con_gp_line(const char *t)
+{
+    con_puts(t);
+    con_puts("\r\n");
+}
+static void con_gpio(const char *p)
+{
+    if (con_word(&p, "reset") || (con_word(&p, "watch") && !gp.on))
+        gp_start(fm1_ms);
+    gp_dump(con_gp_line, fm1_ms);
+}
 static void con_exec(const char *p)
 {
     if (con_run(p))
         return;
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  cpu1  keys  keylog"
+        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  cpu1  keys  keylog  gpio [watch|reset]"
                  "  flr OFFSET [LEN]  tabbench"
 #if FELUCCA_SDCARD
                  "  sd [ls [DIR] | cat FILE | raw SECTOR]"
@@ -420,6 +433,8 @@ static void con_exec(const char *p)
         con_cpu1();
     else if (con_word(&p, "keys"))
         con_keys();
+    else if (con_word(&p, "gpio"))
+        con_gpio(p);
     else if (con_word(&p, "keylog"))
         con_keylog();
     else if (con_word(&p, "flr"))

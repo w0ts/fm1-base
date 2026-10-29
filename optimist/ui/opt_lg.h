@@ -7,7 +7,7 @@
  *                                       cache RAM's) and the cache RAM it has (0: none: CACHE_RAM off or its test failed)
  *   undo ring BYTES + BYTES at ADDR     its ring now: the SRAM part (after the arena's highest block), the cache RAM
  *                                       part and where (seq/undo.c undo_h; "undo ring 0": not set up yet, no edit)
- * Hexadecimal, 8 digits. Main loop: reads only */
+ * Hexadecimal, 8 digits. Main loop: reads only. First, on the probe branch, the GPIO probe's lines (gpio_probe.h gp_dump) */
 static char *opt_lg_put(char *q, const char *t, uint32_t v)
 {
     uint32_t i;
@@ -26,6 +26,7 @@ void app_log(void (*line)(const char *t))
 #else
     uint32_t cr = 0;
 #endif
+    gp_dump(line, fm1_ms);                       /* the GPIO probe first (a probe branch: SYSTEM > GPIO PROBE, gpio_probe.h) */
 #if PART_DROPS
     q = opt_lg_put(b, "arena ", ARN_BYTES);
     q = opt_lg_put(q, " at ", (uint32_t)(uintptr_t)arn_mem);

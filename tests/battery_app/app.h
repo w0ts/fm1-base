@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Henri David */
-/* The battery test app (tests/run_tests.sh): an app built with APP_BATTERY_RAW, reading plat_battery_raw every frame
- * as an app showing its own volts does; the script checks what the app read (expect app_battery_raw) beside the
- * simulator's own (expect battery_raw). No sound, a black screen. */
+/* The battery test app (tests/run_tests.sh): an app built with APP_BATTERY_RAW, reading plat_battery_raw and
+ * plat_battery_charging every frame as an app showing its own volts and its charging does; the script checks what the
+ * app read (expect app_battery_raw, app_battery_charging) beside the simulator's own (expect battery_raw,
+ * battery_charging). No sound, a black screen. */
 #pragma once
 #include <stdint.h>
 #include "plat.h"

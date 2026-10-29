@@ -41,6 +41,12 @@ int32_t plat_battery_raw(void);        /* the reading plat_battery's bars come f
                                         * the main loop's slow average, in the converter's counts (the bars' thresholds
                                         * 531 / 561 / 591); 0 = not read yet. Whether USB powers the FM-1 or not. For an
                                         * app that shows the volts itself; built for an app with APP_BATTERY_RAW (below) */
+int plat_battery_charging(void);       /* the supply, read from the chip's own power registers twice a second (P33: P3_LDO5V_CON bit 5
+                                        * LDO5V_DET, P3_CHG_CON0 bit 0 CHARGE_EN, P3_CHG_READ bit 0 the charge-full flag; JieLi AC79
+                                        * SDK p33.h): 0 no 5 V on the supply pin (running on the cell), 1 5 V present and the
+                                        * chip's charger not running (full, off, or an external charger), 2 5 V present, the chip's
+                                        * charger on and not full = charging; -1 not read yet. The registers are the SDK's: not yet
+                                        * measured on an FM-1. Built for an app with APP_BATTERY_RAW (below) */
 
 /* lights: bright buttons and keys, and dim ones (a short pulse each scan frame; a bright bit wins); glow 0 the dim
  * ones off, 1 low, 2 high. Bit NB in buttons / dim_buttons is PLAY's second, green LED */
@@ -284,7 +290,8 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  *   APP_OVERLOAD    void app_overload(void)       the render took over 90 % of its time (shed voices)
  *   APP_SPLASH      void app_splash(void)         the first screen at boot, instead of the name
  *   APP_GAIN(m)     the render's gain from MASTER's position m (0..4096; default the square, m * m >> 12)
- *   APP_BATTERY_RAW (no function) plat_battery_raw is built (the battery's reading, for an app's own volts)
+ *   APP_BATTERY_RAW (no function) plat_battery_raw and plat_battery_charging are built (the battery's reading, for
+ *                   an app's own volts; whether 5 V is on the supply and the chip's charger runs)
  *   APP_QUIET       void app_quiet(int32_t *lr, uint32_t n)   the render while the flash must not be read (the
  *                   radio's first second, FM1B_BLE): keep time without sound (default: silence)
  *   APP_KEY_SENSE   void app_key_sample(uint32_t key, uint32_t v, uint32_t ticks, int driven) (rows PA7 / PA8),

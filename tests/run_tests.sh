@@ -26,6 +26,9 @@ run() {
 run encoder sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -o $OUT/encoder_test tests/encoder_test.c && $OUT/encoder_test"
 run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test tests/trs_test.c && $OUT/trs_test"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
+# plat_battery_charging (device/plat_supply.c) over simulated P33 registers: 5 V, the charger on, full
+run supply sh -c "$CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -o $OUT/supply_test tests/supply_test.c && \
+    $OUT/supply_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py
 # the web installer's m-bootloader step (web/fm1ota.js installBoot) against a simulated FM-1, and finding the FM-1 by
@@ -82,7 +85,7 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
-# an app with APP_BATTERY_RAW (plat_battery_raw) in the host simulator: tests/battery_app
+# an app with APP_BATTERY_RAW (plat_battery_raw, plat_battery_charging) in the host simulator: tests/battery_app
 run battery-app sh -c "$PY tools/build.py tests/battery_app --host && \
     tests/battery_app/build/host/battest_host tests/battery_app/tests/battery.txt tests/battery_app/build/host"
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"

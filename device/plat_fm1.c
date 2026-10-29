@@ -63,6 +63,7 @@ int plat_battery(void)                           /* (a level moves once the read
 }
 #ifdef APP_BATTERY_RAW
 int32_t plat_battery_raw(void) { return batt_raw; }
+#include "plat_supply.c"                    /* the supply: 5 V and the charger (plat_battery_charging) */
 #endif
 
 /* LEDs: the picture is built off-line and copied one byte per column (Felucca: clearing

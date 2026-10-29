@@ -88,8 +88,9 @@ ram_code_allow = [
     # distortion's gains, the drum inserts' rest
     "rev_post", "rev_bus", "dly_run", "fx_ret_block", "dist_run", "dins_of",
     # the insert effects (insfx/*.c): their marks and widths, the gater's block, the limiter's chorus, the drive's gains,
-    # TAPE / SPIT's block coefficients (tapespit.c ifx_ts_block through FAR, once a block: tsvf_coef_k divides)
-    "ifx_st", "ifx_part", "ifx_quiet_part", "ifx_bus", "ifx_gater", "ifx_lim_run", "ifx_drive", "ifx_ts_run",
+    # TAPE / SPIT's block coefficients (tapespit.c ifx_ts_block through FAR, once a block: tsvf_coef_k divides; "?":
+    # a profile with TAPE / SPIT off builds no ifx_ts_run)
+    "ifx_st", "ifx_part", "ifx_quiet_part", "ifx_bus", "ifx_gater", "ifx_lim_run", "ifx_drive", "ifx_ts_run?",
     # the USB input track (fx.c ut_mix): the computer's audio through FAR(ua_take), RAM code here (core/opt_core.c, HOT;
     # usb_audio_stream.c's, XIP, on Optimist), so the call stays in RAM; the checker cannot see a pointer's target
     "ut_mix",

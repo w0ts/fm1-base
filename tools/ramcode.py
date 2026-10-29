@@ -12,7 +12,8 @@ audio path), with the flash on; it may call, but only code that is in RAM too, s
     whose addresses that function loads (the likely targets: a pointer to XIP code is a call into XIP);
   - fm1.toml ram_code_allow = ["fn", ...] names the RAM functions whose calls out of RAM, or through a pointer, the
     app vouches for (a cold path, a pointer that only ever holds RAM code): each is printed with every build, and a
-    name that matches no function in RAM is an error (the list stays what the code is).
+    name that matches no function in RAM is an error (the list stays what the code is). "fn?" names one an app's
+    switch may leave out: absent it is said in a note, present it must be RAM code as any other.
 
 Constants are not checked: .app_ram code may read .rodata in XIP, so it does not run with the flash off (nothing
 but the flash driver does: its windows hold the interrupts off).
@@ -69,6 +70,9 @@ def check(syms, dis, allow=()):
         return [], []
     starts, names, insns = functions(dis)
     by_name = {n: i for i, n in enumerate(names)}
+    optional = {n[:-1] for n in allow if n.endswith("?")}
+    absent = sorted(n for n in optional if n not in by_name)       # ("fn?": not built here, the switch off)
+    allow = [n.rstrip("?") for n in allow if n.rstrip("?") not in absent]
 
     def in_ram(a):
         return rt[0] <= a < rt[1]
@@ -136,4 +140,6 @@ def check(syms, dis, allow=()):
         if used else ""
     notes = [f"app RAM code (.app_ram): {ar[1] - ar[0]} B, {len(roots)} functions, {len(seen)} with the RAM code they "
              f"call (.ram_text {rt[1] - rt[0]} B in all){allowed}"]
+    if absent:
+        notes.append(f"ram_code_allow: not in this build: {', '.join(absent)}")
     return errors, notes

@@ -32,6 +32,9 @@ run lock sh -c "$CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -o $OUT/lock_tes
 run shim_lock sh -c "$CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -o $OUT/shim_lock_test tests/shim_lock_test.c && $OUT/shim_lock_test"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
+# the half rendered aside (device/audio_commit.c) over a simulated audio DMA: copied only while its half is free
+run audio-commit sh -c "$CC -std=c99 -Wall -Wextra -Werror -O2 -Idevice -o $OUT/audio_commit_test \
+    tests/audio_commit_test.c && $OUT/audio_commit_test"
 run installer "$PY" tests/install_test.py
 # the build's check that a function is in the RAM code run, _rt_start.._rt_end wherever app.ld puts it (tools/ram_run.py)
 run ram-run "$PY" tests/ram_run_test.py

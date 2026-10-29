@@ -930,6 +930,7 @@ def build_web():
     page = page.replace("{{NAME}}", CONF.get("name", NAME)).replace("{{ID}}", NAME)
     (emu / "index.html").write_text(page)
     shutil.copy(web["worklet.js"], emu / "worklet.js")
+    shutil.copytree(SRC / "web" / "fonts", emu.parent / "fonts", dirs_exist_ok=True)   # the pages' fonts (../fonts/fonts.css), no outside host
     for f in ("app.js", "app_worklet.js"):        # the app's own part of the page and of the worklet, if any
         if (APP / "web" / "emu" / f).exists():
             shutil.copy(APP / "web" / "emu" / f, emu / f)

@@ -348,7 +348,7 @@ int32_t opt_ui_beat(void) { return (int32_t)clk_beat; }
 void opt_ui_clock_out(uint32_t on)
 {
 #if FELUCCA_MIDI_CLKOUT
-    clko_on = (uint8_t)(on != 0);
+    clko_on = on ? CLKO_BOTH : CLKO_OFF;   /* (the editor's switch: USB and BLE, the old ON) */
 #else
     (void)on;
 #endif

@@ -337,3 +337,21 @@ uint32_t plat_cpu_pct(void) { return audio_cpu_pct; }
 uint32_t plat_xruns(void) { return audio_xruns; }
 _Static_assert(PLAT_TICKS_PER_US == FM1_TICKS_PER_US, "plat_ticks24 is TIMER4's count");
 uint32_t plat_ticks24(void) { return fm1_ticks(); }
+/* the cache RAM (plat.h; felucca-bsp's fm1_cache_ram.h, set and tested in fm1_cstart): the ways less what .cache_ram
+ * holds (device/app.ld), 0 without the test passed */
+const struct plat_cache_ram *plat_cache_ram(void)
+{
+    static struct plat_cache_ram r;
+#if FM1B_CACHE_RAM
+    extern uint8_t _cr_start[], _cr_end[];
+    uint32_t all = fm1_cache_ram_bytes(), used = (uint32_t)(_cr_end - _cr_start);
+    r.ways = fm1_cr.ways;
+    r.status = fm1_cr.status;
+    r.dway = fm1_cr.dway;
+    r.iway = fm1_cr.iway;
+    r.bad_at = fm1_cr.bad_at;
+    r.bytes = all > used ? all - used : 0u;
+    r.base = r.bytes ? _cr_end : 0;
+#endif
+    return &r;
+}

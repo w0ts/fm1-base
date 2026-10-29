@@ -201,6 +201,14 @@ run flash-image sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -
 run host-flash-load sh -c "$H/template_host tests/flash_load.txt $H && \
     FM1B_FLASH=$H/flash2.bin $H/template_host tests/flash_boot.txt $H && \
     cmp $H/flash.bin $H/flash3.bin"
+# the crash history in flash (device/crashlog.c): the ring against a simulated NOR (filled past both sectors, a power
+# cut at every program and in an erase, the boot's dedup across restarts and power-offs, a save cut short not tried
+# again, the frames, the clear); then in the template's simulator (crash, restart, power, the request's frames and
+# "end N", the clear, a power-on with the dumped flash) read through tools/fm1_remote.py's parser and its --elf symbols
+run crashlog sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -o $OUT/crashlog_test tests/crashlog_test.c && \
+    $OUT/crashlog_test"
+run host-crashlog sh -c "mkdir -p $OUT/crashlog && $H/template_host tests/crashlog.txt $OUT/crashlog && \
+    $PY tests/crashlog_host_test.py $H/template_host $OUT/crashlog"
 # the SD card on the LCD's bus (device/sd.c) against a card in SPI mode byte by byte (start-ups, reads, writes, runs,
 # CRC failures, the read modes, the bus back with the LCD after every call); then an app on plat_sd_* in the host
 # simulator with a card image (tests/sd_app)

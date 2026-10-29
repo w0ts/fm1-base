@@ -181,6 +181,7 @@ The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
 macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 """
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -780,8 +781,9 @@ def build_app():
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     if CONF.get("boot_pack"):                     # the app decodes what the start copies into RAM (app_boot_unpack)
         flags.append("-DFM1B_BOOT_PACK=1")
+    flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)
     if CPU2:
-        flags += ["-DFM1_CPU1=1", f"-DFM1B_BUILD={build_id():#010x}u", f"-DFM1_CPU1_FALLBACK={int(bool(CONF.get('cpu2_fallback')))}"]
+        flags += ["-DFM1_CPU1=1", f"-DFM1_CPU1_FALLBACK={int(bool(CONF.get('cpu2_fallback')))}"]
         flags += cpu2_stack_flags()
     o2 = [f if f != "-Os" else "-O2" for f in flags]
     ir = CONF.get("ir_pass")                      # the app's pass over the IR (see the top)
@@ -1152,9 +1154,11 @@ def o2_objects(cc, base_flags, out):
     return [str(o) for _, o in jobs]
 
 
+@functools.cache
 def build_id():
     """this build's sources (the app's, fm1-base's, felucca-bsp's chip/) and version, hashed: the second core's bar
-    (fm1_cpu1_bar_build) is lifted for a new build"""
+    (fm1_cpu1_bar_build) is lifted for a new build, and each crash record in the flash history names the build that
+    kept it (device/crashlog.c; printed by every build: tools/fm1_remote.py crashes shows it)"""
     h = hashlib.sha1((VERSION or "").encode())
     for d in (APP, SRC / "device", SRC / "include", BSP / "chip"):
         for f in sorted(d.rglob("*")):
@@ -1216,7 +1220,7 @@ def build_host():
                          out / "o2")
     uac = [*usb_audio_flags(), *(f"-D{f}={os.environ[f]}" for f in ("FM1B_UAC", "FM1B_UAC_OUT") if os.environ.get(f) in ("0", "1"))]
     cmd = [os.environ.get("CC", "cc"), "-O2", "-ffp-contract=off", "-std=c99", "-Wall", "-Wextra",
-           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *uac, *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * (BLE and OWN and bool(CONF.get("bt_audio"))), *["-DFM1B_WIFI=1"] * WIFI, *wifi_own_flags(host=True),
+           "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), *uac, f"-DFM1B_BUILD={build_id():#010x}u", *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * (BLE and OWN and bool(CONF.get("bt_audio"))), *["-DFM1B_WIFI=1"] * WIFI, *wifi_own_flags(host=True),
            *(f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
            "-o", str(exe), str(SRC / "host" / "plat_host.c"), *o2_objs, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -1463,6 +1467,7 @@ def main():
     print(f"app      {OUT / (NAME + '.bin')}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
     print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
+    print(f"build    {build_id():08X}  (FM1B_BUILD: the build a crash record names, fm1_remote.py crashes)")
     return 0
 
 

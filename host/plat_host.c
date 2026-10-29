@@ -250,6 +250,7 @@ uint32_t plat_midi_ago(int port, int out)
 }
 static uint32_t midi_in_from;
 uint32_t plat_midi_in_from(void) { return midi_in_from; }
+uint32_t plat_midi_in_t24(void) { return plat_ticks24(); }   /* (the script's messages come in when they are read) */
 int plat_midi_in(uint32_t *pkt, int *port)       /* the script's "midi" (BLE-DEV's on cable 1, as radio.c has them) */
 {
     int p;

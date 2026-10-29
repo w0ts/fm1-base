@@ -25,6 +25,10 @@ run() {
 }
 run encoder sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -o $OUT/encoder_test tests/encoder_test.c && $OUT/encoder_test"
 run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test tests/trs_test.c && $OUT/trs_test"
+run trs-stamp sh -c "$CC -O2 -w -DFELUCCA_MIDI_STAMP=1 -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test_stamp tests/trs_test.c && $OUT/trs_test_stamp"
+# the MIDI-in stamps (FELUCCA_MIDI_STAMP): USB and the jack against a model of their registers on the TIMER5 schedule,
+# each stamp against its message's landing (within +-0.05 ms; the poll's and the read's stamps beside it)
+run midi-stamp sh -c "$CC -std=c11 -O2 -Wall -Wextra -Werror -Wno-unused-function -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/midi_stamp_test tests/midi_stamp_test.c && $OUT/midi_stamp_test"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

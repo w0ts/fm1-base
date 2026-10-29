@@ -14,6 +14,8 @@ import time
 
 import mido
 
+from fm1_ports import fm1_ports
+
 HDR = [0x7D, 0x46, 0x4C]
 PEEK, POKE, CLOCK = 40, 41, 42
 
@@ -27,7 +29,7 @@ def r35(b, i):
 
 
 def ask(cmd, args, timeout=3.0):
-    name = next((n for n in mido.get_output_names() if "FM-1" in n or "X0X" in n), None)
+    name = next(iter(fm1_ports(mido.get_output_names(), extra=("X0X",))), None)
     if not name:
         sys.exit("fm1_debug: no FM-1 MIDI port")
     with mido.open_input(name) as i, mido.open_output(name) as o:

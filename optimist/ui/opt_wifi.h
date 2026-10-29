@@ -145,7 +145,7 @@ static struct {
 static uint32_t wl_qp[WL_Q], wl_qt[WL_Q];
 static int64_t wl_qus[WL_Q];
 static volatile uint32_t wl_qw, wl_qr;
-static uint32_t wl_peers(void) { return plat_link_peers(); }
+static uint32_t wl_peers(void) { return link_mode != LINK_OFF ? plat_link_peers() : 0u; }   /* (LINK OFF: no session, 0) */
 /* 64-bit products in a function of their own (fm1-base's check of felucca-bsp docs/CPU.md: an inlined 32x32->64
  * multiply beside a load) */
 static __attribute__((noinline)) uint64_t wl_mul(uint64_t a, uint32_t b) { return a * b; }
@@ -182,7 +182,7 @@ static void opt_link_tick(void)
 }
 static void wl_clock(int64_t now)               /* Link's session as MIDI clock */
 {
-    int on = wl.ip.ip && plat_link_peers() > 0;
+    int on = wl.ip.ip && link_mode != LINK_OFF && plat_link_peers() > 0;
     if (!on) {
         if (wlk.started)
             (void)wl_q_push(0xFCu, now);
@@ -201,7 +201,7 @@ static void wl_clock(int64_t now)               /* Link's session as MIDI clock 
     for (;;) {
         uint32_t m = wlk.k / 3u, r = wlk.k - m * 3u;
         int64_t ub = (int64_t)wl_mul(m, 125000u) + (r == 0u ? 0 : r == 1u ? 41667 : 83333), t = plat_link_time_at(ub);
-        int play = plat_link_playing();
+        int play = link_mode == LINK_ONSS && plat_link_playing();   /* (LINK ON: tempo and beat, not the session's play / stop) */
         if (t > now + WL_AHEAD_US)
             break;
         if (t < now - 200000) {                 /* late: the main loop stalled, or the session moved */
@@ -232,7 +232,7 @@ static int32_t wl_mpb_now(void) { return 60000000 / (song.g[G_BPM] > 20 ? song.g
 static void wl_push_own(void)                   /* the FM-1's own PLAY / STOP and tempo, to the Link session */
 {
     int32_t mpb;
-    if (!wl.ip.ip || plat_link_peers() == 0 || sy.src == MSRC_LINK)
+    if (!wl.ip.ip || link_mode == LINK_OFF || plat_link_peers() == 0 || sy.src == MSRC_LINK)
         return;                                 /* (no session to tell yet, or Link itself drives us: no echo) */
     mpb = wl_mpb_now();
     if (mpb != wlk.own_mpb) {
@@ -240,7 +240,8 @@ static void wl_push_own(void)                   /* the FM-1's own PLAY / STOP an
         wlk.own_mpb = mpb;
     }
     if (song.playing != wlk.own_playing) {
-        plat_link_set_playing(song.playing);
+        if (link_mode == LINK_ONSS)             /* (LINK ON: our play / stop is not published) */
+            plat_link_set_playing(song.playing);
         wlk.own_playing = song.playing;
     }
 }
@@ -254,7 +255,7 @@ static void opt_wifi_poll(void)
         wlk.own_playing = song.playing;
         plat_link_set_tempo(wlk.own_mpb);       /* (the tempo a session of its own starts with) */
     }
-    plat_link_enable(1);                        /* (once on, nothing: wanted at every pass, so a restart of the stack finds it) */
+    plat_link_enable(link_mode != LINK_OFF);    /* (LINK OFF on the MIDI page: no session; once on, nothing: wanted at every pass, so a restart of the stack finds it) */
     opt_wifi_sync();
     plat_wifi_scanning(wc.scan_want);
     wl_clock(plat_link_now());

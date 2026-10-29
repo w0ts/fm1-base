@@ -63,6 +63,12 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              fault, a late job) restarts the FM-1, the reason in the crash record (Melodee's releases)
   cpu2_fallback = true       instead, one core after a failure, until power-off (FM1_CPU1_FALLBACK); FM1B_BUILD, a
                              hash of the sources, lifts that bar for a new build
+  cache_ram_ways = 2         2, 4 or 7 of the data cache's 8 ways of 4 KiB used as RAM at 0x01F28000 (FM1B_CACHE_RAM:
+                             felucca-bsp's chip/fm1_cache_ram.h, plat_cache_ram in plat.h): set and tested at the start,
+                             before anything uses them; a failed test puts the cache back and gives 0 bytes. The ways
+                             kept are the flash's data cache: fewer of them make big flash reads slower (7 as RAM: 57x
+                             over 16 KiB on an FM-1; 2 in daily use there). The host: a buffer of that size stands in.
+                             An app's own objects in section .cache_ram come first (the build checks they fit)
 Optional parts: only what an fm1.toml asks for is built in (Bluetooth, USB audio; an app's lib/touch by APP_TOUCH in
 app.h); the build prints what it has.
   ble_stack = "own"          with ble: Optimist's own Bluetooth stack (bt/: Henri David's, docs/bt/BLE-STACK.md;
@@ -558,6 +564,15 @@ def radio_units():
     return units, objs, libs
 
 
+def cache_ram_ways():
+    """fm1.toml cache_ram_ways: the data cache's ways used as RAM, 0 (none: off), 2, 4 or 7 (FM1B_CACHE_RAM=N in the
+    environment over it)"""
+    v = os.environ.get("FM1B_CACHE_RAM")
+    n = int(v) if v is not None and v.isdigit() else CONF.get("cache_ram_ways", 0)
+    if not isinstance(n, int) or isinstance(n, bool) or n not in (0, 2, 4, 7):
+        raise SystemExit(f"fm1.toml cache_ram_ways {n!r}: 0, 2, 4 or 7 (of the data cache's 8 ways)")
+    return n
+
 
 def build_app():
     flags = [*CFLAGS, *FPU, *inc(BSP / "chip", BSP / "boards" / "fm1", SRC / "device", SRC / "include", SRC / "lib", APP, GEN,
@@ -811,6 +826,12 @@ def check(img, syms, dis, rt):
     rt, bss, pool = (sym("_rt_end") - sym("_rt_start"), sym("_bss_end") - sym("_data_start"),
                      sym("_pool_end") - sym("_pool_start"))
     spare = 2048 if WIFI else 8192
+    cr_ways, cr_used = cache_ram_ways(), sym("_cr_end") - sym("_cr_start")   # the cache RAM's own objects (.cache_ram)
+    if cr_used > cr_ways * 4096:
+        errors.append(f".cache_ram {cr_used} B in {cr_ways} cache ways ({cr_ways * 4096} B; fm1.toml cache_ram_ways)")
+    elif cr_ways:
+        notes.append(f"cache RAM: {cr_ways} data-cache ways ({cr_ways * 4096} B), {cr_used} B of objects in .cache_ram, "
+                     f"{cr_ways * 4096 - cr_used} B for the app (plat_cache_ram, after its test at the start)")
     if os.environ.get("FM1B_POOL_SPARE", "").isdigit():   # an app's own build for itself (a demo build with mirror)
         spare = int(os.environ["FM1B_POOL_SPARE"])
     if "SRAM" in LAYOUT:                          # device/app.ld: one packed region, one budget
@@ -921,8 +942,11 @@ def build_id():
 
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
-    return [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"))
+    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"))
             if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+    if cache_ram_ways():
+        flags.append(f"-DFM1B_CACHE_RAM={cache_ram_ways()}")   # (the host and the web: plat_cache_ram's stand-in)
+    return flags
 
 
 def build_host():

@@ -113,7 +113,7 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              NAME_worklet.js in the worklet, each file saying what it does; a part's own needs come
                              with it; FM1B_EMU_NAME=1 for the C. FM1B_EMU="midi data" in the environment instead (""
                              for none). Without any, the page, the worklet and app.wasm are what they were
-  xdata2 = true              a fourth plat_data window, PLAT_XDATA2 0xFC000..0xFEFFF (FM1B_XDATA2: plat.h; Felucca's
+  xdata2 = true              one more plat_data window, PLAT_XDATA2 0xFC000..0xFEFFF (FM1B_XDATA2: plat.h; Felucca's
                              globals' sectors, for an app that was a Felucca firmware); the store's objects there are
                              refused to plat_data_erase / plat_data_write
 Optional parts: only what an fm1.toml asks for is built in (Bluetooth, USB audio; an app's lib/touch by APP_TOUCH in

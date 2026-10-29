@@ -148,10 +148,10 @@ each a whole number of 4 KiB sectors: `plat_file_t f = {A, B, BYTES}`. The curre
 whole; a write goes to the other one (its sectors erased as the data reaches them) and its head (32 bytes: magic, a
 sequence number, the size, the CRC-32 of the data, the head's own CRC-32) is written last, after the data was read
 back and checked, so a power cut leaves the old file current. `plat_file_size`, `_read`, `_data` (read in place),
-`_begin`, `_write`, `_commit`, `_delete` map one to one onto `app_file_*`. A file's room is BYTES - 32. In XDATA0 and
-XDATA1 (plat.h) the update loader clears a sector whose bytes 0xF00..0xF07 read as its record: a file's data could do so
-(2^-32 for a sector of random bytes, a CRC-16 and two letters); keep such files in the data area proper when that
-matters.
+`_begin`, `_write`, `_commit`, `_delete` map one to one onto `app_file_*`. A file's room is BYTES - 32. In XDATA0,
+XDATA1 and XDATA3 (plat.h) the update loader clears a sector whose bytes 0xF00..0xF07 read as its record: a file's data
+could do so (2^-32 for a sector of random bytes, a CRC-16 and two letters); keep such files in the data area proper
+when that matters.
 
 ## Size
 

@@ -10,7 +10,8 @@
  *                                  XDATA1's drum records 0xE5000 / 0xE6000) and its globals 0xFC000..0xFEFFF (the settings
  *                                  A/B, the autosave's copy B: plat.h's fourth window, PLAT_XDATA2, through app.c opt_glob_*)
  *   FL_STORE_OK                    Optimist's allow-list on top (hal/fm1_flash_map.h): never the SDK's VM, BTIF or USR
- *                                  area (0xE7000..0xFBFFF, which plat.h's XDATA1 includes), never key_mac
+ *                                  area (0xE7000..0xFBFFF: plat.h refuses the VM and BTIF, PLAT_SYS, and leaves
+ *                                  the USR area, its PLAT_XDATA3, to an app), never key_mac
  *   st_xip                         the banks read in place: plat_data, or the globals' own window (opt_glob_ptr)
  * Main loop only (plat.h: an erase or a write stops everything for a moment). */
 #pragma once
@@ -27,10 +28,11 @@ static uint8_t flash_ok;                        /* (persist_boot: fl_jedec_ram) 
 
 /* the globals' sectors 0xFC000..0xFEFFF: the app's unit (app.c opt_glob_*, core/opt_core.h) */
 
-/* where [off, off + n) is read in place: one of plat.h's windows, or the globals; 0 = neither (or across two) */
+/* where [off, off + n) is read in place: one of plat.h's windows or its system sectors (PLAT_READ_OK: UP_FM6's old
+ * copies at 0xE7000 / 0xE8000, read once by st_upf_move), or the globals; 0 = neither (or across two) */
 static const uint8_t *opt_flash_at(uint32_t off, uint32_t n)
 {
-    if (PLAT_DATA_OK(off, n))
+    if (PLAT_READ_OK(off, n))
         return plat_data(off);
     if (plat_in(off, n, OPT_GLOB_LO, OPT_GLOB_HI))
         return opt_glob_ptr(off);

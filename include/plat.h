@@ -86,6 +86,11 @@ void plat_usb_host(int on);
 int plat_usb_host_state(void);
 int plat_usb_host_msg(void);
 int plat_usb_lost(void);
+/* the connected device's product string, as it names itself ("Launchkey Mini MK3 MIDI"): ASCII, other characters as
+ * '?', at most 31; "" while nothing is connected, and for a device without one. Built for an app with
+ * APP_USB_HOST_NAME (below): felucca-bsp's FELUCCA_USB_HOST_NAME reads it at the connection (another app's image stays
+ * as it was, byte for byte). Main loop */
+const char *plat_usb_host_name(void);
 uint32_t plat_midi_count(int port, int out);   /* messages through port PORT_* since the start (out: sent), real-time (clock...) left out */
 uint32_t plat_midi_ago(int port, int out);     /* ms since the last one (0xFFFFFFFF: none yet) */
 
@@ -289,6 +294,7 @@ uint32_t plat_cpu2_stack(void);        /* how deep its stack (2816 B) has gone, 
  *   APP_SYSEX       int app_sysex(const uint8_t *p, uint32_t n)   a SysEx frame from USB the platform does not take
  *                   (p: the bytes between F0 and F7); 1 = the app's. Its answers: plat_sysex_send. Main loop
  *   APP_USB_CMD     void app_usb_cmd(const uint8_t *d, uint32_t n)   a frame in the update's framing (above). Main loop
+ *   APP_USB_HOST_NAME (no function) plat_usb_host_name is built (the USB host reads the device's product string)
  *   APP_REDRAW      void app_redraw(void)        draw the whole screen again at the next frame (the mirror lost a part)
  *   APP_MIRROR_TEST int app_mirror_test(int on)  the mirror's remote asks for a test session (on 1, off 0): 1 done
  *   APP_CSTART      void app_cstart(void)         first thing at a start, before the RAM is cleared and with nothing

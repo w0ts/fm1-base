@@ -18,6 +18,10 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   id_prefix = "FM-1_0"       package identity: dev builds are the prefix + "00", releases the prefix + XXYYZZ
   usb_manufacturer = "..."   the USB names (felucca-bsp FELUCCA_USB_MANUFACTURER / FELUCCA_USB_PRODUCT)
   usb_product = "..."
+  usb_name_fn = "fn"         the name of the app's function `const char *fn(void)` the USB product name is asked of each time a
+                             host reads it (FELUCCA_USB_NAME_FN; usb_product is the fallback; the split USB audio devices'
+                             names follow it): a name with something of this FM-1 in it (plat.h plat_dev_id,
+                             plat_dev_name: "FM1-XXXX"); the manufacturer stays usb_manufacturer's
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   o2_cflags = ["-DX=1"]      more flags for those; o2_include = ["lib/prefix.h"]: a header included first in each
@@ -649,6 +653,11 @@ def build_app():
     for key, macro in (("usb_manufacturer", "FELUCCA_USB_MANUFACTURER"), ("usb_product", "FELUCCA_USB_PRODUCT")):
         if CONF.get(key):
             flags.append(f'-D{macro}="{CONF[key]}"')
+    if CONF.get("usb_name_fn"):                   # the product name asked of the app at run time (felucca-bsp chip/usb.c)
+        fn = CONF["usb_name_fn"]
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", fn):
+            raise SystemExit(f"build: usb_name_fn = {fn!r}: a C function name")
+        flags.append(f"-DFELUCCA_USB_NAME_FN={fn}")
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     if CPU2:

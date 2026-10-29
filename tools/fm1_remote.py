@@ -38,6 +38,8 @@ import time
 
 import mido
 
+from fm1_ports import fm1_ports
+
 BTN = ["FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"]
 ENC = ["SELECT", "ALGO", "PRESET", "K1", "K2", "K3", "K4"]
 LC, LG, LW, SR = [0x7D, 0x4C, 0x43], [0x7D, 0x4C, 0x47], [0x7D, 0x4C, 0x57], [0x7D, 0x53, 0x52]
@@ -55,11 +57,11 @@ def nibbles(text):
 
 class FM1:
     def __init__(self):
-        names = [n for n in mido.get_output_names() if "FM-1" in n]
+        names = fm1_ports(mido.get_output_names())
         if not names:
             raise SystemExit("no FM-1 on USB-MIDI")
         self.out = mido.open_output(names[0])
-        self.inp = mido.open_input([n for n in mido.get_input_names() if "FM-1" in n][0])
+        self.inp = mido.open_input(fm1_ports(mido.get_input_names())[0])
         self.btn = self.keys = 0
         self.listening = False
 

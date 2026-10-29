@@ -246,6 +246,8 @@ def errors():
     dev = FakeFM1(image, name="My Interface")
     rc, out, err = cli(["--info", "--port", "my int"], dev)
     ok(rc == 0 and "FM-1_015" in out, "--port picks a port the default match skips")
+    rc, out, err = cli(["--info"], FakeFM1(image, name="FM1-1A2B"))
+    ok(rc == 0 and "FM-1_015" in out, "an FM-1 named FM1-XXXX (plat_dev_name): found without --port")
 
     t0 = time.monotonic()
     rc, out, err = cli([p, "--yes"], FakeFM1(image, unplug_after=2))

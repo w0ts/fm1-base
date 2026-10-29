@@ -42,8 +42,12 @@ run usb-audio sh -c "$CC -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-function
     -Ibsp/chip -DTEST_SPLIT=1 -DTEST_NAMES=1 -DTEST_FB=1 -DTEST_O24=1 -DTEST_HC=1 -DTEST_CH=4 -DTEST_24=1 \
     -o $OUT/uac_test_split bsp/tests/uac_test.c -lm && $OUT/uac_test_split"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
+# "FM1-XXXX": the four hex digits from the flash's unique ID (plat_uid.h), the name built from them
+run dev-name sh -c "$CC -std=c11 -Wall -Wextra -Werror -O1 -o $OUT/dev_name_test tests/dev_name_test.c && $OUT/dev_name_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py
+# the tools that find the FM-1 by its port name (tools/fm1_ports.py): FM1-XXXX, the old Optimist, not other gear
+run fm1-ports "$PY" tests/fm1_ports_test.py
 # the web installer's m-bootloader step (web/fm1ota.js installBoot) against a simulated FM-1, and finding the FM-1 by
 # its port (unusual names, the loader under a new name, M-VAVE's Open firmware, resume's check, package checksums)
 if command -v node >/dev/null 2>&1; then

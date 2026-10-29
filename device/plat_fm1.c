@@ -62,6 +62,8 @@ int plat_battery(void)                           /* (a level moves once the read
     return batt_bars;
 }
 
+#include "plat_hp.c"                       /* the headphone jack, debounced (plat_headphones) */
+
 /* LEDs: the picture is built off-line and copied one byte per column (Felucca: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker) */
 static uint8_t led_pos[FM1_NKEY];

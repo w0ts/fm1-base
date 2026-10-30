@@ -108,7 +108,7 @@ static inline __attribute__((always_inline)) uint32_t fm1_cnum_ram(void)
 }
 /* ---- the second core's jobs' stack (system/stackmark.h STK_C1_*: SYSTEM > INFO's RAM line): felucca-bsp's fm1_cpu1_ustack,
  * fm1.toml cpu2_stack bytes (FM1_CPU1_USTACK_BYTES, the build's flag; felucca-bsp's 2816 without), its lowest 256 B the guard;
- * plat_cpu2_stack how deep it went (0: CPU1 never started; the host: 0) */
+ * plat_cpu2_stack how deep it went (0: not marked this start, CPU1 never started or barred; the host: 0) */
 #if FELUCCA_DUAL >= 2
 #ifndef FM1_CPU1_USTACK_BYTES
 #define FM1_CPU1_USTACK_BYTES 2816u

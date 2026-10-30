@@ -31,6 +31,8 @@ run layout "$PY" tests/layout_test.py
 # ways: 2, 4 and 7 ways set, tested and zeroed; 0 and 8 nothing; a cache that never idles, masks not taken, a stuck bit
 # in each way: all put back, 0 bytes
 run cache-ram sh -c "$CC -std=c11 -O1 -Wall -Wextra -Werror -Ibsp/chip -o $OUT/cache_ram_test bsp/tests/cache_ram_test.c && $OUT/cache_ram_test"
+# the static stack check (tools/stack_depth.py, stack_ir.py): frames, the interrupts nested, indirect calls on the IR
+run stack_depth "$PY" tests/stack_depth_test.py
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

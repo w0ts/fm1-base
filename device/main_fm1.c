@@ -1136,7 +1136,6 @@ void fm1_cstart(void)
         *d = *s;
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;
-#endif
 #if FM1B_CACHE_RAM
     fm1_cache_ram_init(FM1B_CACHE_RAM);             /* data-cache ways as RAM (felucca-bsp's fm1_cache_ram.h): its RAM
                                                      * code is in place now, the interrupts still off, the second core

@@ -27,6 +27,8 @@ run encoder sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -o $OUT/encoder_test t
 run trs sh -c "$CC -O2 -w -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/trs_test tests/trs_test.c && $OUT/trs_test"
 # the packed SRAM (device/app.ld) as tools/build.py reads it: one region, RAM code first, then data, bss, the pool
 run layout "$PY" tests/layout_test.py
+# the static stack check (tools/stack_depth.py, stack_ir.py): frames, the interrupts nested, indirect calls on the IR
+run stack_depth "$PY" tests/stack_depth_test.py
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
 run fastmath sh -c "$CC -O2 -w -o $OUT/fastmath_test tests/fastmath_test.c -lm && $OUT/fastmath_test"
 run installer "$PY" tests/install_test.py

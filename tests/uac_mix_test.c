@@ -63,7 +63,7 @@ static void block(uint32_t gain, uint32_t master, int full, uint32_t play, int32
 #if FELUCCA_UAC_OUT
     feed(N);
 #endif
-    uac_mix(o, N, gain, master, full, play);
+    uac_mix(o, N, gain, master, full, play, 0);
     for (i = 1; i < N; i++)
         check(o[2u * i] == o[0] && o[2u * i + 1u] == o[1], "a block's frames alike", o[2u * i], o[0]);
     *l = o[0];
@@ -86,7 +86,7 @@ static void slide(uint32_t g0, uint32_t gain, uint32_t master)
 #if FELUCCA_UAC_OUT
     feed(N);
 #endif
-    uac_mix(o, N, gain, master, 1, 0);
+    uac_mix(o, N, gain, master, 1, 0, 0);
     check(near(o[0], (long)APP * g0 / 4096 + d), "slide: the first frame a step from the last block's", o[0],
           (long)APP * g0 / 4096 + d);
     check(near(o[2u * (N - 1u)], (long)APP * gain / 4096), "slide: the last frame at the new gain", o[2u * (N - 1u)],
@@ -122,6 +122,24 @@ int main(void)
     block(1024, 2048, 0, 4096, &l, &r, &rec);   /* MASTER at half its travel: the square, a quarter (the app's own
                                                  * render would be at 1024 too: here it is given at full, as a stand-in) */
     check(near(l, APP + PC * 64), "MASTER half: the computer at a quarter", l, APP + PC * 64);
+
+    {   /* routed (plat_usb_audio_route): the render took the computer's audio before the app's own render, at full level;
+         * uac_mix adds none after it and does not read the ring again, the recording still the app alone */
+        int32_t o[2u * N];
+        uint32_t i, r0, w = ua_w;
+        UA_RING();
+        for (i = 0; i < N; i++)
+            o[2u * i] = o[2u * i + 1u] = APP;
+        feed(N);
+        r0 = uo_r;
+        uac_mix(o, N, 4096, 4096, 0, 4096, 1);
+        check(o[0] == APP && o[1] == APP && o[2u * (N - 1u)] == APP, "routed: nothing added after the render", o[0], APP);
+        check(uo_r == r0, "routed: the ring not read again", (long)(uo_r - r0), 0);
+        check((int16_t)(ua_ring[w & (UA_N - 1u)] & 0xFFFFu) == rec_app, "routed: the recording, the app alone",
+              (int16_t)(ua_ring[w & (UA_N - 1u)] & 0xFFFFu), rec_app);
+        ua_r = ua_w;
+        uac_play(o, N, 0);              /* (the computer's frames of this block read, as the render before the app did) */
+    }
 
     {   /* muted: nothing added, and the ring read as at any level */
         uint32_t r0 = uo_r, r1, under = uo.underruns;

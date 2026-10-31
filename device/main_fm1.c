@@ -15,6 +15,11 @@ extern uint8_t _app_xip_end[];
 #define FS 44100u
 #define REND_FRAMES HALF_FRAMES             /* app_render's frames per call */
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
+#if FELUCCA_UAC_OUT
+static int32_t uac_in[2u * REND_FRAMES] __attribute__((section(".pool")));   /* the computer's audio for the app
+                                                                               * (plat_usb_audio_route); in the pool,
+                                                                               * not the RAM apps count on */
+#endif
 
 #define DBG_MAGIC 0x44424731u                       /* "DBG1": read with `fm1t memr` */
 struct fm1b_dbg {
@@ -76,6 +81,11 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
         const int full = 0;
 #endif
         for (k = 0; k < HALF_FRAMES; k += REND_FRAMES) {
+#if FELUCCA_UAC_OUT
+            const int route = uac_route != 0;       /* (read once: app_render may change it, for the next) */
+#else
+            const int route = 0;
+#endif
             if (radio_quiet) {                        /* the radio calibrating: no flash reads (radio.c) */
 #ifdef APP_QUIET
                 app_quiet(o + 2u * k, REND_FRAMES);
@@ -85,12 +95,25 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
                     o[2u * k + i] = 0;
 #endif
             } else {
+#if FELUCCA_UAC_OUT
+                if (route) {                        /* the computer's audio the app's input, at full level */
+                    uint32_t i;
+                    for (i = 0; i < 2u * REND_FRAMES; i++)
+                        uac_in[i] = 0;
+                    uac_play(uac_in, REND_FRAMES, 4096u);
+                    uac_in_now = uac_in;
+                }
+#endif
                 app_render(o + 2u * k, REND_FRAMES, full ? 4096u : gain);
+#if FELUCCA_UAC_OUT
+                uac_in_now = 0;
+#endif
             }
             if (radio_quiet)
                 continue;
-            uac_mix(o + 2u * k, REND_FRAMES, gain, master_pos, full, usb_play_q12);   /* the USB
-                                                     * recording, then the computer's audio, then MASTER if full */
+            uac_mix(o + 2u * k, REND_FRAMES, gain, master_pos, full, usb_play_q12, route);   /* the USB
+                                                     * recording, then the computer's audio (not if routed: the app
+                                                     * had it), then MASTER if full */
 #if FM1B_BT_AUDIO
 #ifdef APP_BT_FRAMES
             bta_streamed = (uint8_t)own_bta_feed(app_bt_frames(o + 2u * k, REND_FRAMES), REND_FRAMES);   /* (the app's

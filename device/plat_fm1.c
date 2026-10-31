@@ -379,6 +379,11 @@ int16_t *plat_usb_ch(uint32_t off, uint32_t *run) { return uac_ch_frame(off, run
 #else
 int16_t *plat_usb_ch(uint32_t off, uint32_t *run) { (void)off; *run = 0; return 0; }
 #endif
+/* USB audio output as the app's input: the route asked, and the block app_render may read (main_fm1.c render_block) */
+static volatile uint8_t uac_route;
+static const int32_t *uac_in_now;
+void plat_usb_audio_route(int on) { uac_route = (uint8_t)(on != 0); }
+const int32_t *plat_usb_audio_in(void) { return uac_in_now; }
 void plat_yield(void)
 {
     ble_poll();                                   /* Bluetooth: its notifications go out while the screen draws */

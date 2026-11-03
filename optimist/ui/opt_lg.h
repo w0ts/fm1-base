@@ -20,7 +20,7 @@ static char *opt_lg_put(char *q, const char *t, uint32_t v)
 }
 void app_log(void (*line)(const char *t))
 {
-    char b[44], *q;
+    char b[64], *q;                                 /* (a line's room: 44 before 2026-11-03, one short of the link line) */
 #if FELUCCA_CACHE_RAM
     uint32_t cr = fm1_cache_ram_free();
 #else
@@ -52,6 +52,11 @@ void app_log(void (*line)(const char *t))
     q = opt_lg_put(b, "sync src ", sy.src);
     q = opt_lg_put(q, " lk cnt ", sy_pr[MSRC_LINK].cnt);
     opt_lg_put(q, " q ", wl_qw - wl_qr);
+    line(b);
+    q = opt_lg_put(b, "sync play ", song.playing);   /* (AUTO chooses only stopped and not armed: clock_sync.c sync_select) */
+    q = opt_lg_put(q, " arm ", sy.arm);
+    q = opt_lg_put(q, " mode ", (uint32_t)song.g[G_SYNC]);
+    opt_lg_put(q, " lk age ", SYNC_NOW() - sy_pr[MSRC_LINK].last);   /* (ticks24 since its last F8: present while < SY_LOST) */
     line(b);
 #endif
 #if FELUCCA_UNDO_HISTORY

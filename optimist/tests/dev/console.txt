@@ -11,7 +11,7 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-turn SELECT 1
+turn SELECT 3                                           # (General after BT MIDI and BT AUDIO since 2026-11-03: SERIAL its fourth card)
 wait 100
 expect gv4 0
 turn K4 1

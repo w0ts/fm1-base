@@ -14,7 +14,7 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-spin SELECT 4                                           # (General (METERS on its page: GL_JOIN), BT MIDI, BT AUDIO, then WI-FI: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
+spin SELECT 3                                           # (BT MIDI, BT AUDIO, then WI-FI: Bluetooth and Wi-Fi first since 2026-11-03, General after)
 wait 100
 cells
 # MODE AUTO (OFF, MAN, AUTO ...): the radio starts on Bluetooth's, the page lists what it hears

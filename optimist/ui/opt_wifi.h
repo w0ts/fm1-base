@@ -220,6 +220,10 @@ static void wl_clock(int64_t now)               /* Link's session as MIDI clock 
             if (!wl_q_push(0xFAu, t))
                 break;
             wlk.started = 1;
+        } else if (link_hop && wlk.k % 96u == 0u) {       /* a hop asked (clock_sync.c: AUTO found Link while playing, or
+                                                           * PLAY while following it): a START on the session's bar line */
+            if (!wl_q_push(0xFAu, t))
+                break;
         } else if (!play && wlk.started) {
             if (!wl_q_push(0xFCu, t))
                 break;

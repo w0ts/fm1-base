@@ -11,9 +11,9 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-spin SELECT 2
+spin SELECT 1
 wait 100
-# BT MIDI MODE MAN (SYSTEM: General (METERS on its page where it fits: GL_JOIN), then BT MIDI; no KEYS page since fm1-next b9a394bc, no DEBUG page since c6aef4ee): the radio
+# BT MIDI MODE MAN (SYSTEM: INFO, then BT MIDI: Bluetooth and Wi-Fi first since 2026-11-03; no KEYS page since fm1-next b9a394bc, no DEBUG page since c6aef4ee): the radio
 # starts, advertises
 spin K1 1
 wait 1500

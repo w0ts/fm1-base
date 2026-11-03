@@ -8,7 +8,7 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-turn SELECT 1                                           # (SERIAL: General's fourth card, GL_JOIN; METERS then on its own page)
+turn SELECT 4                                           # (SERIAL: General's fourth card; General after SD CARD and SETTINGS since 2026-11-03)
 wait 100
 expect gv4 0
 turn K4 1

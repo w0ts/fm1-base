@@ -16,7 +16,7 @@ tap GLO
 wait 100
 spin SELECT 3                                           # (BT MIDI, BT AUDIO, then WI-FI: Bluetooth and Wi-Fi first since 2026-11-03, General after)
 wait 100
-# MODE AP AUTO (OFF, MAN, AUTO, JAM JOIN, JAM HOST, AP MAN, AP AUTO): no typed key
+# MODE AP AUTO (OFF, MAN, AUTO, JAM, AP MAN, AP AUTO; the last turn stops at the end): no typed key
 spin K1 1
 wait 100
 spin K1 1
@@ -129,12 +129,15 @@ expect ap_key 0
 expect ap_key_default 1
 expect ap_key_sum 777
 expect ap_state 3
-# MODE JAM HOST (2026-11-03, the user: "a jam AP and jam (client) mode"): the access point on the automatic name and its
-# default password only, Link in force whatever SYNC > LINK says; SAVE shows the password (never the entry)
+# MODE JAM (2026-11-03, one JAM mode, stored 7): no FM-1 of its group heard, it becomes the group's access point after its
+# settle time (6 to 16 s and a sweep, device/wifi_own.c JA_SETTLE_MS) on the automatic name and its default password only,
+# Link in force whatever SYNC > LINK says; SAVE shows the password (never the entry)
 spin K1 -1
 wait 3500
 cells
-expect wifi_mode 6
+expect wifi_mode 7
+wait 20000
+cells
 expect ap_state 3
 expect ap_key 0
 expect ap_key_default 1
@@ -142,9 +145,7 @@ expect link_eff >0
 tap SAVE
 wait 200
 msg KEY
-# MODE AUTO again (JAM HOST, JAM JOIN, AUTO): the access point gone, the station manager back
-spin K1 -1
-wait 200
+# MODE AUTO again (JAM, AUTO): the access point gone, the station manager back
 spin K1 -1
 wait 500
 expect wifi_mode 1

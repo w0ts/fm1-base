@@ -196,11 +196,11 @@ static int of_on(uint32_t f)
 #endif
 #if FELUCCA_WIFI
     case OF_WIFI:
-        return wn_st.mode != WN_MODE_OFF && wn_st.mode != WN_MODE_AP && wn_st.mode != WN_MODE_AP_MAN && wn_st.mode != WN_MODE_JAM_HOST;
+        return wn_st.mode != WN_MODE_OFF && wn_st.mode != WN_MODE_AP && wn_st.mode != WN_MODE_AP_MAN && !plat_wifi_jam_host();   /* (JAM: hosting is the access point's, joining is Link's) */
 #endif
 #if FELUCCA_WIFI_AP
     case OF_AP:
-        return wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || wn_st.mode == WN_MODE_JAM_HOST;
+        return wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || plat_wifi_jam_host();
 #endif
 #if FELUCCA_EDITOR
     case OF_EDITOR:

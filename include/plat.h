@@ -362,12 +362,15 @@ int plat_net_task(void (*fn)(void *), void *arg, const char *name);   /* a task 
 #define FM1B_WIFI_OWN 0
 #endif
 #define PLAT_WIFI_STORE_SIZE 336u
-enum { WIFI_MODE_OFF, WIFI_MODE_AUTO, WIFI_MODE_MAN, WIFI_MODE_AP, WIFI_MODE_AP_MAN, WIFI_MODE_JAM, WIFI_MODE_JAM_HOST };   /* JAM_HOST: AP with the automatic name and its default password only, for JAM to join */   /* JAM: AUTO, and an Optimist access point (FM1-xxxx, its password wifi_ap_default_key's) is joined when no saved network is heard */
+enum { WIFI_MODE_OFF, WIFI_MODE_AUTO, WIFI_MODE_MAN, WIFI_MODE_AP, WIFI_MODE_AP_MAN, WIFI_MODE_JAM, WIFI_MODE_JAM_HOST, WIFI_MODE_JAM_AUTO };   /* JAM_AUTO: JAM that becomes the host by itself when no access point of its group is heard (plat_wifi_jam_host says which it is now) */   /* JAM_HOST: AP with the automatic name and its default password only, for JAM to join */   /* JAM: AUTO, and an Optimist access point (FM1-xxxx, its password wifi_ap_default_key's) is joined when no saved network is heard */
 void plat_wifi_mode(int mode);         /* OFF: nothing runs (the radio, once started, stays up); MAN: joins when asked;
                                         * AUTO: and the best saved network heard, at the start and whenever none is
                                         * joined; AP, AP_MAN: the FM-1 is the access point (wifi_ap = true, below).
                                         * Kept */
 int plat_wifi_get_mode(void);
+int plat_wifi_group(void);             /* the JAM group, 1..9 (an Optimist access point: FM1-xxxx, group 1, or FM1-xxxx-N, 2..9; a unit hosts / joins its own group only) */
+void plat_wifi_set_group(int g);       /* 1..9, else ignored; kept with the Wi-Fi record */
+int plat_wifi_jam_host(void);          /* MODE JAM_AUTO: 1 hosting now (the access point is up or coming up), 0 joining / looking; MODE JAM HOST: 1; else 0 */
 /* the manager's step (finer than plat_wifi_state), and why the last join failed */
 enum { WIFI_STEP_OFF, WIFI_STEP_RADIO, WIFI_STEP_IDLE, WIFI_STEP_SCAN, WIFI_STEP_KEY, WIFI_STEP_AUTH, WIFI_STEP_ASSOC,
        WIFI_STEP_HANDSHAKE, WIFI_STEP_UP, WIFI_STEP_FAIL, WIFI_STEP_JOINED, WIFI_STEP_PRE };   /* KEY: the key made from the

@@ -390,12 +390,21 @@ static void wa_stop(void)                               /* everyone told, the ke
     wa.st = WA_OFF;
 }
 
+static uint32_t wa_nclients(void)                        /* the stations associated now */
+{
+    uint32_t i, n = 0;
+    if (!WA_MEM() || wa.st == WA_OFF)
+        return 0;
+    for (i = 0; i < WIFI_AP_CLIENTS; i++)
+        n += wa.m->ap.clients[i].state == WIFI_AP_CL_ASSOC && wa.m->keyed[i];
+    return n;
+}
 /* ---- the mode's network (the record's wn_st.ap) */
 static uint32_t wa_name(uint8_t *out)                   /* the name chosen, else FM1- and the radio address's last 4 digits */
 {
     static const char H[] = "0123456789ABCDEF";
     uint8_t mac[6];
-    if (wn_st.ap.ssid_len && wn_st.ap.ssid_len <= WN_SSID_MAX && wn_st.mode != WN_MODE_JAM_HOST) {   /* (JAM HOST: always the
+    if (wn_st.ap.ssid_len && wn_st.ap.ssid_len <= WN_SSID_MAX && own_mode() != WN_MODE_JAM_HOST) {   /* (JAM HOST: always the
                                                          * automatic name, the one JAM looks for, wifi_own.c wc_jam_pick) */
         memcpy(out, wn_st.ap.ssid, wn_st.ap.ssid_len);
         return wn_st.ap.ssid_len;
@@ -404,6 +413,10 @@ static uint32_t wa_name(uint8_t *out)                   /* the name chosen, else
     out[0] = 'F', out[1] = 'M', out[2] = '1', out[3] = '-';
     out[4] = (uint8_t)H[mac[4] >> 4], out[5] = (uint8_t)H[mac[4] & 15u];
     out[6] = (uint8_t)H[mac[5] >> 4], out[7] = (uint8_t)H[mac[5] & 15u];
+    if (own_mode() == WN_MODE_JAM_HOST && own_jam_group() > 1u) {   /* (JAM HOST: its group 2..9 after, FM1-xxxx-N; group 1 plain) */
+        out[8] = '-', out[9] = (uint8_t)('0' + own_jam_group());
+        return 10u;
+    }
     return 8u;
 }
 static uint8_t wa_auto_ch;                              /* CHANNEL AUTO: the one chosen at this start (0: none yet) */
@@ -433,8 +446,8 @@ static uint32_t wa_pick_channel(const struct wn_scan *t)
     return best;
 }   /* (the record's: the AP may
                                                                                           * still be on the one before) */
-static int wa_mode_ap(void) { return wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || wn_st.mode == WN_MODE_JAM_HOST; }
-static int wa_wanted(void) { return wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_JAM_HOST || (wn_st.mode == WN_MODE_AP_MAN && wa.user_on); }
+static int wa_mode_ap(void) { return own_mode() == WN_MODE_AP || own_mode() == WN_MODE_AP_MAN || own_mode() == WN_MODE_JAM_HOST; }
+static int wa_wanted(void) { return own_mode() == WN_MODE_AP || own_mode() == WN_MODE_JAM_HOST || (own_mode() == WN_MODE_AP_MAN && wa.user_on); }
 static void wa_pmk_start(const char *pass, uint32_t pl);
 static void wa_begin_mode(void)                         /* the record's network: no key job, the radio next */
 {
@@ -442,7 +455,7 @@ static void wa_begin_mode(void)                         /* the record's network:
     wa.save_key = 0;
     wa.ssid_len = (uint8_t)wa_name(wa.ssid);
     wa.ch = (uint8_t)wa_channel();
-    if (wn_st.ap.set == 1u && wn_st.mode != WN_MODE_JAM_HOST) {   /* a typed password: its key is kept (JAM HOST: never, the default one) */
+    if (wn_st.ap.set == 1u && own_mode() != WN_MODE_JAM_HOST) {   /* a typed password: its key is kept (JAM HOST: never, the default one) */
         memcpy(wa.pmk, wn_st.ap.pmk, 32);
         wa.st = WA_RADIO;
         return;
@@ -477,7 +490,7 @@ static uint32_t wa_pass_len(const char *pass)           /* a WPA2 passphrase: 8 
 static void wa_poll(void)                               /* once a main-loop pass: one step */
 {
     uint32_t now = own_ms(), i;
-    if (wn_st.mode != WN_MODE_AP_MAN)
+    if (own_mode() != WN_MODE_AP_MAN)
         wa.user_on = 0;                                 /* (AP MAN's own switch is off once another mode is chosen) */
 
     if (wa.by_mode && !wa_wanted() && wa.st != WA_OFF && !(wa.st == WA_PMK && wa.save_key)) {   /* MODE left AP, or AP MAN
@@ -487,7 +500,7 @@ static void wa_poll(void)                               /* once a main-loop pass
         wa.by_mode = (uint8_t)wa_mode_ap();
         return;
     }
-    if (!wa.by_mode && wa.st != WA_OFF && wn_st.mode != WN_MODE_OFF) {   /* a start of one not kept: until a mode is chosen */
+    if (!wa.by_mode && wa.st != WA_OFF && own_mode() != WN_MODE_OFF) {   /* a start of one not kept: until a mode is chosen */
         wa_stop();
         return;
     }
@@ -595,10 +608,10 @@ int plat_wifi_ap_set(const uint8_t *ssid, uint32_t len, const char *pass)
 {
     uint32_t pl = wa_pass_len(pass);
     own_store_load();
-    if (len > WN_SSID_MAX || (len && !ssid) || !pl || wn_st.mode == WN_MODE_JAM_HOST)
+    if (len > WN_SSID_MAX || (len && !ssid) || !pl || own_mode() == WN_MODE_JAM_HOST)
         return -1;                                      /* (JAM HOST: its password is the default one, never typed) */
     wa_stop();
-    if (wn_st.mode == WN_MODE_AP_MAN)
+    if (own_mode() == WN_MODE_AP_MAN)
         wa.user_on = 1;                                 /* (a password typed starts it) */
     wa.by_mode = 1;
     wa.save_key = 1;
@@ -638,7 +651,7 @@ int plat_wifi_ap_name(char *name)
     }
     return (int)n;
 }
-int plat_wifi_ap_has_key(void) { own_store_load(); return wn_st.ap.set == 1u && wn_st.mode != WN_MODE_JAM_HOST; }
+int plat_wifi_ap_has_key(void) { own_store_load(); return wn_st.ap.set == 1u && own_mode() != WN_MODE_JAM_HOST; }
 int plat_wifi_ap_default_key(char *out)
 {
     uint8_t b[WN_SSID_MAX];
@@ -646,7 +659,7 @@ int plat_wifi_ap_default_key(char *out)
     own_store_load();
     n = wa.st != WA_OFF && !wa.by_mode ? wa.ssid_len : wa_name(b);
     wifi_ap_default_key(wa.st != WA_OFF && !wa.by_mode ? wa.ssid : b, n, out);
-    return wn_st.ap.set != 1u || wn_st.mode == WN_MODE_JAM_HOST;   /* (JAM HOST: the default one, whatever is kept) */
+    return wn_st.ap.set != 1u || own_mode() == WN_MODE_JAM_HOST;   /* (JAM HOST: the default one, whatever is kept) */
 }
 void plat_wifi_ap_forget(void)
 {
@@ -659,7 +672,7 @@ void plat_wifi_ap_forget(void)
 int plat_wifi_ap_run(int on)
 {
     own_store_load();
-    if (wn_st.mode != WN_MODE_AP_MAN)
+    if (own_mode() != WN_MODE_AP_MAN)
         return -1;
     wa.user_on = (uint8_t)(on != 0);
     return 0;
@@ -668,7 +681,7 @@ int plat_wifi_ap_start(const uint8_t *ssid, uint32_t len, const char *pass, int 
 {
     uint32_t pl = wa_pass_len(pass);
     own_store_load();
-    if (wn_st.mode != WN_MODE_OFF || len < 1u || len > WN_SSID_MAX || !ssid || !pl || ch < 1 || ch > 13)
+    if (own_mode() != WN_MODE_OFF || len < 1u || len > WN_SSID_MAX || !ssid || !pl || ch < 1 || ch > 13)
         return -1;
     wa_stop();
     wc_enable(0);                                       /* (the station's manager steps aside) */

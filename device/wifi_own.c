@@ -39,7 +39,8 @@ _Static_assert(sizeof(struct plat_wifi_ap) == sizeof(struct wn_ap), "plat.h plat
 _Static_assert(PLAT_WIFI_STORE_SIZE == WN_STORE_SIZE, "plat.h PLAT_WIFI_STORE_SIZE: wifi_nets.h WN_STORE_SIZE");
 _Static_assert((int)WIFI_MODE_OFF == (int)WN_MODE_OFF && (int)WIFI_MODE_AUTO == (int)WN_MODE_AUTO && (int)WIFI_MODE_MAN == (int)WN_MODE_MAN &&
                (int)WIFI_MODE_AP == (int)WN_MODE_AP && (int)WIFI_MODE_AP_MAN == (int)WN_MODE_AP_MAN &&
-               (int)WIFI_MODE_JAM == (int)WN_MODE_JAM && (int)WIFI_MODE_JAM_HOST == (int)WN_MODE_JAM_HOST,
+               (int)WIFI_MODE_JAM == (int)WN_MODE_JAM && (int)WIFI_MODE_JAM_HOST == (int)WN_MODE_JAM_HOST &&
+               (int)WIFI_MODE_JAM_AUTO == (int)WN_MODE_JAM_AUTO,
                "plat.h WIFI_MODE_*: wifi_nets.h's");
 
 #define WC_CH_MS 150u                    /* one channel's listening in a scan */
@@ -499,8 +500,72 @@ static struct {
 static struct wn_scan wc_tab;                     /* the APs heard */
 #include "wifi_own_tune.c"                       /* the tuning on the radio (wifi/wifi_tune.h) */
 
-static int wc_auto(void) { return wn_st.mode == WN_MODE_AUTO || wn_st.mode == WN_MODE_JAM; }   /* (saved networks joined by themselves) */
-static int wc_mode_off(void) { return wn_st.mode == WN_MODE_OFF || wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || wn_st.mode == WN_MODE_JAM_HOST; }
+/* MODE JAM AUTO: the stored mode is JAM_AUTO, the one in force is JAM (looking for an access point of the group, joining it) or JAM_HOST
+ * (this unit is the access point). A unit starts as JAM; when nothing is joined and none of its group is heard after a settle time
+ * (6 to 16 s, the longer the higher the radio address's last 16 bits: the lowest address hosts first) and a full sweep, it becomes the
+ * host. A host with no client for a while looks once (a "peek": JAM for one sweep), so two units that both became hosts at the
+ * same moment find each other: the first to look joins the other (the user, 2026-11-03: "elect a master ... group setting") */
+#define JA_SETTLE_MS 6000u               /* the settle time's least; the address adds up to JA_SPREAD_MS */
+#define JA_SPREAD_MS 10000u
+#define JA_PEEK_MS 15000u                /* a host without a client looks after this (plus the address's low 3 bits, in seconds) */
+static struct {
+    uint8_t on, host, peek;              /* in JAM AUTO; hosting now; the look in hand */
+    uint8_t had_client;                  /* a client has been seen since the host started: no peeking */
+    uint32_t t0, sw_seen, sw_n;          /* ms of the settle / host start; the manager's wc.sweeps last seen (it restarts at 0 with the manager); the full sweeps counted since t0 */
+} ja;
+static uint8_t own_mode(void) { return wn_st.mode == WN_MODE_JAM_AUTO ? (ja.host ? WN_MODE_JAM_HOST : WN_MODE_JAM) : wn_st.mode; }
+static uint32_t own_jam_group(void) { return wn_st.ap.grp >= 1u && wn_st.ap.grp <= WN_GROUPS ? wn_st.ap.grp : 1u; }
+static uint32_t ja_id16(void)
+{
+    uint8_t mac[6];
+    own_mac(mac);
+    return ((uint32_t)mac[4] << 8) | mac[5];
+}
+#if FM1B_WIFI_AP
+static uint32_t wa_nclients(void);       /* (wifi_own_ap.c) the stations associated now */
+#else
+static uint32_t wa_nclients(void) { return 0; }
+#endif
+static int wc_jam_pick(void);
+static void ja_poll(uint32_t now)
+{
+    if (wn_st.mode != WN_MODE_JAM_AUTO) {
+        ja.on = ja.host = ja.peek = 0;
+        return;
+    }
+    if (!ja.on) {                         /* just chosen: joining first */
+        ja.on = 1, ja.host = ja.peek = ja.had_client = 0;
+        ja.t0 = now, ja.sw_n = 0;
+    }
+    if (wc.sweeps != ja.sw_seen) {        /* (a sweep ended; or the manager restarted: its count began again) */
+        ja.sw_n += wc.sweeps > ja.sw_seen ? wc.sweeps - ja.sw_seen : wc.sweeps;
+        ja.sw_seen = wc.sweeps;
+    }
+    if (ja.host) {
+        if (wa_nclients())
+            ja.had_client = 1;
+        if (!ja.had_client && now - ja.t0 >= JA_PEEK_MS + (ja_id16() & 7u) * 1000u) {
+            ja.host = 0, ja.peek = 1;     /* look once: the access point goes off, the manager sweeps */
+            ja.t0 = now, ja.sw_n = 0;
+        }
+        return;
+    }
+    if (wl.joined || (wc.st >= WC_PMK && wc.st <= WC_HS) || wc.st == WC_PRE || wc.st == WC_LINK) {
+        ja.t0 = now, ja.sw_n = 0, ja.peek = 0;   /* on a network (or joining one): not the host */
+        return;
+    }
+    if (wc.st == WC_OFF || wc.st == WC_RADIO)
+        ja.t0 = now, ja.sw_n = 0;                       /* (the radio's start is not looking) */
+#if FM1B_WIFI_AP                                        /* (no access point built: JAM AUTO stays JAM, it has nothing to host with) */
+    else if (ja.sw_n >= 2u && wc_jam_pick() < 0 &&
+             (ja.peek || now - ja.t0 >= JA_SETTLE_MS + ja_id16() * JA_SPREAD_MS / 65536u)) {
+        ja.host = 1, ja.peek = 0, ja.had_client = 0;    /* two full sweeps heard none of the group's: this unit hosts */
+        ja.t0 = now;
+    }
+#endif
+}
+static int wc_auto(void) { return own_mode() == WN_MODE_AUTO || own_mode() == WN_MODE_JAM; }   /* (saved networks joined by themselves) */
+static int wc_mode_off(void) { uint8_t m = own_mode(); return m == WN_MODE_OFF || m == WN_MODE_AP || m == WN_MODE_AP_MAN || m == WN_MODE_JAM_HOST; }
 static void wc_to(uint32_t st) { wc.st = (uint8_t)st; wc.t0 = own_ms(); }
 static void wc_fail(uint32_t why) { wc.fail = (uint8_t)why; wc.fails++; wc_to(WC_FAIL); wc.t_retry = own_ms(); }
 static void wc_send(uint32_t len) { own_tx(len, 1u, 1u); }
@@ -646,23 +711,26 @@ static int wc_auto_pick(int *slot)                /* AUTO: the strongest AP of t
     }
     return -1;
 }
-/* MODE JAM: an Optimist access point is named FM1- and four capital hex digits (the automatic name of device/wifi_own_ap.c wa_name) */
-static int wc_is_optimist_name(const uint8_t *s, uint32_t n)
+/* MODE JAM: an Optimist access point is named FM1- and four capital hex digits (the automatic name of device/wifi_own_ap.c wa_name),
+ * and for a group 2..9 "-N" after: its group, 1..9 (0: not an Optimist name) */
+static uint32_t wc_optimist_group(const uint8_t *s, uint32_t n)
 {
     uint32_t i;
-    if (n != 8u || memcmp(s, "FM1-", 4) != 0)
+    if ((n != 8u && n != 10u) || memcmp(s, "FM1-", 4) != 0)
         return 0;
     for (i = 4; i < 8u; i++)
         if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'A' && s[i] <= 'F')))
             return 0;
-    return 1;
+    if (n == 8u)
+        return 1u;
+    return s[8] == '-' && s[9] >= '2' && s[9] <= '9' ? (uint32_t)(s[9] - '0') : 0u;
 }
-static int wc_is_own_name(const uint8_t *s, uint32_t n)   /* never join the FM-1's own network */
+static int wc_is_own_name(const uint8_t *s, uint32_t n)   /* never join the FM-1's own network (whatever its group) */
 {
     static const char H[] = "0123456789ABCDEF";
     uint8_t mac[6];
     own_mac(mac);
-    return n == 8u && memcmp(s, "FM1-", 4) == 0 && s[4] == (uint8_t)H[mac[4] >> 4] && s[5] == (uint8_t)H[mac[4] & 15u] &&
+    return (n == 8u || n == 10u) && memcmp(s, "FM1-", 4) == 0 && s[4] == (uint8_t)H[mac[4] >> 4] && s[5] == (uint8_t)H[mac[4] & 15u] &&
            s[6] == (uint8_t)H[mac[5] >> 4] && s[7] == (uint8_t)H[mac[5] & 15u];
 }
 /* the strongest Optimist access point heard (the table is kept strongest first), WPA2-PSK, not our own, not one that refused its
@@ -672,7 +740,7 @@ static int wc_jam_pick(void)
     uint32_t i;
     for (i = 0; i < wc_tab.n; i++) {
         const struct wn_ap *a = &wc_tab.ap[i];
-        if (a->sec != WN_SEC_PSK || !wc_is_optimist_name(a->ssid, a->ssid_len) || wc_is_own_name(a->ssid, a->ssid_len))
+        if (a->sec != WN_SEC_PSK || wc_optimist_group(a->ssid, a->ssid_len) != own_jam_group() || wc_is_own_name(a->ssid, a->ssid_len))
             continue;
         if (wc.jam_bad && !memcmp(wc.jam_bssid, a->bssid, 6) && own_ms() - wc.jam_t < WC_JAM_BAD_MS)
             continue;
@@ -728,7 +796,7 @@ static void wc_scan_step(void)
         wc_join(&wc_tab.ap[a], wn_st.n[slot].pmk, 0);
         return;
     }
-    if (wn_st.mode == WN_MODE_JAM && !wl.joined && (a = wc_jam_pick()) >= 0) {   /* no saved network heard: an Optimist access point */
+    if (own_mode() == WN_MODE_JAM && !wl.joined && (a = wc_jam_pick()) >= 0) {   /* no saved network heard: an Optimist access point */
         char k[WIFI_AP_KEY_LEN + 1u];
         struct wn_ap ap = wc_tab.ap[a];
         wifi_ap_default_key(ap.ssid, ap.ssid_len, k);
@@ -749,8 +817,9 @@ static void wc_poll(void)                         /* once a main-loop pass: one 
 {
     static uint8_t mode_seen = 0xFFu;
     uint32_t now = own_ms();
-    if (wn_st.mode != mode_seen) {                /* MODE JAM just chosen: look at once, not after the next retry */
-        mode_seen = wn_st.mode;
+    ja_poll(now);
+    if (own_mode() != mode_seen) {                /* MODE JAM just chosen: look at once, not after the next retry */
+        mode_seen = own_mode();
         if (mode_seen == WN_MODE_JAM)
             wc.t_retry = now - WC_RETRY_MS;
     }
@@ -790,11 +859,11 @@ static void wc_poll(void)                         /* once a main-loop pass: one 
         }
         if (wc.st == WC_FAIL && wc.fail == WCF_NOCAL)
             break;
-        if (wc.st == WC_FAIL && now - wc.t_retry < (wn_st.mode == WN_MODE_JAM ? WC_JAM_RETRY_MS : WC_RETRY_MS) && wc_auto() &&
+        if (wc.st == WC_FAIL && now - wc.t_retry < (own_mode() == WN_MODE_JAM ? WC_JAM_RETRY_MS : WC_RETRY_MS) && wc_auto() &&
             !wc.scan_want && !wc.scan_once)
             break;
-        if (wc.scan_want || wc.scan_once || ((wn_st.mode == WN_MODE_JAM && now - wc.t_retry >= WC_JAM_RETRY_MS) ||
-                                                   (wn_st.mode == WN_MODE_AUTO && wn_count(&wn_st) && now - wc.t_retry >= WC_RETRY_MS)))
+        if (wc.scan_want || wc.scan_once || ((own_mode() == WN_MODE_JAM && now - wc.t_retry >= WC_JAM_RETRY_MS) ||
+                                                   (own_mode() == WN_MODE_AUTO && wn_count(&wn_st) && now - wc.t_retry >= WC_RETRY_MS)))
             wc_sweep();
         break;
     case WC_SCAN:
@@ -916,16 +985,27 @@ void plat_wifi_on(int on)                        /* (JieLi's API: on = AUTO unle
 void plat_wifi_mode(int mode)
 {
     own_store_load();
-    if (mode < WIFI_MODE_OFF || (mode > (FM1B_WIFI_AP ? WIFI_MODE_AP_MAN : WIFI_MODE_MAN) && mode != WIFI_MODE_JAM) || wn_st.mode == (uint8_t)mode)
+    if (mode < WIFI_MODE_OFF || (mode > (FM1B_WIFI_AP ? WIFI_MODE_AP_MAN : WIFI_MODE_MAN) && mode != WIFI_MODE_JAM && mode != WIFI_MODE_JAM_AUTO) || wn_st.mode == (uint8_t)mode)
         return;
-    wn_st.mode = (uint8_t)mode;
+    wn_st.mode = (uint8_t)(mode == WIFI_MODE_JAM || mode == WIFI_MODE_JAM_HOST ? WIFI_MODE_JAM_AUTO : mode);   /* (one JAM mode) */
     own_store_changed();
 }
 int plat_wifi_get_mode(void) { own_store_load(); return wn_st.mode; }
+int plat_wifi_group(void) { own_store_load(); return (int)own_jam_group(); }
+void plat_wifi_set_group(int g)
+{
+    own_store_load();
+    if (g < 1 || g > (int)WN_GROUPS || (int)own_jam_group() == g)
+        return;
+    wn_st.ap.grp = (uint8_t)g;
+    ja.on = 0;                                    /* a new group: looked for again, from joining */
+    own_store_changed();
+}
+int plat_wifi_jam_host(void) { own_store_load(); return own_mode() == WN_MODE_JAM_HOST; }
 int plat_wifi_step(void) { return wc.st; }
 int plat_wifi_jam(void)
 {
-    if (wn_st.mode != WN_MODE_JAM)
+    if (own_mode() != WN_MODE_JAM)
         return 0;
     if (wc.jam && wc.st >= WC_PMK && wc.st != WC_FAIL)
         return 1;

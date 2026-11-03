@@ -5,34 +5,34 @@
 # nothing and are never read. Before 2026-10-28 listing them read a header at NULL (ed_backup.c bk_info): the editor's
 # connect was a CPU exception on the FM-1 (the red crash screen), a SIGSEGV here.
 # Each file: LIST (kind sample, flags rwd, size 0, room 0), SUM (size 0, CRC 0), READ (no bytes). The frames are
-# tools/fm1_companion.py's (fm1_install.frame(0x61, op, u16 index, ...)); files 62..64 = USR1..USR3 in this build.
+# tools/fm1_companion.py's (fm1_install.frame(0x61, op, u16 index, ...)); files 78..80 = USR1..USR3 in this build (after live patterns' objects, 2026-11-01).
 #   optimist/build/host/optimist_host optimist/tests/sd/editor_files.txt OUT
 wait 600
 sysex_out
-sysex F0 00 32 05 1B 00 00 00 00 3E 00 04 06 F7
+sysex F0 00 32 05 1B 00 00 00 00 4E 00 44 05 F7
 wait 50
-expect_sysex F0 00 32 05 2B 01 00 00 00 00 7C 00 18 04 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 15 06 40 24 F7
-sysex F0 00 32 05 1B 00 00 00 00 3F 00 00 06 F7
+expect_sysex F0 00 32 05 2B 01 00 00 00 00 1C 01 18 05 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 15 06 40 14 F7
+sysex F0 00 32 05 1B 00 00 00 00 4F 00 40 05 F7
 wait 50
-expect_sysex F0 00 32 05 2B 01 00 00 00 00 7E 00 18 04 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 25 06 40 23 F7
-sysex F0 00 32 05 1B 00 00 00 00 40 00 7C 05 F7
+expect_sysex F0 00 32 05 2B 01 00 00 00 00 1E 01 18 05 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 25 06 40 13 F7
+sysex F0 00 32 05 1B 00 00 00 00 50 00 3C 05 F7
 wait 50
-expect_sysex F0 00 32 05 2B 01 00 00 00 00 00 01 18 04 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 35 06 40 22 F7
-sysex F0 00 32 05 1B 00 00 00 01 3E 00 7C 05 F7
+expect_sysex F0 00 32 05 2B 01 00 00 00 00 20 01 18 05 60 40 03 00 00 00 00 00 00 00 00 00 2A 4D 12 35 06 40 12 F7
+sysex F0 00 32 05 1B 00 00 00 01 4E 00 3C 05 F7
 wait 50
-expect_sysex F0 00 32 05 63 00 00 00 01 00 7C 00 00 00 00 00 00 00 00 00 00 70 17 F7
-sysex F0 00 32 05 1B 00 00 00 01 3F 00 78 05 F7
+expect_sysex F0 00 32 05 63 00 00 00 01 00 1C 01 00 00 00 00 00 00 00 00 00 70 15 F7
+sysex F0 00 32 05 1B 00 00 00 01 4F 00 38 05 F7
 wait 50
-expect_sysex F0 00 32 05 63 00 00 00 01 00 7E 00 00 00 00 00 00 00 00 00 00 60 17 F7
-sysex F0 00 32 05 1B 00 00 00 01 40 00 74 05 F7
+expect_sysex F0 00 32 05 63 00 00 00 01 00 1E 01 00 00 00 00 00 00 00 00 00 60 15 F7
+sysex F0 00 32 05 1B 00 00 00 01 50 00 34 05 F7
 wait 50
-expect_sysex F0 00 32 05 63 00 00 00 01 00 00 01 00 00 00 00 00 00 00 00 00 50 17 F7
-sysex F0 00 32 05 4B 00 00 40 00 3E 00 00 00 00 00 00 08 00 60 02 F7
+expect_sysex F0 00 32 05 63 00 00 00 01 00 20 01 00 00 00 00 00 00 00 00 00 50 15 F7
+sysex F0 00 32 05 4B 00 00 40 00 4E 00 00 00 00 00 00 08 00 40 02 F7
 wait 50
-expect_sysex F0 00 32 05 43 00 00 40 00 00 7C 00 00 00 00 00 00 40 01 F7
-sysex F0 00 32 05 4B 00 00 40 00 40 00 00 00 00 00 00 08 00 5C 02 F7
+expect_sysex F0 00 32 05 43 00 00 40 00 00 1C 01 00 00 00 00 00 30 01 F7
+sysex F0 00 32 05 4B 00 00 40 00 50 00 00 00 00 00 00 08 00 3C 02 F7
 wait 50
-expect_sysex F0 00 32 05 43 00 00 40 00 00 00 01 00 00 00 00 00 3E 01 F7
+expect_sysex F0 00 32 05 43 00 00 40 00 00 20 01 00 00 00 00 00 2E 01 F7
 sysex_out
 # still running: a key plays
 peakreset

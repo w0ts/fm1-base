@@ -43,7 +43,7 @@ static struct wn_store wn_st;
 static void wifi_nets_in(const uint8_t r[WN_STORE_SIZE])
 {
     wn_load(&wn_st, r);
-    if (!FELUCCA_WIFI_AP && (wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN))
+    if (!FELUCCA_WIFI_AP && (wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || wn_st.mode == WN_MODE_JAM_HOST))
         wn_st.mode = WN_MODE_OFF;                /* (a record from a build with MODE AP: this one has none) */
 }
 static void wifi_nets_out(uint8_t r[WN_STORE_SIZE]) { wn_save(&wn_st, r); }
@@ -256,7 +256,8 @@ static void opt_wifi_poll(void)
         wlk.own_playing = song.playing;
         plat_link_set_tempo(wlk.own_mpb);       /* (the tempo a session of its own starts with) */
     }
-    link_jam = wn_st.mode == WN_MODE_JAM;      /* (MODE JAM: Link on whatever SYNC > LINK says; leaving it gives the setting back) */
+    link_jam = wn_st.mode == WN_MODE_JAM || wn_st.mode == WN_MODE_JAM_HOST;   /* (MODE JAM JOIN / JAM HOST: Link on whatever SYNC > LINK
+                                                 * says; leaving it gives the setting back) */
     plat_link_enable(link_eff() != LINK_OFF);    /* (LINK OFF on the MIDI page: no session; once on, nothing: wanted at every pass, so a restart of the stack finds it) */
     opt_wifi_sync();
     plat_wifi_scanning(wc.scan_want);

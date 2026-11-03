@@ -43,7 +43,7 @@ TREE = BUILD / "optimist"                      # Optimist's tree (gen_optimist.p
 DRIVER = APP / "tests" / "optsim.mjs"
 # the trial's generated headers (gen_optimist.py) the firmware includes beside its fonts and icons
 SHARED = ["felucca_colors.h", "felucca_tables.h", "felucca_samples.h", "felucca_drumkits.h", "x0x_drum_samples.h",
-          "x0x_drum_tables.h", "felucca_wavetables.h"]
+          "x0x_drum_tables.h", "felucca_wavetables.h", "felucca_bank.h"]   # (felucca_bank.h: model.c's engine order since 2026-11-01)
 
 
 def tree():

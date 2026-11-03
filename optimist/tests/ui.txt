@@ -29,15 +29,15 @@ turn SELECT 1
 wait 100
 expect gv3 7
 cells
-# ENV tapped: SOUND (1), its ENV row; KNOB 2 turns DEC up
+# ENV tapped: SOUND (1), its ENV row (track 1's default sound: DEC 56); KNOB 2 turns DEC up
 tap ENV
 wait 100
 expect scr 1
 expect row 0
-expect gv2 112
+expect gv2 56
 turn K2 4
 wait 100
-expect gv2 116
+expect gv2 60
 cells
 shot ui-env.png
 # ALGORITHM one detent: track 2 (DIGITAL RHODES), its ENV
@@ -46,14 +46,16 @@ wait 100
 expect track 1
 cells
 shot ui-env-t2.png
-# GLO tapped: GLOBAL (9), its TEMPO line: BPM 111; KNOB 1 up five: 116
+# GLO tapped: GLOBAL (9), its first page TUNE (BPM is on the PLAY-held page since 2026-11-01: op_project.c): TUNE 0;
+# KNOB 1 up two: 2, the tempo untouched (BPM 111)
 tap GLO
 wait 100
 expect scr 9
-expect bpm 111
-turn K1 5
+expect gv1 0
+turn K1 2
 wait 100
-expect bpm 116
+expect gv1 2
+expect bpm 111
 cells
 shot ui-global.png
 # SEQ tapped: STEP (5), track 2's piano roll

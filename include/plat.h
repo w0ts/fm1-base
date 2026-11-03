@@ -362,7 +362,7 @@ int plat_net_task(void (*fn)(void *), void *arg, const char *name);   /* a task 
 #define FM1B_WIFI_OWN 0
 #endif
 #define PLAT_WIFI_STORE_SIZE 336u
-enum { WIFI_MODE_OFF, WIFI_MODE_AUTO, WIFI_MODE_MAN, WIFI_MODE_AP, WIFI_MODE_AP_MAN, WIFI_MODE_JAM };   /* JAM: AUTO, and an Optimist access point (FM1-xxxx, its password wifi_ap_default_key's) is joined when no saved network is heard */
+enum { WIFI_MODE_OFF, WIFI_MODE_AUTO, WIFI_MODE_MAN, WIFI_MODE_AP, WIFI_MODE_AP_MAN, WIFI_MODE_JAM, WIFI_MODE_JAM_HOST };   /* JAM_HOST: AP with the automatic name and its default password only, for JAM to join */   /* JAM: AUTO, and an Optimist access point (FM1-xxxx, its password wifi_ap_default_key's) is joined when no saved network is heard */
 void plat_wifi_mode(int mode);         /* OFF: nothing runs (the radio, once started, stays up); MAN: joins when asked;
                                         * AUTO: and the best saved network heard, at the start and whenever none is
                                         * joined; AP, AP_MAN: the FM-1 is the access point (wifi_ap = true, below).

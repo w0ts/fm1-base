@@ -31,7 +31,7 @@
 #endif
 #define MIR_BLE MIR_BLE_BUILT                   /* the mirror over Bluetooth too (felucca.c's: with BLE; ui/opt_bt.h sends its
                                                  * frames and hands it the requests) */
-#define MBR_PROJ (MIR_BLE && FELUCCA_BT_PROJ && FELUCCA_FLASH && FELUCCA_BACKUP && FELUCCA_PATTERNS)   /* (felucca.c's) */
+#define MBR_PROJ (MIR_BLE && FELUCCA_FLASH && FELUCCA_BACKUP && FELUCCA_PATTERNS)   /* (felucca.c's: no BT_PROJ item since 2026-11-01, part of EDITOR) */
 
 /* ---- usb.c's state as the editor reads it (opt_stubs.h usb: config, resets), each main loop pass */
 static void opt_ed_usb(void)

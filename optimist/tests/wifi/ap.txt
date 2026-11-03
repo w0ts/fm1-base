@@ -14,9 +14,11 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-spin SELECT 5                                           # (General, METERS, BT MIDI, BT AUDIO, then WI-FI: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
+spin SELECT 4                                           # (General (METERS on its page: GL_JOIN), BT MIDI, BT AUDIO, then WI-FI: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
 wait 100
-# MODE AP AUTO (OFF, MAN, AUTO, JAM, AP MAN, AP AUTO): no typed key
+# MODE AP AUTO (OFF, MAN, AUTO, JAM JOIN, JAM HOST, AP MAN, AP AUTO): no typed key
+spin K1 1
+wait 100
 spin K1 1
 wait 100
 spin K1 1
@@ -125,7 +127,20 @@ expect ap_key 0
 expect ap_key_default 1
 expect ap_key_sum 777
 expect ap_state 3
-# MODE AUTO again (AP MAN, JAM, AUTO): the access point gone, the station manager back
+# MODE JAM HOST (2026-11-03, the user: "a jam AP and jam (client) mode"): the access point on the automatic name and its
+# default password only, Link in force whatever SYNC > LINK says; SAVE shows the password (never the entry)
+spin K1 -1
+wait 3500
+cells
+expect wifi_mode 6
+expect ap_state 3
+expect ap_key 0
+expect ap_key_default 1
+expect link_eff >0
+tap SAVE
+wait 200
+msg KEY
+# MODE AUTO again (JAM HOST, JAM JOIN, AUTO): the access point gone, the station manager back
 spin K1 -1
 wait 200
 spin K1 -1

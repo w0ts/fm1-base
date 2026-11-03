@@ -38,7 +38,8 @@
 _Static_assert(sizeof(struct plat_wifi_ap) == sizeof(struct wn_ap), "plat.h plat_wifi_ap: wifi_nets.h wn_ap");
 _Static_assert(PLAT_WIFI_STORE_SIZE == WN_STORE_SIZE, "plat.h PLAT_WIFI_STORE_SIZE: wifi_nets.h WN_STORE_SIZE");
 _Static_assert((int)WIFI_MODE_OFF == (int)WN_MODE_OFF && (int)WIFI_MODE_AUTO == (int)WN_MODE_AUTO && (int)WIFI_MODE_MAN == (int)WN_MODE_MAN &&
-               (int)WIFI_MODE_AP == (int)WN_MODE_AP && (int)WIFI_MODE_AP_MAN == (int)WN_MODE_AP_MAN,
+               (int)WIFI_MODE_AP == (int)WN_MODE_AP && (int)WIFI_MODE_AP_MAN == (int)WN_MODE_AP_MAN &&
+               (int)WIFI_MODE_JAM == (int)WN_MODE_JAM && (int)WIFI_MODE_JAM_HOST == (int)WN_MODE_JAM_HOST,
                "plat.h WIFI_MODE_*: wifi_nets.h's");
 
 #define WC_CH_MS 150u                    /* one channel's listening in a scan */
@@ -496,7 +497,7 @@ static struct wn_scan wc_tab;                     /* the APs heard */
 #include "wifi_own_tune.c"                       /* the tuning on the radio (wifi/wifi_tune.h) */
 
 static int wc_auto(void) { return wn_st.mode == WN_MODE_AUTO || wn_st.mode == WN_MODE_JAM; }   /* (saved networks joined by themselves) */
-static int wc_mode_off(void) { return wn_st.mode == WN_MODE_OFF || wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN; }
+static int wc_mode_off(void) { return wn_st.mode == WN_MODE_OFF || wn_st.mode == WN_MODE_AP || wn_st.mode == WN_MODE_AP_MAN || wn_st.mode == WN_MODE_JAM_HOST; }
 static void wc_to(uint32_t st) { wc.st = (uint8_t)st; wc.t0 = own_ms(); }
 static void wc_fail(uint32_t why) { wc.fail = (uint8_t)why; wc.fails++; wc_to(WC_FAIL); wc.t_retry = own_ms(); }
 static void wc_send(uint32_t len) { own_tx(len, 1u, 1u); }

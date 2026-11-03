@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The trial in the host simulator (milestone 3): Optimist's own storage on fm1-base's flash access. A sound and the
-# tempo changed, a setting (SYSTEM's KNOB COLORS), the project saved to slot 3 and the sound to user preset U01 through
+# tempo changed, a setting (SYSTEM's KNOB COLORS off), the project saved to slot 3 and the sound to user preset U01 through
 # the UI; the bytes at Optimist's addresses in Optimist's formats; a restart ("reboot": the simulated flash kept) finds
 # the work again (the autosave resumed), the slots used; the flash dumped (optimist/build/host/trial-flash.bin) for
 # tests/storage_restart.txt, a power-on with it in a new process (all RAM fresh: the UI too, which "reboot" keeps).
@@ -18,29 +18,35 @@ expect w.0xFC000 -1
 expect w.0x97000 0x31474C53
 expect w.0x9F000 -1
 expect w.0xDC000 -1
-# a sound: track 1's ENV, DEC 112 -> 116; the tempo: GLOBAL's BPM 111 -> 116
+# a sound: track 1's ENV, DEC 56 -> 116; the tempo: BPM 111 -> 116 (PLAY held)
 tap ENV
 wait 100
 turn K2 4
 wait 100
-expect gv2 116
+expect gv2 60
 tap GLO
 wait 100
+# (the tempo: on the PLAY-held page since 2026-11-01, op_tempo.c; held past SYSTEM HOLD, KNOB 1 is BPM;
+# let go, the screen before comes back, the transport untouched)
+press PLAY
+wait 800
 turn K1 5
+wait 100
+release PLAY
 wait 100
 expect bpm 116
 # a setting: SYSTEM (GLO again), GENERAL (its fourth row: INFO, INTERNALS, USB STATS before it, Optimist's USB audio on; the DEBUG page gone, fm1-next c6aef4ee),
-# KNOB COLORS OFF -> ON (the settings word's bit 25, GENERAL's first card;
+# KNOB COLORS ON (its default since 2026-11-03) -> OFF (the settings word's bit 25, GENERAL's first card;
 # the settings record saved: copy A, 0xFC000 (outside plat.h's windows: the app's unit writes it, app.c
 # opt_glob_*)
 tap GLO
 wait 100
 spin SELECT 3
 wait 100
-expect gv1 0
-turn K1 1
-wait 100
 expect gv1 1
+turn K1 -1
+wait 100
+expect gv1 0
 tap HOME
 wait 300
 expect w.0xFC000 0x554C4546
@@ -90,7 +96,7 @@ expect w.0xFE000 -1
 expect panel_hits 0
 shot st-saved.png
 flash_dump optimist/build/host/trial-flash.bin
-# a restart in this process: the flash kept, Optimist's power-on (opt_core_init: the defaults, BPM 111, DEC 112, then
+# a restart in this process: the flash kept, Optimist's power-on (opt_core_init: the defaults, BPM 111, DEC 56, then
 # the stores); the work comes back as it was left (the UI's own RAM is the one thing "reboot" keeps: storage_restart.txt)
 reboot
 wait 1500
@@ -100,4 +106,4 @@ expect up.1 1
 expect up.2 0
 tap ENV
 wait 100
-expect gv2 116
+expect gv2 60

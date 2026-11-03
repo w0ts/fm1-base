@@ -146,7 +146,7 @@ def cf_list(frames):
     return [files[i] for i in range(n)], n
 
 
-def cf_list_script(s, n_guess=80):
+def cf_list_script(s, n_guess=128):          # (more than the list holds: 83 since live patterns, 2026-11-01; past its end: not OK, skipped)
     for i in range(n_guess):
         s.ask(cfr(0x61, [0, *le(i, 2)]))
     return s
@@ -317,7 +317,7 @@ def bk_list(frames):
     return objs, n
 
 
-def list_script(s, n_guess=80):
+def list_script(s, n_guess=128):                  # (more than BK_LIST holds: 81 objects since live patterns, 2026-11-01)
     first = 0
     while first < n_guess:
         s.ask(fr(43, 4, first))
@@ -363,7 +363,8 @@ def backup(out, flash):
                 ts2.ask(cfr(0x61, [1, *le(i, 2), *le(off, 4), *le(256, 2)]), wait=30)
             ts2.ask(cfr(0x61, [2, *le(i, 2)]), wait=60)
     info = [f for f in files if f[1] == "BKINFO"][0]
-    ts2.ask(cfr(0x61, [1, *le(info[0], 2), *le(0, 4), *le(256, 2)]))
+    for off in range(0, max(info[4], 1), 256):     # (BKINFO in 256-byte reads: past 256 bytes since live patterns' objects)
+        ts2.ask(cfr(0x61, [1, *le(info[0], 2), *le(off, 4), *le(256, 2)]))
     t, o = run2(out, "read", ts2, os2, flash)
     for f in o:
         if f == "restart" or f[4] != 44:
@@ -378,7 +379,7 @@ def backup(out, flash):
     tdata, sums, binfo = {}, {}, None
     for op, st, i, b in cfiles(t):
         if op == 1 and st == 0 and i == info[0]:
-            binfo = b[4:]
+            binfo = (binfo or []) + list(b[4:])
         elif op == 1 and st == 0:
             tdata.setdefault(i, bytearray()).extend(b[4:])
         elif op == 2 and st == 0:

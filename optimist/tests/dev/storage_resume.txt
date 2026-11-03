@@ -9,4 +9,4 @@ expect up.1 1
 expect w.0xA0000 0x32474C53
 tap ENV
 wait 100
-expect gv2 116
+expect gv2 60

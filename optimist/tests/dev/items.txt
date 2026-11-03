@@ -433,8 +433,9 @@ expect peak_db_min -60
 key 7 up
 wait 1500
 expect voices 0
-# BASS+ (always built since 2026-10-29): SYSTEM > GENERAL's SPK LOWCUT (ON at the start: OFF / ON / BASS+), a key played;
-# the jack: nothing plugged SPK LOWCUT, headphones in HP BASS (OFF / +3 dB / +6 dB), each only on its side (fx/outcorr.c)
+# the output's correction (fx/outcorr.c): nothing in the jack the speaker's low cut, always on since 2026-11-01
+# (803deeab: SPK LOWCUT's row gone, BASS+ with it); headphones in: HPHN BASS (OFF / +3 dB / +6 dB, General's
+# second card), each only on its side
 tap GLO
 wait 100
 tap GLO
@@ -444,19 +445,13 @@ wait 50
 turn SELECT 1                                           # (General, right after INFO: no DEBUG page since fm1-next c6aef4ee)
 wait 50
 cells
-expect gv2 1
-expect gv3 0
+expect gv2 0
 expect hp 0
 expect oc 1
-turn K2 2
-wait 100
-expect gv2 2
-expect oc 2
-cells
 tap HOME
 wait 100
 expect scr 0
-# a key through BASS+
+# a key through the low cut
 peakreset
 key 7 down
 wait 500
@@ -465,7 +460,7 @@ expect peak_db_min -60
 key 7 up
 wait 1500
 expect voices 0
-# headphones in: SPK LOWCUT off them, HP BASS OFF: no correction; +6 dB: HP BASS; out again: BASS+ back
+# headphones in: no low cut on them, HPHN BASS OFF: no correction; +6 dB: HP BASS; out again: the low cut back
 jack in
 wait 300
 expect hp 1
@@ -477,10 +472,11 @@ turn SELECT -30
 wait 50
 turn SELECT 1                                           # (General, right after INFO: no DEBUG page since fm1-next c6aef4ee)
 wait 50
-turn K3 2
+turn K2 2
 wait 100
-expect gv3 2
+expect gv2 2
 expect oc 4
+cells
 tap HOME
 wait 100
 expect scr 0
@@ -495,7 +491,7 @@ expect voices 0
 jack out
 wait 300
 expect hp 0
-expect oc 2
+expect oc 1
 # (GLO opens the one of GLOBAL / SYSTEM open last, SYSTEM since HOME left it: 2026-10-29)
 tap GLO
 wait 100
@@ -503,13 +499,10 @@ turn SELECT -30
 wait 50
 turn SELECT 1                                           # (General, right after INFO: no DEBUG page since fm1-next c6aef4ee)
 wait 50
-turn K3 -2
-wait 50
-expect gv3 0
 turn K2 -2
 wait 50
 expect gv2 0
-expect oc 0
+expect oc 1
 tap HOME
 wait 100
 # LANE_FX: DR selected, a lane's black key held: the page of ROLL, CHANCE, FILL, NUDGE; ROLL and FILL moved, the next row's VRAND
@@ -574,7 +567,7 @@ tap GLO
 wait 100
 spin SELECT -30
 wait 100
-spin SELECT 3                                           # (General, METERS, then BT MIDI: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
+spin SELECT 2                                           # (General (METERS on its page: GL_JOIN), then BT MIDI: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
 wait 100
 spin K1 1
 wait 1500

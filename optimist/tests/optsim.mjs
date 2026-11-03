@@ -21,6 +21,8 @@ const tap = (n) => { const i = BTN.indexOf(n); if (i < 0) throw new Error(`no bu
 const turn = (n, d) => { const i = ENC.indexOf(n); if (i < 0) throw new Error(`no knob ${n} (${ENC})`); for (let k = 0; k < Math.abs(d); k++) { x.sim_enc(i, Math.sign(d)); run(300); } run(100); };
 const WHITE = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26];   // white key w -> key (0 = F3), as fm1-base's host
 const key = (w) => { x.sim_key(WHITE[w], 1); run(50); x.sim_key(WHITE[w], 0); run(100); };
+// the tempo: on the PLAY-held page since 2026-11-01 (op_tempo.c): PLAY held past SYSTEM HOLD, KNOB 1 its BPM, let go
+const tempo = (d) => { const i = BTN.indexOf("PLAY"); x.sim_button(i, 1); run(800); turn("KNOB 1", d); x.sim_button(i, 0); run(200); };
 const save = (path) => { writeFileSync(path, flash()); console.log(`  ok optsim: flash ${path} (${x.sim_flash_size()} B, ${x.sim_flash_rev()} erases and writes)`); };
 
 if (mode === "touch" || mode === "idle") {
@@ -37,11 +39,11 @@ run(1500);
 // card: a USB STATS row before it, USB audio on)
 const DEV = process.env.OPTSIM_UI === "dev";
 if (mode === "write") {
-  tap("ENV"); turn("KNOB 2", 4);                       // a sound: track 1's DEC 112 -> 116
-  tap("GLO"); turn("KNOB 1", 5);                       // the tempo: 111 -> 116
-  tap("GLO");                                          // SYSTEM, GENERAL's KNOB COLORS on
-  if (DEV) { turn("SELECT", 1); turn("KNOB 1", 1); } else { turn("SELECT", 3); turn("KNOB 1", 1); }
-  if (DEV) { turn("SELECT", 2); turn("KNOB 1", 3); }   // and USB AUDIO's MASTER NONE -> 1+2 (the routing, "UAR3"; past METERS: no KEYS page since fm1-next b9a394bc)
+  tap("ENV"); turn("KNOB 2", 4);                       // a sound: track 1's DEC 56 -> 60
+  tap("GLO"); tempo(5);                                // the tempo: 111 -> 116 (GLOBAL open, for the GLO below)
+  tap("GLO");                                          // SYSTEM, GENERAL's KNOB COLORS off (ON is its default since 2026-11-03)
+  if (DEV) { turn("SELECT", 1); turn("KNOB 1", -1); } else { turn("SELECT", 3); turn("KNOB 1", -1); }
+  if (DEV) { turn("SELECT", 1); turn("KNOB 1", 3); }   // and USB AUDIO's MASTER NONE -> 1+2 (the routing, "UAR3"; METERS on General's page: GL_JOIN)
   tap("HOME");
   tap("SAVE"); turn("KNOB 2", 1); key(2); tap("SAVE"); tap("SAVE");   // PROJECT: SAVE to slot 3, YES, the name's SAVE
   turn("SELECT", DEV ? 1 : 2); turn("KNOB 2", 1); key(0); tap("SAVE"); tap("SAVE");   // USER: SAVE to U01, YES, the name's SAVE
@@ -52,7 +54,7 @@ if (mode === "write") {
   run(15000);                                      // hands off past the autosave's 10 s: what a power-on writes by itself
   save(b);
 } else {
-  tap("GLO"); turn("KNOB 1", 4);                       // the tempo 4 up from what the trial's flash brought
+  tempo(4);                                            // the tempo 4 up from what the trial's flash brought
   tap("HOME");
   run(12000);                                      // the autosave (its other copy)
   save(b);

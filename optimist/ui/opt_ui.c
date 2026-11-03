@@ -182,7 +182,7 @@ void opt_core_init(void)
         track_defaults(t);
         if (i < NPART) {
             set_engine_of(t, trk_def_engine(i));
-            apply_preset_to(t, trk_def_preset(i));
+            trk_def_sound(t, i);                 /* (its preset, and T2's FM6 voice: as Optimist's main.c, model.c f51dbba9) */
             t->p[P_REV] = 0;
             t->engine = t->eng_req;
         }

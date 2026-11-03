@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The USB serial console (optimist/run.sh: profiles/dev-console.config with the host's Bluetooth stand-ins, USB_CONSOLE on fm1-base's plat_console_*; ui/
-# opt_console.h): SYSTEM > USB's SERIAL on (its own page after General again, KNOB 1: General is full with DEBUG STATS, fm1-next c6aef4ee), a restart (it is presented from the next start), then Optimist's command
+# opt_console.h): SYSTEM > USB SERIAL on (General's fourth card, KNOB 4: GL_JOIN, METERS then on its own page), a restart (it is presented from the next start), then Optimist's command
 # line: run control, status, params, and the commands that read the hardware, on what fm1-base's platform gives (dbg, cpu1,
 # keys, keylog, flr, tabbench). The host types the line ("console LINE") and keeps the reply for expect_console
 wait 800
@@ -11,12 +11,12 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-turn SELECT 2
+turn SELECT 1
 wait 100
-expect gv1 0
-turn K1 1
+expect gv4 0
+turn K4 1
 wait 3000
-expect gv1 1
+expect gv4 1
 reboot
 wait 1500
 console help

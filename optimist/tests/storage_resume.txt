@@ -9,4 +9,4 @@ expect proj.3 1
 expect up.1 1
 tap ENV
 wait 100
-expect gv2 116
+expect gv2 60

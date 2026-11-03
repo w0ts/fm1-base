@@ -22,7 +22,7 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-spin SELECT 3                                           # (General, METERS, then USB AUDIO: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
+spin SELECT 2                                           # (General (METERS on its page: GL_JOIN), then USB AUDIO: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
 wait 100
 spin K1 1
 wait 100

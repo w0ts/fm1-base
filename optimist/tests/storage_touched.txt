@@ -13,11 +13,11 @@ expect w.0x9F000 0x554C4546
 expect w.0xFE000 0x554C4546
 tap ENV
 wait 100
-expect gv2 116
+expect gv2 60
 tap GLO
 wait 100
 tap GLO
 wait 100
 spin SELECT 3
 wait 100
-expect gv1 1
+expect gv1 0   # (KNOB COLORS OFF, as storage.txt left it: ON is the default since 2026-11-03)

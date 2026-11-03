@@ -128,7 +128,9 @@ static uint32_t wa_name(uint8_t *out)           /* the network's name (no termin
     return n;
 }
 static int wa_set_pass(const uint8_t *ssid, uint32_t len, const char *pass) { return plat_wifi_ap_set(ssid, len, pass); }
-static void wa_set_channel(uint32_t ch) { (void)plat_wifi_ap_set_channel((int)ch); }
+static void wa_set_channel(uint32_t ch) { (void)plat_wifi_ap_set_channel((int)ch); }   /* (0: AUTO) */
+static int wa_channel_auto(void) { return plat_wifi_ap_channel_auto(); }
+#define WA_CH_AUTO 1                            /* (fm1-base's access point has CHANNEL AUTO: the quietest at each start) */
 static void wa_forget_key(void) { plat_wifi_ap_forget(); }
 static int wa_run(int on) { return plat_wifi_ap_run(on); }
 static int wa_default_key(char *out) { return plat_wifi_ap_default_key(out); }   /* 9 bytes; 1: in use, 0: a typed one replaces it */
@@ -233,8 +235,16 @@ static int32_t wl_mpb_now(void) { return 60000000 / (song.g[G_BPM] > 20 ? song.g
 static void wl_push_own(void)                   /* the FM-1's own PLAY / STOP and tempo, to the Link session */
 {
     int32_t mpb;
-    if (!wl.ip.ip || link_eff() == LINK_OFF || plat_link_peers() == 0 || sy.src == MSRC_LINK)
-        return;                                 /* (no session to tell yet, or Link itself drives us: no echo) */
+    if (!wl.ip.ip || link_eff() == LINK_OFF || plat_link_peers() == 0)
+        return;                                 /* (no session to tell yet) */
+    if (sy.src == MSRC_LINK) {                  /* Link drives us: no echo, but a tempo the user turned goes to the session */
+        if (link_tempo_req) {
+            link_tempo_req = 0;
+            wlk.own_mpb = wl_mpb_now();
+            plat_link_set_tempo(wlk.own_mpb);
+        }
+        return;
+    }
     mpb = wl_mpb_now();
     if (mpb != wlk.own_mpb) {
         plat_link_set_tempo(mpb);

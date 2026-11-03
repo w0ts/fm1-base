@@ -39,6 +39,7 @@ expect ap_key 0
 expect ap_key_default 1
 expect ap_key_sum 777
 expect ap_channel 6
+# (CHANNEL AUTO, the default: nothing else on the air here, so 6; the card reads AUTO 6)
 client_peer 120
 wifi_client auto default
 wait 3000
@@ -66,8 +67,9 @@ expect playing 1
 client_peer play 0
 wait 2000
 expect playing 0
-# CHANNEL on the page (K3): kept, the access point moves once it rests, the phone joins it again there
-spin K3 5
+# CHANNEL on the page (K3): from AUTO (0) up 11 detents to 11, kept, the access point moves once it rests, the phone joins it
+# again there
+spin K3 11
 wait 300
 cells
 expect ap_channel 11

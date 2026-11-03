@@ -50,7 +50,10 @@ _Static_assert((int)WIFI_MODE_OFF == (int)WN_MODE_OFF && (int)WIFI_MODE_AUTO == 
 #define WC_PRE_MS 150u                   /* after the deauth: the AP drops its record of us */
 #define WC_LINK_MS 300u                  /* M4 sent -> DHCP: the AP needs this to take the key into use */
 #define WC_RETRY_MS 20000u               /* AUTO: another round after a failure or nothing found */
-#define WC_JAM_BAD_MS 120000u            /* JAM: an access point that refused the default password is left alone this long */
+#define WC_JAM_BAD_MS 15000u             /* JAM: an access point that refused the default password is left alone this long
+                                          * (2 min before 2026-11-03: a JAM HOST only ever uses its default one, so a refusal
+                                          * is a host still starting; the user: "both devices eventually reconnected after a while") */
+#define WC_JAM_RETRY_MS 5000u            /* JAM: another round this soon while no network is joined (AUTO's is WC_RETRY_MS) */
 #define WC_LOST_MS 8000u                 /* joined, and nothing heard from the AP this long (its beacons): gone */
 #define WC_RADIO_MS 3000u                /* the radio is started this long after power-on at the earliest (the start's own work first) */
 #define OWN_RX_MAX 1024u                 /* the largest frame taken, with its receive header (a UDP datagram of 512 B and more fits) */
@@ -787,9 +790,11 @@ static void wc_poll(void)                         /* once a main-loop pass: one 
         }
         if (wc.st == WC_FAIL && wc.fail == WCF_NOCAL)
             break;
-        if (wc.st == WC_FAIL && now - wc.t_retry < WC_RETRY_MS && wc_auto() && !wc.scan_want && !wc.scan_once)
+        if (wc.st == WC_FAIL && now - wc.t_retry < (wn_st.mode == WN_MODE_JAM ? WC_JAM_RETRY_MS : WC_RETRY_MS) && wc_auto() &&
+            !wc.scan_want && !wc.scan_once)
             break;
-        if (wc.scan_want || wc.scan_once || ((wn_st.mode == WN_MODE_JAM || (wn_st.mode == WN_MODE_AUTO && wn_count(&wn_st))) && now - wc.t_retry >= WC_RETRY_MS))
+        if (wc.scan_want || wc.scan_once || ((wn_st.mode == WN_MODE_JAM && now - wc.t_retry >= WC_JAM_RETRY_MS) ||
+                                                   (wn_st.mode == WN_MODE_AUTO && wn_count(&wn_st) && now - wc.t_retry >= WC_RETRY_MS)))
             wc_sweep();
         break;
     case WC_SCAN:

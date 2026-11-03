@@ -37,6 +37,23 @@ void app_log(void (*line)(const char *t))
 #endif
     opt_lg_put(q, " cache ", cr);
     line(b);
+#if FELUCCA_WIFI && FELUCCA_LINK
+    /* Link as the clock (ui/opt_wifi.h wl_clock; the user, 2026-11-03: AUTO:INT with a Link peer on both): its peers, the
+     * ticks queued and restarts, the source followed (MSRC_*) and Link's presence count (clock_sync.c sy_pr: SY_STEADY
+     * steady ticks make it present) */
+    q = opt_lg_put(b, "link peers ", plat_link_peers());
+    q = opt_lg_put(q, " ip ", wl.ip.ip);
+    opt_lg_put(q, " eff ", link_eff());
+    line(b);
+    q = opt_lg_put(b, "link ticks ", wlk.n_ticks);
+    q = opt_lg_put(q, " rst ", wlk.n_restart);
+    opt_lg_put(q, " late ", wlk.n_catchup);
+    line(b);
+    q = opt_lg_put(b, "sync src ", sy.src);
+    q = opt_lg_put(q, " lk cnt ", sy_pr[MSRC_LINK].cnt);
+    opt_lg_put(q, " q ", wl_qw - wl_qr);
+    line(b);
+#endif
 #if FELUCCA_UNDO_HISTORY
     q = opt_lg_put(b, "undo ring ", undo_h.ready ? undo_h.len[0] : 0u);
     q = opt_lg_put(q, " + ", undo_h.ready ? undo_h.len[1] : 0u);

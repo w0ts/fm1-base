@@ -462,8 +462,11 @@ int plat_wifi_ap_set(const uint8_t *ssid, uint32_t len, const char *pass);   /* 
                                         * automatic one) and password (8..63 printable characters): the key made (a
                                         * slice a pass) and kept, the access point started again on it (AP_MAN: started).
                                         * 0, -1 a bad name or password */
-int plat_wifi_ap_set_channel(int ch);  /* 1..13, kept; a running access point moves once it has rested 1.2 s. 0 / -1 */
-int plat_wifi_ap_channel(void);        /* the channel (kept, or the one plat_wifi_ap_start runs) */
+int plat_wifi_ap_set_channel(int ch);  /* 0 AUTO (the default: the quietest channel, chosen again at each start), or 1..13, kept;
+                                        * a running access point moves once it has rested 1.2 s. 0 / -1 */
+int plat_wifi_ap_channel(void);        /* the channel in use (AUTO: the one chosen, else the kept one, or the one
+                                        * plat_wifi_ap_start runs) */
+int plat_wifi_ap_channel_auto(void);   /* 1: CHANNEL is AUTO */
 int plat_wifi_ap_name(char *name);     /* the network's name (33 bytes, may be 0): its length */
 int plat_wifi_jam(void);               /* MODE JAM: 0 not joined that way, 1 joining / joined an Optimist access point (plat_wifi_ssid), 2 the last one tried refused its default password (it has a typed one) */
 int plat_wifi_ap_has_key(void);        /* a typed password's key is kept */

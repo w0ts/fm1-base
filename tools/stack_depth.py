@@ -64,6 +64,9 @@ MAIN_ROOTS = ("_start",)
 BOUNDS = {
     "sd_cmd": 2,                     # (device/sd.c: an ACMD sends CMD55 first, which is no ACMD)
     "fm1_ble_rf_exec": 2,            # (felucca-bsp chip/fm1_ble_rf.h: its sub-program only at depth 0)
+    "uh_probe": 2,                   # (felucca-bsp chip/usb_host.c: a hub probes its ports at depth 1, and depth 1 probes no hub;
+    "uh_hub_probe": 2,               #  the cycle uh_probe > uh_hub_probe > uh_hub_port_probe > uh_probe, entered at any of the three,
+    "uh_hub_port_probe": 2,          #  a hot-plug at uh_hub_port_probe: one hub level at most)
 }
 MARGIN = (0.25, 1024)                # (a stack's size: the static worst and at least 25 % or 1 KiB, the larger)
 

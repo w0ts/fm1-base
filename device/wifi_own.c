@@ -564,7 +564,7 @@ static void ja_poll(uint32_t now)
     }
 #endif
 }
-static int wc_auto(void) { return own_mode() == WN_MODE_AUTO || own_mode() == WN_MODE_JAM; }   /* (saved networks joined by themselves) */
+static int wc_auto(void) { return own_mode() == WN_MODE_AUTO; }   /* (saved networks joined by themselves; not in JAM: the user, 2026-11-03: it joins an FM-1 network only, never the home one) */
 static int wc_mode_off(void) { uint8_t m = own_mode(); return m == WN_MODE_OFF || m == WN_MODE_AP || m == WN_MODE_AP_MAN || m == WN_MODE_JAM_HOST; }
 static void wc_to(uint32_t st) { wc.st = (uint8_t)st; wc.t0 = own_ms(); }
 static void wc_fail(uint32_t why) { wc.fail = (uint8_t)why; wc.fails++; wc_to(WC_FAIL); wc.t_retry = own_ms(); }
@@ -859,7 +859,7 @@ static void wc_poll(void)                         /* once a main-loop pass: one 
         }
         if (wc.st == WC_FAIL && wc.fail == WCF_NOCAL)
             break;
-        if (wc.st == WC_FAIL && now - wc.t_retry < (own_mode() == WN_MODE_JAM ? WC_JAM_RETRY_MS : WC_RETRY_MS) && wc_auto() &&
+        if (wc.st == WC_FAIL && now - wc.t_retry < (own_mode() == WN_MODE_JAM ? WC_JAM_RETRY_MS : WC_RETRY_MS) && (wc_auto() || own_mode() == WN_MODE_JAM) &&
             !wc.scan_want && !wc.scan_once)
             break;
         if (wc.scan_want || wc.scan_once || ((own_mode() == WN_MODE_JAM && now - wc.t_retry >= WC_JAM_RETRY_MS) ||

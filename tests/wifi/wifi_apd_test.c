@@ -637,6 +637,12 @@ int main(void)
         plat_wifi_mode(WIFI_MODE_JAM_AUTO);
         tick(1);
         check(plat_wifi_get_mode() == WIFI_MODE_JAM_AUTO && !plat_wifi_jam_host() && !ja.host, "JAM AUTO: joining first, not hosting at once");
+        check(!wc_auto(), "JAM: saved networks are not joined by themselves (only an FM-1 network of the group is)");
+        plat_wifi_mode(WIFI_MODE_AUTO);
+        tick(1);
+        check(wc_auto(), "AUTO: saved networks are");
+        plat_wifi_mode(WIFI_MODE_JAM_AUTO);
+        tick(1);
         for (t = 0; t < 30000u && !ja.host; t += 100u)
             tick(100);
         check(ja.host && plat_wifi_jam_host() == 1 && plat_wifi_get_mode() == WIFI_MODE_JAM_AUTO,

@@ -24,6 +24,12 @@
  *   flr OFFSET [LEN<=256]  the flash as plat_data reads it (the data windows; the app's own code is not there)
  *   tabbench     the tables' read speed: SINE, main RAM, the pool (TAB_IN_POOL)
  *   sd [ls [DIR] | cat FILE | raw SECTOR]   the card: its state, a folder, a file's first bytes, a sector (SDCARD builds)
+ *   sd diag      the card's clock: the one kept, what the mount's detection saw at each step (fm1-base's plat_sd_clock:
+ *                Optimist's sd diag's clock lines), the CRC failures and the run-time steps down since the power-on
+ *   sd clock MHZ|auto   the clock: the fastest step at or under MHZ, unchecked (plat_sd_clock_set); auto: detected;
+ *                then the mount again (Optimist's sd clock)
+ *   sd speed     each step tried now (plat_sd_clock_try: the CSD, the CID and blocks, CRC-checked against the floor's;
+ *                Optimist's sd speed reads the CSD alone at each clock), the clock kept as it was
  * What stays with fm1-base, which owns that hardware (its own tools read it: tools/fm1_debug.py, fm1_remote.py): memory reads (memr: raw addresses, the platform's alone to read), the crash
  * and boot records (crash, boot), the second core's set-up and rails (dualcfg), the radio's calibration, link layer and
  * Bluetooth Classic diagnostics (blevm, bletrim, blell, btclk, btinq, btscan, btrx, btpage, bttrace), the SD bus modes
@@ -308,10 +314,102 @@ static void con_tabbench(void)
     con_puts(")\r\n");
 }
 #if FELUCCA_SDCARD
+static const char *const CON_SD_RES[6] = {"not tried", "pass", "CRC failed", "data differs from the floor's",
+                                          "timeout or refused", "skipped (no high speed)"};
+static void con_sd_mhz(uint32_t khz)                    /* " 15 MHz", " 8.6 MHz" (to a tenth); 0: " -" */
+{
+    uint32_t t = (khz + 50u) / 100u;
+    if (!khz) {
+        con_puts(" -");
+        return;
+    }
+    con_putc(' ');
+    con_dec((int32_t)(t / 10u));
+    if (t % 10u) {
+        con_putc('.');
+        con_dec((int32_t)(t % 10u));
+    }
+    con_puts(" MHz");
+}
+
+/* "clock 20 MHz (auto: fastest passed 30 MHz, probe N ms) crc fails N steps down N", then a line per step */
+static void con_sd_clock(void)
+{
+    plat_sd_clock_t c;
+    uint32_t k;
+    plat_sd_clock(&c);
+    con_puts("clock");
+    con_sd_mhz(c.khz);
+    if (c.forced) {
+        con_puts(" (set: sd clock)");
+    } else {
+        con_puts(" (auto: fastest passed");
+        if (c.top + 1u < PLAT_SD_NSTEP)
+            con_sd_mhz(c.step_khz[c.top]);
+        else
+            con_puts(" none above the floor");
+        con_puts(", probe ms ");
+        con_dec((int32_t)c.probe_ms);
+        con_putc(')');
+    }
+    con_puts(" crc fails ");
+    con_dec((int32_t)c.crc_fails);
+    con_puts(" steps down ");
+    con_dec((int32_t)c.steps_down);
+    con_puts("\r\n");
+    for (k = 0; k < PLAT_SD_NSTEP; k++) {
+        con_puts("  step");
+        con_sd_mhz(c.step_khz[k]);
+        con_puts(": ");
+        con_puts(CON_SD_RES[c.res[k] % 6u]);
+        con_puts(k == c.step && c.khz ? "  <- kept\r\n" : "\r\n");
+    }
+}
+
+static void con_sd_speed(void)
+{
+    plat_sd_clock_t c;
+    uint32_t k;
+    int r;
+    plat_sd_clock(&c);
+    for (k = 0; k < PLAT_SD_NSTEP; k++) {
+        r = plat_sd_clock_try(k);
+        con_puts("  step");
+        con_sd_mhz(c.step_khz[k]);
+        con_puts(": ");
+        con_puts(r >= 0 && r < 6 ? CON_SD_RES[r] : r == PLAT_SD_NOCARD ? "no card (mount first: sd)"
+                                                 : r == PLAT_SD_BUSY ? "busy" : "error");
+        con_puts("\r\n");
+        if (r < 0)
+            break;
+    }
+    con_puts("sd speed: done, the clock as it was\r\n");
+}
+
 static void con_sd_cmd(const char *p)
 {
     static const char *const ST[] = {"unmounted", "no card", "no FAT16 / FAT32 filesystem", "ready"};
     int ok;
+    if (con_word(&p, "diag")) {
+        con_sd_clock();
+        return;
+    }
+    if (con_word(&p, "speed")) {
+        con_sd_speed();
+        return;
+    }
+    if (con_word(&p, "clock")) {                         /* the fastest step at or under MHZ; anything else: auto */
+        plat_sd_clock_t c;
+        uint32_t mhz = con_num(&p, &ok), k, pick = 0;
+        plat_sd_clock(&c);
+        for (k = 0; ok && k < PLAT_SD_NSTEP && !pick; k++)
+            if (c.step_khz[k] <= mhz * 1000u)
+                pick = k + 1u;
+        if (ok && !pick)
+            pick = PLAT_SD_NSTEP;                        /* (under the floor: the floor) */
+        plat_sd_clock_set(pick);
+        p = "";                                          /* (then the mount again, below) */
+    }
     if (con_word(&p, "raw")) {                           /* a sector, through plat_sd_read */
         static uint8_t blk[512];
         uint32_t s = con_num(&p, &ok);
@@ -333,6 +431,9 @@ static void con_sd_cmd(const char *p)
         if (!sub && sd_card_type()) {
             con_kv("MB", (int32_t)sd_card_mb());
             con_kv("blocks", (int32_t)plat_sd_blocks());
+            con_puts("clock");
+            con_sd_mhz(plat_sd_clock_khz());
+            con_puts(" (sd diag: each step)\r\n");
         }
         if (st != SD_READY)
             return;
@@ -381,7 +482,7 @@ static void con_exec(const char *p)
         con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  cpu1  keys  keylog"
                  "  flr OFFSET [LEN]  tabbench"
 #if FELUCCA_SDCARD
-                 "  sd [ls [DIR] | cat FILE | raw SECTOR]"
+                 "  sd [ls [DIR] | cat FILE | raw SECTOR | diag | speed | clock MHZ|auto]"
 #endif
 #if FELUCCA_BLE || FELUCCA_BT_AUDIO
                  "  btlog [N]"

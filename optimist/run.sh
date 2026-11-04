@@ -33,11 +33,16 @@ H=optimist/build/host
 # the SD card mode (the profile copy profiles/sd-dev-07efe611.config: Optimist's card code on fm1-base's simulated
 # card, fm1-base's bigger slot FM1B_APP_END=0xCE000): with no card (tests/sd/nocard.txt), then with a card image
 # (optimist/sdcard.py: FAT32 by the system's formatter, Optimist's card zip, two samples; tests/sd/card.txt), the card
-# read back after (sdcard.py check). Without macOS's hdiutil / newfs_msdos no card image: said, the card's checks not run
+# read back after (sdcard.py check). Without macOS's hdiutil / newfs_msdos no card image: said, the card's checks not run.
+# First, after the build linked Optimist's tree: the card's clock steps, fm1-base's and Optimist's the same
+# (tests/sd/sd_clock_steps.c)
 run_sd() {
     echo "optimist/run.sh: profile sd"
     export OPT_PROFILE=profiles/sd-dev-07efe611.config FM1B_APP_END=0xCE000
     X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
+    "${CC:-cc}" -std=c99 -Wall -Wextra -Werror -Ioptimist/build/optimist/firmware/hal -Idevice -o $H/sd_clock_steps \
+        optimist/tests/sd/sd_clock_steps.c
+    $H/sd_clock_steps
     $H/optimist_host optimist/tests/note.txt $H
     $H/optimist_host optimist/tests/sd/nocard.txt $H
     $H/optimist_host optimist/tests/sd/editor_files.txt $H   # (the slots, which hold nothing, as the companion's files)

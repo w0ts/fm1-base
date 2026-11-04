@@ -964,13 +964,14 @@ int plat_wifi_jam(void)
 }
 int plat_wifi_jam_stat(int i, uint32_t v[4])
 {
-    const struct ja_peer *q = &ja.n.peer[i - 1];
+    const struct ja_peer *q;
     if (!ja.up || i < 0 || i > (int)JA_PEERS)
         return 0;
     if (!i) {
         v[0] = ja.n.ch, v[1] = wl.n_tx, v[2] = wl.n_tx_err, v[3] = wl.n_kept;
         return 1;
     }
+    q = &ja.n.peer[i - 1];
     v[0] = (uint32_t)q->mac[4] << 8 | q->mac[5], v[1] = q->n_data, v[2] = (uint32_t)-(int32_t)q->rssi, v[3] = own_ms() - q->t_heard;
     return q->used;
 }

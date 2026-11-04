@@ -1445,6 +1445,29 @@ int plat_sd_close(void)
     sd_run = 0;
     return sd_up ? 0 : PLAT_SD_NOCARD;
 }
+/* the clock: the image has none (0 kHz, every step untried, the device's steps listed); plat_sd_clock_set kept for
+ * plat_sd_clock to say; a step tried: untried */
+#include "../device/sd_clock.h"
+static uint8_t sd_force;
+uint32_t plat_sd_clock_khz(void) { return 0; }
+void plat_sd_clock(plat_sd_clock_t *c)
+{
+    uint32_t k;
+    memset(c, 0, sizeof *c);
+    for (k = 0; k < PLAT_SD_NSTEP; k++)
+        c->step_khz[k] = FM1B_SD_STEP_KHZ(k);
+    c->step = c->top = (uint8_t)(PLAT_SD_NSTEP - 1u);
+    c->forced = sd_force;
+}
+void plat_sd_clock_set(uint32_t k) { sd_force = (uint8_t)(k <= PLAT_SD_NSTEP ? k : PLAT_SD_NSTEP); }
+int plat_sd_clock_try(uint32_t k)
+{
+    if (!sd_up)
+        return PLAT_SD_NOCARD;
+    if (sd_run)
+        return PLAT_SD_BUSY;
+    return k < PLAT_SD_NSTEP ? PLAT_SD_STEP_UNTRIED : PLAT_SD_ERR;
+}
 #endif
 /* the USB serial console (plat.h plat_console_*): not open until a script types a line ("console LINE": the line and a CR
  * go in, the app's reply is kept for "expect_console TEXT"); presented unless the app says not (plat_console_present) */

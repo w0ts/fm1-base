@@ -102,6 +102,7 @@ static struct {
     int hs;                                          /* CMD6 switched it to high speed */
     long cmd6s, cmd10s, cmd6_switches;
     int worse_to, cmd6_crc_bad, garbage_from, slow_ms, wedge_from, wedged;
+    uint32_t stop_noise_us, noise_until;             /* after a CMD12 every byte read back is noise this long (a card still settling) */
     int hold_at;                                     /* out[] index of a late token (-1 none), hold_end its time */
     uint32_t hold_end;
     uint32_t noise;
@@ -211,6 +212,8 @@ static void command(void)
     }
     say1(0xFF);                                      /* (one byte before the answer) */
     if (n == 12) {
+        if (c.stop_noise_us && !c.noise_until)
+            c.noise_until = now + c.stop_noise_us * FM1_TICKS_PER_US;
         c.rd_multi = 0;
         c.nout = c.pos = 0;
         c.hold_at = -1;
@@ -404,7 +407,7 @@ static uint8_t fm1_sd_hw_xfer(uint8_t b, uint32_t mode)
     if (!c.kind || !sel || t_step() < c.dead_from)   /* (too fast for the line: the card hears nothing, says nothing) */
         return 0xFF;
     uint8_t o = card_byte(b);
-    if (t_step() < c.garbage_from) {
+    if (t_step() < c.garbage_from || (c.noise_until && now < c.noise_until)) {
         c.noise = c.noise * 1103515245u + 12345u;
         return (uint8_t)(c.noise >> 16);
     }

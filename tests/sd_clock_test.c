@@ -332,6 +332,33 @@ static void run_slip(void)
     }
     c.dead_from = 0;
     c.garbage_from = 0;
+    /* one step, not five: the card stopped in a run stays unreliable a moment (2 ms measured on an FM-1, 2026-11-04: 15 MHz went
+     * down to 6.67, 12 reading right): a failure that soon after a step retries at the new clock */
+    card(1);
+    c.ok_from = 3;
+    ok(plat_sd_init() == 0 && sd.step == 3, "slip: 12 MHz kept for the settling card");
+    c.ok_from = 4;
+    c.garbage_from = 4;                              /* 12 MHz goes bad */
+    c.stop_noise_us = 2000u;
+    ok(plat_sd_read_open(340) == 0, "slip: a run on the settling card");
+    {
+        int r, got = 0;
+        uint32_t n = 0;
+        while (n++ < 400u && !got) {
+            r = plat_sd_read_next(buf, 1000);
+            if (r == 0)
+                got = 1;
+            else if (r != PLAT_SD_BUSY)
+                break;
+        }
+        ok(got && same(340, buf, 1) && sd.step == 4, "slip: one step down, however long the card settles");
+    }
+    (void)plat_sd_close();
+    c.stop_noise_us = 0;
+    c.noise_until = 0;
+    c.ok_from = 0;
+    c.garbage_from = 0;
+    sd.step = (uint8_t)FM1B_SD_FLOOR;
     /* the floor reached: a real failure */
     c.dead_from = (int)FM1B_SD_NSTEP;
     d0 = sd.steps_down;

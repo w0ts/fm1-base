@@ -47,6 +47,8 @@ static struct {
     uint32_t crc_fails;                /* blocks whose CRC16 failed */
     uint16_t crc;                      /* the last block's CRC16 (the clock detection's fingerprint) */
     uint8_t v2;                        /* an SD v2 card (CMD8 answered): the clock detection's */
+    uint8_t r1;                        /* the last R1 (0xFF: nobody answered): sd_slip */
+    uint32_t slip_t;                   /* when the last step down was (sd_slip; 0 none) */
     uint8_t step;                      /* the clock every session runs at: a step of sd_clock.h, 0 the fastest */
     uint8_t top;                       /* the fastest step the detection saw pass (FM1B_SD_FLOOR: none above it) */
     uint8_t hs;                        /* CMD6 switched the card to high speed */
@@ -149,8 +151,8 @@ static uint8_t sd_cmd(uint32_t cmd, uint32_t arg)    /* the R1 answer; 0xFF none
         (void)sd_rx();                               /* (a stuff byte) */
     for (i = 0; i < 10u; i++)
         if (!((r = sd_rx()) & 0x80u))
-            return r;
-    return 0xFFu;
+            return sd.r1 = r;
+    return sd.r1 = 0xFFu;
 }
 
 static uint8_t sd_wait_byte(uint32_t ms)             /* the first byte other than 0xFF within ms (0xFF: none) */
@@ -521,11 +523,24 @@ static int sd_step_down(void)                        /* a CRC16 failed at run ti
  * failure is the real one. SD_DOWN_MS bounds it all for the main loop: past it a failure stands, whatever the step */
 #define SD_DOWN_MS 150u
 #define SD_RUN_SILENT_MS 100u          /* a read run with no block this long (the spec's read limit): as a timeout */
+#define SD_SLIP_SETTLE_MS 3u
+#define SD_SLIP_HOLD_MS 5u             /* a card stopped in a run stays unreliable a moment (2 ms on an FM-1, 2026-11-04: five steps
+                                        * down in it, 15 MHz to 6.67 with 12 reading right): a failure this soon after a step
+                                        * retries at that clock. Not when nobody answered (R1 0xFF): a card taken out goes on down */
 
 static int sd_slip(uint32_t t0)                      /* 1: a step down, the card stopped: read again */
 {
-    if (sd_since(t0) >= SD_MS(SD_DOWN_MS) || !sd_step_down())
+    if (sd_since(t0) >= SD_MS(SD_DOWN_MS))
         return 0;
+    if (sd.slip_t && sd.r1 != 0xFFu && sd_since(sd.slip_t) < SD_MS(SD_SLIP_HOLD_MS)) {
+        sd_release();                                /* (the same clock again, once the card has settled) */
+        while (sd_since(sd.slip_t) < SD_MS(SD_SLIP_SETTLE_MS))
+            (void)sd_rx();
+    } else {
+        if (!sd_step_down())
+            return 0;
+        sd.slip_t = fm1_ticks() | 1u;
+    }
     sd_release();
     fm1_sd_hw_sel();
     (void)sd_rx();

@@ -16,7 +16,8 @@
  * and the failure the black FM-1 showed (Optimist 47524040: garbage past the start-up):
  *   garbage_from steps faster than this: every byte read back is noise; the card still hears the commands
  *   slow_ms      every token (a block's, a register's) comes this late, at every clock
- *   wedge_from   a command at a step faster than this leaves the card deaf until a CMD0 */
+ *   wedge_from   a command at a step faster than this leaves the card deaf until a CMD0
+ *   worse_to     > 0: the first wrong read moves ok_from here (the board worse after a failure) */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -100,7 +101,7 @@ static struct {
     long flaky_n;
     int hs;                                          /* CMD6 switched it to high speed */
     long cmd6s, cmd10s, cmd6_switches;
-    int cmd6_crc_bad, garbage_from, slow_ms, wedge_from, wedged;
+    int worse_to, cmd6_crc_bad, garbage_from, slow_ms, wedge_from, wedged;
     int hold_at;                                     /* out[] index of a late token (-1 none), hold_end its time */
     uint32_t hold_end;
     uint32_t noise;
@@ -115,7 +116,10 @@ static void card_desel(void)                         /* (a late token never sent
 static int clock_bad(void)                           /* this clock reads wrong: past what the card takes, or 30 without CMD6 */
 {
     int k = t_step();
-    return k < c.ok_from || k == c.bad_only - 1 || (k < (int)FM1B_SD_NSTEP_HS && !c.hs);
+    int bad = k < c.ok_from || k == c.bad_only - 1 || (k < (int)FM1B_SD_NSTEP_HS && !c.hs);
+    if (bad && c.worse_to)
+        c.ok_from = c.worse_to;
+    return bad;
 }
 
 static void say(const uint8_t *b, int n) { memcpy(c.out + c.nout, b, (size_t)n); c.nout += n; }

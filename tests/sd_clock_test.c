@@ -4,18 +4,21 @@
  * MHz; plat.h "The clock") on the byte-level card (tests/sd_card_model.h: a card whose reads go wrong above a given
  * clock, time out there, read zeros with a right CRC, fail now and then, fail at one step alone, or stop answering for
  * good; the same switches and cases as Optimist's tests/sd_clock_test.c for its own driver):
- *   - every step reads: 30 MHz passes (CMD6 took high speed), 20 kept (the margin step below the fastest);
+ *   - every step reads, from the floor up: 30 MHz passes (CMD6 took high speed), 20 kept (no failure: the step below
+ *     the top);
  *   - no high speed: 30 skipped, 20 passes, 15 kept; SDSC v2 the same walk; SD v1 and the plain pins: the floor, nothing
  *     tried; plat_sd_clock_set: a step, unchecked;
- *   - reads wrong above each step in turn: that step the fastest, the next kept (the floor when that is the floor);
- *   - timeouts above 10 MHz: the first ends the walk at the floor, the card reads there;
- *   - the black FM-1's failure: garbage past the start-up above 15 MHz, the card slow, a card that goes deaf at a fast
- *     command, every step wrong and slow, the tokens later than the probe waits: each mounts, at the floor, the probe's
+ *   - reads wrong above each step in turn: the first wrong step ends the walk, the one below it kept and checked once
+ *     more (the floor when that is the floor), every faster step untried;
+ *   - timeouts from 10 MHz up: 8.57 kept;
+ *   - the black FM-1's failure: garbage past the start-up from 15 MHz up keeps 12, from 10 up keeps 8.57, no CMD6 sent;
+ *     the card slow, a card that goes deaf at a fast command, the tokens later than the probe waits: each mounts, the probe's
  *     simulated time under 5.5 s (the watchdog 8 s), under 2 s between feeds; the CMD6 switch only when its status (CRC
  *     right) says high speed is supported; plat_sd_read and plat_sd_write feed the watchdog;
  *   - zeros with a right CRC16 above 12 MHz: caught by the floor's fingerprint (PLAT_SD_STEP_DIFF);
- *   - a block in 30 wrong above 8.57 MHz: the second pass catches what the first missed; 6.67 kept;
- *   - the margin step failing alone: the walk goes on after it;
+ *   - a block in 30 wrong from 8.57 MHz up: the second pass catches what the first missed; 7.5 kept;
+ *   - the check at the step kept failing: the floor, still mounted;
+ *   - one step alone wrong: the walk ends there, nothing faster tried;
  *   - the card gone at a step: PLAT_SD_ERR, not present, no clock;
  *   - every detection: nothing written, no command refused for its CRC7, the bus back with the LCD, the watchdog fed,
  *     the CRC failures it saw not counted as the card's;
@@ -106,8 +109,8 @@ static void walks(void)
     ok(start("all good") == 0 && sd.failed == 0, "all good: started, no step failed");
     expect("all good", 0, 1);
     ok(c.hs && sd.res[0] == PLAT_SD_STEP_PASS && sd.res[1] == PLAT_SD_STEP_PASS &&
-       sd.res[FM1B_SD_FLOOR] == PLAT_SD_STEP_PASS && sd.res[2] == PLAT_SD_STEP_UNTRIED && c.cmd10s > 0,
-       "all good: 30 and 20 passed (CMD6 high speed), the floor's reference (the CID read), 15 untried");
+       sd.res[FM1B_SD_FLOOR] == PLAT_SD_STEP_PASS && sd.res[2] == PLAT_SD_STEP_PASS && c.cmd10s > 0,
+       "all good: every step passed (30 after CMD6 high speed), the floor's reference (the CID read)");
     ok(plat_sd_clock_khz() == 20000u, "all good: 20000 kHz");
     plat_sd_clock(&k);
     ok(k.khz == 20000u && k.step == 1 && k.top == 0 && k.hs && !k.forced && k.step_khz[0] == 30000u &&
@@ -142,64 +145,69 @@ static void walks(void)
     ok(k.forced == 3, "set: plat_sd_clock says it was set");
     plat_sd_clock_set(0);
 
-    for (int s = 1; s <= (int)FM1B_SD_FLOOR; s++) {  /* wrong above step s: s the fastest, s + 1 kept */
+    for (int s = 1; s <= (int)FM1B_SD_FLOOR; s++) {  /* wrong above step s: the walk ends there, s kept */
         card(1);
         c.ok_from = s;
         snprintf(w, sizeof w, "wrong above %u kHz", (unsigned)FM1B_SD_STEP_KHZ(s));
-        ok(start(w) == 0 && sd.failed == (uint32_t)s, w);
-        if (s < (int)FM1B_SD_FLOOR)
-            expect(w, (uint32_t)s, (uint32_t)s + 1u);
-        else
-            expect(w, FM1B_SD_FLOOR, FM1B_SD_FLOOR);
-        ok(sd.res[s - 1] == PLAT_SD_STEP_CRC, w);
+        ok(start(w) == 0 && sd.failed == 1u, w);
+        expect(w, (uint32_t)s, (uint32_t)s);
+        ok(sd.res[s - 1] == PLAT_SD_STEP_CRC && (s == 1 || sd.res[s - 2] == PLAT_SD_STEP_UNTRIED), w);
     }
 
-    card(1);                                         /* the line dead above 10 MHz: timeouts */
+    card(1);                                         /* the line dead from 10 MHz up: a timeout */
     c.dead_from = 5;
     (void)start("timeouts");
-    expect("timeouts", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
-    ok(sd.res[0] == PLAT_SD_STEP_ERR && sd.res[1] == PLAT_SD_STEP_UNTRIED && sd.failed == 1,
-       "timeouts: the first ends the walk at the floor, no other step tried");
+    expect("timeouts", 5, 5);
+    ok(sd.res[4] == PLAT_SD_STEP_ERR && sd.res[3] == PLAT_SD_STEP_UNTRIED, "timeouts: the walk ends there, 12 not tried");
 
-    /* the black FM-1: garbage past the start-up above 15 MHz, the card slow: every token 19 ms late, a hair under the
-     * probe's wait. Mounts at the floor, under the watchdog (8 s), its feeds close together */
+    /* the black FM-1: garbage past the start-up. From 15 MHz up: 12 kept; from 10 up: 8.57. No CMD6: 30 never reached */
     card(1);
+    c.garbage_from = 3;
+    bounded("garbage from 15", start("garbage from 15"));
+    expect("garbage from 15", 3, 3);
+    ok(sd.res[2] != PLAT_SD_STEP_PASS && !c.cmd6s && plat_sd_clock_khz() == 12000u, "garbage from 15: 12 MHz, no CMD6 sent");
+    card(1);
+    c.garbage_from = 5;
+    bounded("garbage from 10", start("garbage from 10"));
+    expect("garbage from 10", 5, 5);
+    ok(plat_sd_clock_khz() == 8571u, "garbage from 10: 8.57 MHz");
+
+    card(1);                                         /* the card slow: every token 19 ms late, a hair under the wait */
+    c.slow_ms = 19;
+    bounded("slow", start("slow"));
+    ok(sd.res[7] == PLAT_SD_STEP_PASS && sd.res[6] == PLAT_SD_STEP_UNTRIED, "slow: the 1 s budget ended the walk");
+    expect("slow", 7, FM1B_SD_FLOOR);
+
+    card(1);                                         /* slow and garbage: the same, the budget first */
     c.garbage_from = 3;
     c.slow_ms = 19;
     bounded("garbage + slow", start("garbage + slow"));
-    expect("garbage + slow", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
-
-    card(1);                                         /* garbage, on time */
-    c.garbage_from = 3;
-    bounded("garbage", start("garbage"));
-    expect("garbage", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
+    expect("garbage + slow", 7, FM1B_SD_FLOOR);
 
     card(1);                                         /* tokens later than the probe waits: the floor, nothing tried */
     c.slow_ms = 30;
     bounded("slower than the wait", start("slower than the wait"));
-    ok(sd.res[FM1B_SD_FLOOR] == PLAT_SD_STEP_ERR && sd.res[0] == PLAT_SD_STEP_UNTRIED,
+    ok(sd.res[FM1B_SD_FLOOR] == PLAT_SD_STEP_ERR && sd.res[7] == PLAT_SD_STEP_UNTRIED,
        "slower than the wait: the floor's own pass gave up, nothing tried");
     expect("slower than the wait", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
 
-    card(1);                                         /* every step wrong and slow: the time ends the walk */
-    c.ok_from = (int)FM1B_SD_FLOOR;
-    c.slow_ms = 19;
-    bounded("wrong and slow", start("wrong and slow"));
-    ok(sd.step == FM1B_SD_FLOOR && sd.res[FM1B_SD_FLOOR - 1u] == PLAT_SD_STEP_UNTRIED,
-       "wrong and slow: the 1 s budget stopped the walk before the last step");
-    expect("wrong and slow", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
-
-    card(1);                                         /* every step reads, slowly: the worst honest run */
-    c.slow_ms = 19;
-    bounded("slow", start("slow"));
-    expect("slow", 0, 1);
-
-    card(1);                                         /* a fast command leaves it deaf: started again, 400 kHz */
-    c.wedge_from = 1;
-    c.slow_ms = 19;
+    card(1);                                         /* a fast command leaves it deaf: started again at 400 kHz */
+    c.wedge_from = 6;
     bounded("wedged", start("wedged"));
-    ok(plat_sd_present() && sd.res[0] != PLAT_SD_STEP_PASS, "wedged: started again, still there");
-    expect("wedged", FM1B_SD_FLOOR, FM1B_SD_FLOOR);
+    expect("wedged", 6, 6);
+
+    card(1);                                         /* deaf, and slow enough for every wait to count */
+    c.wedge_from = 7;
+    c.slow_ms = 9;
+    bounded("wedged + slow", start("wedged + slow"));
+    expect("wedged + slow", 7, 7);
+
+    card(1);                                         /* the check at the step kept failing: the floor, still mounted */
+    c.ok_from = 6;
+    c.worse_to = 8;
+    bounded("the check fails", start("the check fails"));
+    ok(sd.res[5] == PLAT_SD_STEP_CRC && sd.res[6] == PLAT_SD_STEP_PASS, "the check fails: 8.57 failed, 7.5 had passed");
+    expect("the check fails", 6, FM1B_SD_FLOOR);
 
     card(1);                                         /* CMD6 asked, its status's CRC16 wrong: no switch */
     c.cmd6_crc_bad = 1;
@@ -211,7 +219,7 @@ static void walks(void)
     ok(!c.cmd6_switches, "CMD6's status says high speed is not supported: not switched");
     card(1);
     (void)start("CMD6");
-    ok(c.cmd6_switches == 1 && c.cmd6s == 2 && c.hs, "CMD6: asked, then switched, once");
+    ok(c.cmd6_switches == 1 && c.cmd6s == 2 && c.hs, "CMD6: asked, then switched, once, before 30 MHz");
 
     card(1);                                         /* a pass over the card inside one frame: fed at every call */
     (void)plat_sd_init();
@@ -225,23 +233,22 @@ static void walks(void)
     card(1);                                         /* zeros with a right CRC16 above 12 MHz */
     c.zero_from = 3;
     (void)start("zeros");
-    expect("zeros", 3, 4);
+    expect("zeros", 3, 3);
     ok(sd.res[2] == PLAT_SD_STEP_DIFF, "zeros: 15 MHz differs from the floor's fingerprint");
 
     card(1);                                         /* a block in 30 wrong above 8.57 MHz */
     c.flaky_from = 6;
     c.flaky_every = 30;
     (void)start("now and then");
-    expect("now and then", 6, 7);
-    ok(sd.failed == 6 && sd.res[0] == PLAT_SD_STEP_CRC && sd.res[2] == PLAT_SD_STEP_CRC,
-       "now and then: every step above 7.5 MHz failed (a block in 30: each step's second pass, 24 blocks, reaches one)");
+    expect("now and then", 6, 6);
+    ok(sd.failed == 1 && sd.res[5] == PLAT_SD_STEP_CRC && sd.res[4] == PLAT_SD_STEP_UNTRIED,
+       "now and then: 8.57 failed (a block in 30: its second pass, 24 blocks, reaches one), the walk ended there");
 
-    card(1);                                         /* 30 wrong, 15 alone wrong: 20 passes, its margin fails */
-    c.ok_from = 1;
+    card(1);                                         /* 15 alone wrong: the walk ends there, 20 not tried */
     c.bad_only = 3;
-    (void)start("margin fails");
-    expect("margin fails", 3, 4);
-    ok(sd.res[1] == PLAT_SD_STEP_PASS && sd.res[2] == PLAT_SD_STEP_CRC, "margin fails: 20 passed, 15 failed");
+    (void)start("one step wrong");
+    expect("one step wrong", 3, 3);
+    ok(sd.res[1] == PLAT_SD_STEP_UNTRIED && sd.res[2] == PLAT_SD_STEP_CRC, "one step wrong: 15 failed, 20 untried");
 
     card(1);                                         /* the card gone at 30 MHz */
     c.die_from = 1;
@@ -256,7 +263,7 @@ static void run_time(int dma)
     uint32_t d0, f0;
     card(1);
     c.dma_bad = !dma;                                /* (a DMA that reads wrong: the byte path) */
-    c.ok_from = 2;
+    c.ok_from = 3;
     ok(plat_sd_init() == 0 && sd.step == 3 && sd.dma == (uint8_t)dma, dma ? "run time, DMA: 12 MHz kept"
                                                                           : "run time, bytes: 12 MHz kept");
     c.ok_from = 4;                                   /* 12 MHz goes wrong (and 10 reads) */
@@ -287,10 +294,10 @@ static void tries(void)
 {
     card(1);
     c.ok_from = 3;
-    ok(plat_sd_init() == 0 && sd.step == 4, "sd speed: 10 MHz kept");
-    ok(plat_sd_clock_try(3) == PLAT_SD_STEP_PASS && sd.step == 4 && bus_back(), "sd speed: 12 MHz tried: pass, 10 kept");
-    ok(plat_sd_clock_try(1) == PLAT_SD_STEP_CRC && sd.step == 4 && plat_sd_present() && bus_back() &&
-       plat_sd_read(5, buf, 2) == 0 && same(5, buf, 2), "sd speed: 20 MHz tried: CRC, the card still reads at 10");
+    ok(plat_sd_init() == 0 && sd.step == 3, "sd speed: 12 MHz kept");
+    ok(plat_sd_clock_try(4) == PLAT_SD_STEP_PASS && sd.step == 3 && bus_back(), "sd speed: 10 MHz tried: pass, 12 kept");
+    ok(plat_sd_clock_try(1) == PLAT_SD_STEP_CRC && sd.step == 3 && plat_sd_present() && bus_back() &&
+       plat_sd_read(5, buf, 2) == 0 && same(5, buf, 2), "sd speed: 20 MHz tried: CRC, the card still reads at 12");
     ok(plat_sd_clock_try(FM1B_SD_FLOOR) == PLAT_SD_STEP_PASS, "sd speed: the floor: pass");
     ok(plat_sd_clock_try(FM1B_SD_NSTEP) == PLAT_SD_ERR, "sd speed: no such step: PLAT_SD_ERR");
     ok(plat_sd_read_open(10) == 0 && plat_sd_clock_try(2) == PLAT_SD_BUSY && plat_sd_close() == 0,

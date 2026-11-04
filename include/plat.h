@@ -644,14 +644,15 @@ uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; el
  * The clock (device/sd_clock.h's steps: 30 20 15 12 10 8.57 7.5 6.67 6 MHz, 6 the floor): the start-up always at
  * 400 kHz, the first data at the floor; then plat_sd_init detects the fastest that reads right on this card and board
  * (an SD v2 card, not on the plain pins): a reference pass at the floor (the CSD and the CID, each block's CRC16, 8
- * blocks by CMD17 spread over the card, 16 from block 0 by one CMD18: their fingerprint), then from the fastest step
- * down two passes a step, each with no CRC failure, no timeout and the floor's fingerprint (30 MHz only after CMD6 took
- * high speed); a step that fails: back to the floor before the CMD12, the card checked there (started again when it
- * must); the step below the fastest that passed must pass too and is the clock kept (the margin). A card that no longer
- * reads at the floor after a failed step: PLAT_SD_ERR. At run time a block whose CRC16 fails above the floor drops the
- * clock one step at once (counted) and plat_sd_read reads it again there; plat_sd_read_next steps down the same and
- * answers PLAT_SD_CRC. A step that times out or is refused ends the walk at the floor, no step starts after 1 s, every
- * wait is 20 ms: the detection takes ~5 s at the very worst, ~1.7 s at most between its watchdog feeds.
+ * blocks by CMD17 spread over the card, 16 from block 0 by one CMD18: their fingerprint), then from the floor up two
+ * passes a step, each with no CRC failure, no timeout and the floor's fingerprint (30 MHz only after CMD6's status says
+ * high speed is supported and it switched). The first step that fails ends the walk: back to the floor before the CMD12,
+ * the card checked there (started again when it must), then the step below the failure is kept and checked once more
+ * (that failing: the floor). No step failed (the top reached, or 1 s spent): the step below the fastest that passed, so a
+ * card that reads everything runs at 20 MHz. A card that no longer reads at the floor after a failed step: PLAT_SD_ERR.
+ * At run time a block whose CRC16 fails above the floor drops the clock one step at once (counted) and plat_sd_read reads
+ * it again there; plat_sd_read_next steps down the same and answers PLAT_SD_CRC. Every wait is 20 ms: the detection takes
+ * ~7 s at the very worst, every wait at its limit, ~1.7 s at most between its watchdog feeds.
  *   plat_sd_clock_khz()        the clock the card runs at now, kHz; 0: no card, the plain pins (no clock to pick), the host
  * For a console (built with usb_console: FM1B_CDC, on the host always):
  *   plat_sd_clock(c)           what the detection found (plat_sd_clock_t below)

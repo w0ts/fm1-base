@@ -198,7 +198,7 @@ static uint32_t group_rx;
 static void on_group(void *ctx, uint32_t src_ip, uint16_t src_port, const uint8_t *p, uint32_t n, int64_t at)
 {
     (void)ctx, (void)src_port, (void)at;
-    if (src_ip == 0xC0A80402u && n == 4u && !memcmp(p, "LINK", 4))
+    if ((src_ip == 0xC0A80402u || (src_ip >> 16) == 0xA9FEu) && n == 4u && !memcmp(p, "LINK", 4))
         group_rx++;
 }
 
@@ -577,98 +577,79 @@ int main(void)
     check(wa.st == WA_UP && wa.ssid_len == 8u && memcmp(wa.ssid, "FM1-4455", 8) == 0 && wn_st.ap.ssid_len == 0u,
           "the automatic name: FM1- and the last four digits of the address");
 
-    /* 13b. MODE JAM's pick: an Optimist name (FM1- and four capital hex digits), WPA2-PSK, not our own, the strongest first, one that
-     * refused the default password left alone for a while */
+    /* 13b. MODE JAM: no access point, no manager: the group's channel, the group's BSSID, open frames at the never-keyed WCID */
     {
-        struct wn_ap a1, a2, a3, a4;
-        memset(&a1, 0, sizeof a1), memset(&a2, 0, sizeof a2), memset(&a3, 0, sizeof a3), memset(&a4, 0, sizeof a4);
-        wc_tab.n = 0;
-        check(wc_optimist_group((const uint8_t *)"FM1-A1B2", 8) == 1u && !wc_optimist_group((const uint8_t *)"FM1-a1b2", 8) &&
-              !wc_optimist_group((const uint8_t *)"FM1-A1B", 7) && !wc_optimist_group((const uint8_t *)"HOMEWIFI", 8) &&
-              !wc_optimist_group((const uint8_t *)"Optimist", 8), "JAM: the Optimist name is FM1- and four capital hex digits (group 1)");
-        check(wc_optimist_group((const uint8_t *)"FM1-A1B2-3", 10) == 3u && wc_optimist_group((const uint8_t *)"FM1-A1B2-9", 10) == 9u &&
-              !wc_optimist_group((const uint8_t *)"FM1-A1B2-1", 10) && !wc_optimist_group((const uint8_t *)"FM1-A1B2-0", 10) &&
-              !wc_optimist_group((const uint8_t *)"FM1-A1B2-A", 10) && !wc_optimist_group((const uint8_t *)"FM1-A1B2_3", 10),
-              "JAM: a group 2..9 is FM1-xxxx-N; -1, -0, a letter, another separator are not Optimist names");
-        check(wc_is_own_name((const uint8_t *)"FM1-4455", 8) && !wc_is_own_name((const uint8_t *)"FM1-4456", 8), "JAM: our own name (FM1-4455 here) is never joined");
-        memcpy(a1.ssid, "FM1-4455", 8), a1.ssid_len = 8, a1.sec = WN_SEC_PSK, a1.rssi = -30, a1.bssid[5] = 1;   /* (ours: strongest) */
-        memcpy(a2.ssid, "FM1-A1B2", 8), a2.ssid_len = 8, a2.sec = WN_SEC_OPEN, a2.rssi = -40, a2.bssid[5] = 2;   /* (open: not ours to join) */
-        memcpy(a3.ssid, "FM1-C3D4", 8), a3.ssid_len = 8, a3.sec = WN_SEC_PSK, a3.rssi = -50, a3.bssid[5] = 3;
-        memcpy(a4.ssid, "FM1-E5F6", 8), a4.ssid_len = 8, a4.sec = WN_SEC_PSK, a4.rssi = -60, a4.bssid[5] = 4;
-        wn_scan_add(&wc_tab, &a4);
-        wn_scan_add(&wc_tab, &a3);
-        wn_scan_add(&wc_tab, &a2);
-        wn_scan_add(&wc_tab, &a1);
-        check(wc_jam_pick() >= 0 && !memcmp(wc_tab.ap[wc_jam_pick()].ssid, "FM1-C3D4", 8), "JAM: the strongest usable one: not ours, not open");
-        wc.jam_bad = 1, memcpy(wc.jam_bssid, a3.bssid, 6), wc.jam_t = ms;
-        check(wc_jam_pick() >= 0 && !memcmp(wc_tab.ap[wc_jam_pick()].ssid, "FM1-E5F6", 8), "JAM: one that refused the default password is skipped: the next one");
-        ms += WC_JAM_BAD_MS + 1u;
-        check(wc_jam_pick() >= 0 && !memcmp(wc_tab.ap[wc_jam_pick()].ssid, "FM1-C3D4", 8), "JAM: ... and tried again after two minutes");
-        wc.jam_bad = 0;
-        wc_tab.n = 0;
-    }
-
-    /* 13c. JAM groups: a unit joins only an access point of its own group (1 when none is set) */
-    {
-        struct wn_ap g1, g3;
-        memset(&g1, 0, sizeof g1), memset(&g3, 0, sizeof g3);
-        memcpy(g1.ssid, "FM1-C3D4", 8), g1.ssid_len = 8, g1.sec = WN_SEC_PSK, g1.rssi = -30, g1.bssid[5] = 1;
-        memcpy(g3.ssid, "FM1-E5F6-3", 10), g3.ssid_len = 10, g3.sec = WN_SEC_PSK, g3.rssi = -60, g3.bssid[5] = 3;
-        wc_tab.n = 0;
-        wn_scan_add(&wc_tab, &g1);
-        wn_scan_add(&wc_tab, &g3);
-        check(plat_wifi_group() == 1 && wc_jam_pick() >= 0 && !memcmp(wc_tab.ap[wc_jam_pick()].ssid, "FM1-C3D4", 8), "group 1 (the default): the plain name is picked");
+        uint8_t raw[WN_STORE_SIZE], fr[128];
+        uint32_t jv[5];
+        uint32_t t, n, seen_beacon = 0;
+        check(plat_wifi_jam() == -1, "MODE AP: not on the air");
+        plat_wifi_set_group(1);
+        plat_wifi_mode(WIFI_MODE_JAM_AUTO);
+        tick(300);
+        check(ja.up && wa.st == WA_OFF && !wl.ap && wl.ja && wl.on, "JAM: the access point stopped, the air up");
+        check(plat_wifi_step() == WIFI_STEP_OFF, "JAM: the station's manager rests");
+        check(fm1_fake_ch == 1u, "group 1: channel 1");
+        check(!strcmp(plat_wifi_ssid(), "fm1-jam"), "group 1: the name fm1-jam");
+        check(plat_wifi_jam_stat(0, jv) && (wl.ip.ip >> 16) == 0xA9FEu && jv[0] == 1u, "the address: 169.254.x.y at once, no DHCP");
+        check(plat_wifi_jam() == 0 && plat_wifi_state() == WIFI_ON, "nobody heard: 0, on");
+        for (t = 0; t < 2200u; t += 50u) {
+            uint32_t m0 = ntx;
+            tick(50);
+            for (i = m0; i < ntx; i++) {
+                const struct txe *x = &txlog[i % TXMAX];
+                if (x->f[0] == 0x80u && !memcmp(x->f + 38, "fm1-jam", 7)) {
+                    seen_beacon++;
+                    check(x->wcid == JA_WCID && !x->ack, "the beacon: the plain WCID, no ACK wanted");
+                }
+            }
+        }
+        check(seen_beacon >= 2u && seen_beacon <= 3u, "a beacon a second");
+        /* Link's group datagram from another unit: heard, counted, its address learned */
+        plat_net_udp_open(20808, on_group, 0);
+        plat_net_join(0xE04C4E4Bu);
+        {
+            struct wifi_ip o;
+            uint8_t omac[6] = {2, 0x11, 0x22, 0x33, 0x66, 0x77};
+            uint32_t g0 = group_rx, m0;
+            wifi_ip_ibss_init(&o, omac, ja.n.bssid, 0xA9FE0505u, 0);
+            n = wifi_ip_send_udp(&o, 20808, 0xE04C4E4Bu, 20808, (const uint8_t *)"LINK", 4, fr);
+            ja_rx(fr, n, -40, now_us());
+            check(group_rx == g0 + 1u, "a group datagram of another unit reaches the app's port");
+            check(plat_wifi_jam() == 1, "one FM-1 heard");
+            check(plat_wifi_jam_stat(1, jv) && jv[1] == 1u && !plat_wifi_jam_stat(2, jv), "its frames counted, per unit");
+            m0 = ntx;
+            check(plat_net_udp_send(20808, 0xA9FE0505u, 20808, "PING", 4) == 0 && ntx == m0 + 1u, "unicast to it: its address known from the group frame");
+            check(txlog[m0 % TXMAX].ack && txlog[m0 % TXMAX].wcid == JA_WCID && !memcmp(txlog[m0 % TXMAX].f + 4, omac, 6) &&
+                  !(txlog[m0 % TXMAX].f[1] & 0x43u), "... acknowledged by the MAC, the plain WCID, open, ad-hoc");
+            check(plat_net_udp_send(20808, 0xA9FE0606u, 20808, "PING", 4) != 0, "an address never heard: not sent");
+            {
+                struct wifi_ip c2;
+                uint32_t mine = wl.ip.ip, g1 = group_rx;
+                wifi_ip_ibss_init(&c2, omac, ja.n.bssid, mine, 0);
+                n = wifi_ip_send_udp(&c2, 20808, 0xE04C4E4Bu, 20808, (const uint8_t *)"LINK", 4, fr);
+                ja_rx(fr, n, -40, now_us());
+                check(wl.ip.ip != mine && (wl.ip.ip >> 16) == 0xA9FEu && group_rx == g1, "another unit with our address: a new draw");
+            }
+            ms += JA_HEARD_MS + 1u;
+            tick(10);
+            check(plat_wifi_jam() == 0, "not heard for 3 s: gone");
+            plat_net_join(0);
+            plat_net_udp_close(20808);
+        }
+        plat_wifi_leave();
+        check(ja.up && wl.on, "a leave asked in JAM does not stop the air");
         plat_wifi_set_group(0), plat_wifi_set_group(10);
         check(plat_wifi_group() == 1, "a group outside 1..9 is ignored");
         plat_wifi_set_group(3);
-        check(plat_wifi_group() == 3 && wc_jam_pick() >= 0 && !memcmp(wc_tab.ap[wc_jam_pick()].ssid, "FM1-E5F6-3", 10), "group 3: only FM1-xxxx-3 is picked, the stronger group 1 left alone");
-        plat_wifi_set_group(4);
-        check(wc_jam_pick() < 0, "group 4: neither is picked");
-        plat_wifi_set_group(1);
-        wc_tab.n = 0;
-    }
-
-    /* 13d. JAM AUTO: alone, the unit joins first (looks), then hosts under its group's name; a host with no client looks once and hosts
-     * again; another group's name changes the host's name */
-    {
-        uint8_t raw[WN_STORE_SIZE];
-        uint32_t t;
-        plat_wifi_set_group(1);
-        plat_wifi_mode(WIFI_MODE_JAM_AUTO);
-        tick(1);
-        check(plat_wifi_get_mode() == WIFI_MODE_JAM_AUTO && !plat_wifi_jam_host() && !ja.host, "JAM AUTO: joining first, not hosting at once");
-        check(!wc_auto(), "JAM: saved networks are not joined by themselves (only an FM-1 network of the group is)");
-        plat_wifi_mode(WIFI_MODE_AUTO);
-        tick(1);
-        check(wc_auto(), "AUTO: saved networks are");
-        plat_wifi_mode(WIFI_MODE_JAM_AUTO);
-        tick(1);
-        for (t = 0; t < 30000u && !ja.host; t += 100u)
-            tick(100);
-        check(ja.host && plat_wifi_jam_host() == 1 && plat_wifi_get_mode() == WIFI_MODE_JAM_AUTO,
-              "JAM AUTO: nothing heard after the settle time and sweeps: this unit hosts (the stored mode stays JAM AUTO)");
-        check(t >= JA_SETTLE_MS, "JAM AUTO: not before the settle time");
-        run_until_up();
-        check(wa.st == WA_UP && wa.ssid_len == 8u && memcmp(wa.ssid, "FM1-4455", 8) == 0, "JAM AUTO host: the access point is FM1-4455 (group 1)");
+        tick(30);
+        check(ja.up && fm1_fake_ch == 11u && !strcmp(plat_wifi_ssid(), "fm1-jam-3"), "group 3: channel 11, fm1-jam-3");
         wn_save(&wn_st, raw);
-        check(raw[2] == WN_MODE_JAM_AUTO, "JAM AUTO: the stored mode is JAM AUTO, never the effective one");
-        for (t = 0; t < 40000u && ja.host; t += 100u)
-            tick(100);
-        check(!ja.host && ja.peek, "JAM AUTO: a host with no client looks once (back to joining)");
-        for (t = 0; t < 30000u && !ja.host; t += 100u)
-            tick(100);
-        check(ja.host, "JAM AUTO: nothing heard in the look: hosts again");
-        plat_wifi_set_group(3);
-        tick(300);
-        check(!ja.host && ja.on == 1u && plat_wifi_group() == 3, "JAM AUTO: a new group starts again from joining");
-        for (t = 0; t < 30000u && !ja.host; t += 100u)
-            tick(100);
-        run_until_up();
-        check(wa.st == WA_UP && wa.ssid_len == 10u && memcmp(wa.ssid, "FM1-4455-3", 10) == 0, "JAM AUTO host in group 3: FM1-4455-3");
+        check(raw[2] == WN_MODE_JAM_AUTO, "JAM: stored as 7");
         plat_wifi_set_group(1);
         plat_wifi_mode(WIFI_MODE_AP);
         tick(300);
         run_until_up();
+        check(!ja.up && !wl.ja && wa.st == WA_UP && wa.ssid_len == 8u && memcmp(wa.ssid, "FM1-4455", 8) == 0, "back to AP: the air off, its own name");
     }
 
     /* 14. the radio does not start */

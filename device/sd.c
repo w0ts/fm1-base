@@ -563,6 +563,12 @@ uint32_t plat_sd_clock_khz(void)
     return sd.up && sd.mode != FM1_SD_HW_GPIO ? FM1B_SD_STEP_KHZ(sd.step) : 0u;
 }
 
+void plat_sd_errs(uint32_t *crc_fails, uint32_t *steps_down)
+{
+    *crc_fails = sd.crc_fails;
+    *steps_down = sd.steps_down;
+}
+
 #if FM1B_CDC                           /* (the console's alone: flash) */
 void plat_sd_clock(plat_sd_clock_t *c)
 {

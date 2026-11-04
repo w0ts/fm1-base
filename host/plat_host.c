@@ -183,6 +183,26 @@ static uint8_t mirror_on;
 static void mirror_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px);
 static void mirror_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c);
 #endif
+/* FM1B_SD_TIME=1 in the environment: what a main loop pass costs on an FM-1, the simulator's clock moved by the card's
+ * time so the app's time slices end as they do there, none of it free. A block read 610 us (840 KB/s, 8.57 MHz), a
+ * command 400 us, a block written 3 ms; an LCD byte 0.18 us (44 MHz effective). Script "sdstat": since the last one, the
+ * frames, the card's blocks and commands, the strips, the bus's share, the longest pass; FM1B_SD_GAPS=ms prints each pass
+ * over ms. expect sd_gap_ms: the longest pass so far (its card and LCD time), the script's own limit */
+static int sdt_on;
+static uint64_t sdt_us;                 /* the card's time so far: plat_ms runs ahead by it */
+static struct {
+    uint64_t rd, wr, cmd, strips, lcd_b;
+} sdt, sdt_p;                           /* since sdstat; this pass */
+static uint32_t sdt_frames, sdt_max_ms10, sdt_all_ms10, sdt_gaps_ms;
+static uint32_t sdt_t0;
+#define SDT_RD_US 610u
+#define SDT_CMD_US 400u
+#define SDT_WR_US 3000u
+static void lcd_note(uint32_t bytes)
+{
+    sdt_p.strips++;
+    sdt_p.lcd_b += bytes;
+}
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
 {
     uint32_t i, j;
@@ -192,6 +212,7 @@ static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
         mirror_fill(x, y, x + w > 240u ? 240u - x : w, y + h > 240u ? 240u - y : h, c);
 #endif
     lcd_changes++;
+    lcd_note(2u * (x + w > 240u ? 240u - x : w) * (y + h > 240u ? 240u - y : h));
     for (j = y; j < y + h && j < 240u; j++)
         for (i = x; i < x + w && i < 240u; i++)
             fb[j * 240u + i] = sc;
@@ -202,6 +223,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     uint32_t i, j;
     blits++;
     lcd_changes++;
+    lcd_note(2u * w * h);
     for (j = 0; j < h; j++)
         for (i = 0; i < w; i++)
             if (x + i < 240u && y + j < 240u)
@@ -263,7 +285,7 @@ static uint32_t lit_btn, lit_keys, dim_btn, dim_keys;
 static uint32_t lights_b, lights_db;    /* plat_lights' buttons as given (PLAY's green apart), and its glow */
 static int lights_glow;
 
-uint32_t plat_ms(void) { return now_ms; }
+uint32_t plat_ms(void) { return now_ms + (uint32_t)(sdt_us / 1000u); }
 uint32_t plat_buttons(void) { return held_btn | mirror_in_buttons(); }   /* (+ the host's: the mirror's remote) */
 uint32_t plat_keys(void) { return held_keys | mirror_in_keys(); }
 static uint32_t plat_remote_keys(void) { return 0; }   /* (the device's remote control: the script is this one's) */
@@ -1381,6 +1403,8 @@ int plat_sd_init(void)
     static int env_done;
     if (!env_done) {
         env_done = 1;
+        sdt_on = getenv("FM1B_SD_TIME") != 0;
+        sdt_gaps_ms = getenv("FM1B_SD_GAPS") ? (uint32_t)atoi(getenv("FM1B_SD_GAPS")) : 0u;
         if (getenv("FM1B_SD") && getenv("FM1B_SD")[0] && sd_insert(getenv("FM1B_SD")))
             fprintf(stderr, "FM1B_SD %s: no such image\n", getenv("FM1B_SD"));
     }
@@ -1399,14 +1423,29 @@ static int sd_io(uint32_t blk, void *p, uint32_t n, int wr)
     if (wr ? fwrite(p, 512, n, sd_img) != n : fread(p, 512, n, sd_img) != n)
         return PLAT_SD_ERR;
     if (wr)
-        fflush(sd_img), sd_writes += n;
+        fflush(sd_img), sd_writes += n, sdt_p.wr += n;
     else
-        sd_reads += n;
+        sd_reads += n, sdt_p.rd += n;
+    if (sdt_on)
+        sdt_us += (uint64_t)n * (wr ? SDT_WR_US : SDT_RD_US);
     return 0;
 }
-int plat_sd_read(uint32_t blk, void *p, uint32_t n) { return sd_run ? PLAT_SD_BUSY : sd_io(blk, p, n, 0); }
+static void sdt_cmd(void)
+{
+    sdt_p.cmd++;
+    if (sdt_on)
+        sdt_us += SDT_CMD_US;
+}
+int plat_sd_read(uint32_t blk, void *p, uint32_t n)
+{
+    if (!sd_run)
+        sdt_cmd();
+    return sd_run ? PLAT_SD_BUSY : sd_io(blk, p, n, 0);
+}
 int plat_sd_write(uint32_t blk, const void *p, uint32_t n)
 {
+    if (!sd_run)
+        sdt_cmd();
     return sd_run ? PLAT_SD_BUSY : sd_io(blk, (void *)p, n, 1);
 }
 int plat_sd_read_open(uint32_t blk)
@@ -1419,6 +1458,7 @@ int plat_sd_read_open(uint32_t blk)
         return PLAT_SD_ERR;
     sd_run = 1;
     sd_next = blk;
+    sdt_cmd();
     return 0;
 }
 int plat_sd_read_next(void *p, uint32_t wait_us)
@@ -1451,6 +1491,7 @@ int plat_sd_close(void)
 #include "../device/sd_clock.h"
 static uint8_t sd_force;
 uint32_t plat_sd_clock_khz(void) { return 0; }
+void plat_sd_errs(uint32_t *crc_fails, uint32_t *steps_down) { *crc_fails = *steps_down = 0; }
 void plat_sd_clock(plat_sd_clock_t *c)
 {
     uint32_t k;
@@ -1491,6 +1532,37 @@ uint32_t plat_console_write(const void *p, uint32_t n)
     return n;
 }
 void plat_console_present(int on) { con_presented = on != 0; }
+#if FM1B_SD
+static void sdt_pass_end(int frame)              /* a pass over: its time, the longest, the sums */
+{
+    uint32_t card = (uint32_t)(sdt_p.rd * SDT_RD_US + sdt_p.cmd * SDT_CMD_US + sdt_p.wr * SDT_WR_US);
+    uint32_t lcd = (uint32_t)(sdt_p.lcd_b * 18u / 100u), ms10 = (card + lcd) / 100u;
+    sdt.rd += sdt_p.rd, sdt.wr += sdt_p.wr, sdt.cmd += sdt_p.cmd, sdt.strips += sdt_p.strips, sdt.lcd_b += sdt_p.lcd_b;
+    sdt_frames += (uint32_t)frame;
+    sdt_all_ms10 = ms10 > sdt_all_ms10 ? ms10 : sdt_all_ms10;
+    sdt_max_ms10 = ms10 > sdt_max_ms10 ? ms10 : sdt_max_ms10;
+    if (sdt_gaps_ms && ms10 >= sdt_gaps_ms * 10u)
+        printf("  sdgap %u ms: pass %u.%u ms, %llu blocks, %llu commands, %llu written, %llu strips %llu B\n", plat_ms(),
+               ms10 / 10u, ms10 % 10u, (unsigned long long)sdt_p.rd, (unsigned long long)sdt_p.cmd,
+               (unsigned long long)sdt_p.wr, (unsigned long long)sdt_p.strips, (unsigned long long)sdt_p.lcd_b);
+    memset(&sdt_p, 0, sizeof sdt_p);
+}
+static void sdt_report(const char *name)
+{
+    uint32_t ms = plat_ms() - sdt_t0, card = (uint32_t)(sdt.rd * SDT_RD_US + sdt.cmd * SDT_CMD_US + sdt.wr * SDT_WR_US);
+    uint32_t lcd = (uint32_t)(sdt.lcd_b * 18u / 100u);
+    ms = ms ? ms : 1u;
+    printf("  sdstat %-14s %6u ms %5u frames: card %7llu blocks %6llu commands %5llu written; %7llu strips %10llu B; "
+           "a frame %6.1f strips %8.0f B; bus: card %5.1f %% LCD %5.1f %%; longest pass %u.%u ms\n", name, ms, sdt_frames,
+           (unsigned long long)sdt.rd, (unsigned long long)sdt.cmd, (unsigned long long)sdt.wr,
+           (unsigned long long)sdt.strips, (unsigned long long)sdt.lcd_b,
+           sdt_frames ? (double)sdt.strips / sdt_frames : 0.0, sdt_frames ? (double)sdt.lcd_b / sdt_frames : 0.0,
+           card / 10.0 / ms, lcd / 10.0 / ms, sdt_max_ms10 / 10u, sdt_max_ms10 % 10u);
+    memset(&sdt, 0, sizeof sdt);
+    sdt_frames = sdt_max_ms10 = 0;
+    sdt_t0 = plat_ms();
+}
+#endif
 static void run_ms(uint32_t ms);
 static void console_line(const char *t)         /* the line typed, the reply kept (the earlier reply and the banner dropped) */
 {
@@ -1767,7 +1839,7 @@ static int himg_load(const char *path, uint32_t *objs)   /* 0 = loaded (*objs: t
 #endif
 
 static uint32_t cpu_pct;
-uint32_t plat_cpu_pct(void) { return cpu_pct; }
+uint32_t plat_cpu_pct(void) { return sdt_on ? 20u + plat_ms() / 16u % 7u : cpu_pct; }   /* (FM1B_SD_TIME: a load that moves, as on an FM-1) */
 static void ds_fill(ds_rec_t *r)                    /* what the simulator has of main_fm1.c's counters (the rest 0) */
 {
     r->up_s = (now_ms - hcr_boot_ms) / 1000u, r->halves = hds_halves;
@@ -2415,6 +2487,9 @@ static void sim_ms_end(int frame)
         app_frame();
     else
         app_input_only();
+#if FM1B_SD
+    sdt_pass_end(frame);
+#endif
 #if FM1B_MIRROR
     mirror_step();
     host_mirror_ms();
@@ -2567,6 +2642,8 @@ static int expect(const char *what, const char *val)
         got = (int)sd_writes;
     else if (!strcmp(what, "sd_present"))
         got = sd_up;
+    else if (!strcmp(what, "sd_gap_ms"))
+        got = (int)(sdt_all_ms10 / 10u);
 #endif
     else if (!strcmp(what, "store_tries"))
         got = (int)store_tries;
@@ -3180,6 +3257,8 @@ int main(int argc, char **argv)
             else
                 printf("  ok   flash_dump %s\n", a);
 #if FM1B_SD
+        } else if (!strcmp(cmd, "sdstat")) {      /* sdstat NAME: the card's and the LCD's bus since the last (above) */
+            sdt_report(a);
         } else if (!strcmp(cmd, "sd")) {          /* sd FILE | sd out: a card image in, or the card out */
             if (sd_insert(a)) {
                 printf("FAIL sd %s: no such image\n", a);

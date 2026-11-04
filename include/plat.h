@@ -693,6 +693,7 @@ typedef struct {
     uint32_t steps_down;               /* run-time steps down for them */
 } plat_sd_clock_t;
 uint32_t plat_sd_clock_khz(void);
+void plat_sd_errs(uint32_t *crc_fails, uint32_t *steps_down);   /* blocks whose CRC16 failed, run-time steps down for them (plat_sd_clock_t's two, in every build) */
 void plat_sd_clock(plat_sd_clock_t *c);
 void plat_sd_clock_set(uint32_t k);
 int plat_sd_clock_try(uint32_t k);

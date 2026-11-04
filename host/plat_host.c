@@ -105,6 +105,7 @@
  *   sysex_log FILE|off           every frame the app sends from now on, appended to FILE as it went out (raw)
  *   usb unplug|plug|stall|read   the computer: the cable out, in again (a new plat_usb_session), the computer stops
  *                                reading the device's SysEx, reads again
+ *   jam_peer BPM [GROUP] | jam_peer off      (wifi_stack = "own") another FM-1 of a MODE JAM group (host/wifi_air.c)
  *   wifi_net NAME PASS [CH] | wifi_net off   (wifi_stack = "own") the simulated network (host/wifi_air.c): an access
  *                                point on channel CH (6), its DHCP server (192.168.50.2..); off: it is gone
  *   wifi mode OFF|AUTO|MAN | wifi join NAME [PASS] | wifi leave | wifi scan   the FM-1's (plat_wifi_*)

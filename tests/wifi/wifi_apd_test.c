@@ -580,8 +580,8 @@ int main(void)
     /* 13b. MODE JAM: no access point, no manager: the group's channel, the group's BSSID, open frames at the never-keyed WCID */
     {
         uint8_t raw[WN_STORE_SIZE], fr[128];
-        uint32_t jv[5];
-        uint32_t t, n, seen_beacon = 0;
+        uint32_t jv[4];
+        uint32_t n;
         check(plat_wifi_jam() == -1, "MODE AP: not on the air");
         plat_wifi_set_group(1);
         plat_wifi_mode(WIFI_MODE_JAM_AUTO);
@@ -592,18 +592,6 @@ int main(void)
         check(!strcmp(plat_wifi_ssid(), "fm1-jam"), "group 1: the name fm1-jam");
         check(plat_wifi_jam_stat(0, jv) && (wl.ip.ip >> 16) == 0xA9FEu && jv[0] == 1u, "the address: 169.254.x.y at once, no DHCP");
         check(plat_wifi_jam() == 0 && plat_wifi_state() == WIFI_ON, "nobody heard: 0, on");
-        for (t = 0; t < 2200u; t += 50u) {
-            uint32_t m0 = ntx;
-            tick(50);
-            for (i = m0; i < ntx; i++) {
-                const struct txe *x = &txlog[i % TXMAX];
-                if (x->f[0] == 0x80u && !memcmp(x->f + 38, "fm1-jam", 7)) {
-                    seen_beacon++;
-                    check(x->wcid == JA_WCID && !x->ack, "the beacon: the plain WCID, no ACK wanted");
-                }
-            }
-        }
-        check(seen_beacon >= 2u && seen_beacon <= 3u, "a beacon a second");
         /* Link's group datagram from another unit: heard, counted, its address learned */
         plat_net_udp_open(20808, on_group, 0);
         plat_net_join(0xE04C4E4Bu);

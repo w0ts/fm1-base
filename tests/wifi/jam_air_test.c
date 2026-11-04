@@ -56,7 +56,6 @@ struct unit {
     int64_t offs;
     int64_t pass_at;                     /* true us of the next pass */
     uint32_t pass_lo, pass_hi;           /* a pass takes this many us */
-    int64_t beacon_at;
     uint8_t mac[6];
     struct ja_net n;
     struct wifi_ip ip;
@@ -139,7 +138,7 @@ static void unit_rx(struct unit *r, const struct rxf *q, int64_t now)
 {
     uint8_t b[FRAME_MAX];
     uint32_t tl = 0, ip;
-    if (ja_heard(&r->n, q->f, q->n, q->rssi, (uint32_t)(t_now / 1000)) != JA_DATA)
+    if (!ja_heard(&r->n, q->f, q->n, q->rssi, (uint32_t)(t_now / 1000)))
         return;
     ip = ja_sender_ip(q->f, q->n);
     if (ip == r->ip.ip) {
@@ -169,11 +168,6 @@ static void unit_pass(struct unit *p)
         p->qr++;
     }
     lk_poll(&p->k, now);
-    if (t_now >= p->beacon_at) {
-        uint8_t b[FRAME_MAX];
-        p->beacon_at = t_now + JA_BEACON_MS * 1000u;
-        air_send(p, b, ja_beacon(&p->n, (uint64_t)now, b));
-    }
     p->pass_at = t_now + p->pass_lo + rnd() % (p->pass_hi - p->pass_lo + 1u);
 }
 static void unit_on(uint32_t i, uint32_t grp, double ppm, uint32_t lo, uint32_t hi)
@@ -207,7 +201,6 @@ static void unit_on(uint32_t i, uint32_t grp, double ppm, uint32_t lo, uint32_t 
     p->on = 1;
     lk_enable(&p->k, 1, local_us(p));
     lk_set_addr(&p->k, ip, LK_MCAST_PORT);
-    p->beacon_at = t_now;
 }
 static void unit_off(uint32_t i) { u[i].on = 0; }   /* (switched off: no bye-bye) */
 static void reset(void)
@@ -319,21 +312,14 @@ int main(void)
     check(!memcmp(f + 10, u[0].mac, 6) && !memcmp(f + 16, u[0].n.bssid, 6), "addr2 the sender, addr3 the group's BSSID");
     check(ja_sender_ip(f, n) == u[0].ip.ip, "the sender's IP read off the frame");
     unit_on(1, 1, 0, 1000, 2000);
-    check(ja_heard(&u[1].n, f, n, -50, 0) == JA_DATA && u[1].n.peer[0].n_data == 1u, "another unit of the group: heard, counted");
-    check(ja_heard(&u[0].n, f, n, -50, 0) == JA_NOT_OURS, "our own frame: not");
+    check(ja_heard(&u[1].n, f, n, -50, 0) && u[1].n.peer[0].n_data == 1u, "another unit of the group: heard, counted");
+    check(!ja_heard(&u[0].n, f, n, -50, 0), "our own frame: not");
     unit_on(2, 2, 0, 1000, 2000);
-    check(ja_heard(&u[2].n, f, n, -50, 0) == JA_NOT_OURS && !u[2].n.peer[0].used, "another group's: dropped, not counted");
+    check(!ja_heard(&u[2].n, f, n, -50, 0) && !u[2].n.peer[0].used, "another group's: dropped, not counted");
     f[1] = 0x42u;
-    check(ja_heard(&u[1].n, f, n, -50, 0) == JA_NOT_OURS, "an access point's (FromDS): not ours");
+    check(!ja_heard(&u[1].n, f, n, -50, 0), "an access point's (FromDS): not ours");
     f[1] = 0x40u;
-    check(ja_heard(&u[1].n, f, n, -50, 0) == JA_NOT_OURS, "a protected one: not ours");
-    n = ja_beacon(&u[0].n, 1234, f);
-    check(f[0] == 0x80u && f[34] == 2u && f[37] == 7u && !memcmp(f + 38, "fm1-jam", 7), "the beacon: IBSS, the name as its SSID");
-    check(n < 70u, "the beacon: under 70 bytes (0.76 ms at 1 Mb/s)");
-    check(ja_heard(&u[1].n, f, n, -50, 0) == JA_BEACON && u[1].n.peer[0].n_beacon == 1u, "a beacon of the group: counted apart");
-    f[38] = 'x';
-    check(ja_heard(&u[1].n, f, n, -50, 0) == JA_NOT_OURS, "a beacon with that BSSID and another name: not ours");
-
+    check(!ja_heard(&u[1].n, f, n, -50, 0), "a protected one: not ours");
     /* an ARP who-has from a computer on the network */
     reset();
     unit_on(0, 1, 0, 1000, 2000);
@@ -350,7 +336,7 @@ int main(void)
         memcpy(a + 40, a + 10, 6);
         a[46] = 169, a[47] = 254, a[48] = 9, a[49] = 9;
         a[56] = (uint8_t)(u[0].ip.ip >> 24), a[57] = (uint8_t)(u[0].ip.ip >> 16), a[58] = (uint8_t)(u[0].ip.ip >> 8), a[59] = (uint8_t)u[0].ip.ip;
-        check(ja_heard(&u[0].n, a, 60, -50, 0) == JA_DATA && wifi_ip_early_filter(&u[0].ip, a, 60) &&
+        check(ja_heard(&u[0].n, a, 60, -50, 0) && wifi_ip_early_filter(&u[0].ip, a, 60) &&
               wifi_ip_rx_frame(&u[0].ip, a, 60, 0, r, &tl) == 1 && tl, "a who-has for our address: answered");
         check(r[1] == 0u && !memcmp(r + 4, a + 10, 6) && !memcmp(r + 16, u[0].n.bssid, 6), "the answer: an ad-hoc frame to the asker");
     }

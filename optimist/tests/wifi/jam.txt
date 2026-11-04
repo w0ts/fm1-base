@@ -1,48 +1,65 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# MODE JAM in the trial (device/wifi_own.c wc_jam_pick; host simulator, OPT_HOST_BT=1 OPT_HOST_WIFI=1 with profiles/dev-wifi.config:
-# optimist/run.sh's wifi run). The simulated network is an Optimist access point (FM1-AB12) with its default password
-# (wifi_ap_default_key); a Link peer on it. MODE AUTO hears it and ignores it; MODE JAM joins it by itself with the derived
-# key, Link runs although SYNC > LINK is OFF (the stored value untouched) and goes back to it when JAM is left; an access
-# point that has a typed password refuses the derived key: one try, JAM says so (wifi_jam 2) and leaves it alone
+# MODE JAM in the trial (device/wifi_own.c ja_*, wifi/wifi_jam.h; host simulator, OPT_HOST_BT=1 OPT_HOST_WIFI=1 with profiles/dev-wifi.config:
+# optimist/run.sh's wifi run). The air holds another FM-1 of a group (jam_peer) and a Link peer on it. No access point, nothing
+# joined: the FM-1 goes to its group's channel, takes a 169.254 address and hears the other; Link runs although SYNC > LINK is
+# OFF (the stored value untouched) and goes back to it when JAM is left; another group is another channel: nobody heard
 wait 1500
 master 2048
 wait 100
-wifi_net FM1-AB12 default 6
-link_peer 120
+jam_peer 120
 linkset 0
-wifi mode AUTO
-wait 4000
-wifi scan
-wait 4000
-expect wifi_mode 1
-expect wifi_found 1
-expect wifi_step 2
-expect wifi_jam 0
-expect link_peers 0
-# JAM: joined by itself, nothing typed, nothing saved by it
 wifi mode JAM
-wait 12000
+wait 5000
 expect wifi_mode 7
-expect wifi_step 8
-expect wifi_ip_last 2
+expect wifi_step 0
+expect wifi_ch 1
+expect wifi_ip_first 169
 expect wifi_jam 1
 expect link_stored 0
 expect link_eff 1
 expect link_peers 1
+expect peer_peers 1
+# the page: MODE JAM, GROUP, STATE (HEARD 1, in turns the signal, RETRY, LOST: K4 holds a turn), LINK PEERS
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 3
+wait 300
+cells
+shot jam-page-0.png
+spin K4 1
+wait 300
+cells
+shot jam-page-1.png
+spin K4 1
+wait 300
+cells
+shot jam-page-2.png
+spin K4 1
+wait 300
+cells
+shot jam-page-3.png
+# the other unit's tempo reaches this one: the session is shared with no access point between
+link_peer tempo 133
+wait 1500
+expect link_bpm_x10 1330
+# GROUP 2: channel 6, the other unit (group 1) no longer heard
+wifi group 2
+wait 6000
+expect wifi_ch 6
+expect wifi_jam 0
+expect link_peers 0
+# ... it joins group 2 as well
+jam_peer 90 2
+wait 5000
+expect wifi_jam 1
+expect link_peers 1
 # leaving JAM: the LINK setting is back (OFF), the stored value was never touched
+wifi group 1
 wifi mode AUTO
 wait 500
+expect wifi_jam -1
 expect link_stored 0
 expect link_eff 0
-# an access point whose owner typed a password: the derived key is refused
-wifi leave
-wifi_net FM1-AB12 typedkey1 6
-wait 500
-wifi mode JAM
-wait 25000
-expect wifi_mode 7
-expect wifi_step 9
-expect wifi_jam 2
-expect link_eff 1
-wifi mode AUTO
-wifi_net off
+jam_peer off

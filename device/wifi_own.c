@@ -507,7 +507,6 @@ static struct wn_scan wc_tab;                     /* the APs heard */
 static struct {
     uint8_t up, fail;                     /* running; the radio cannot start */
     uint8_t grp;
-    uint32_t t_beacon;
     struct ja_net n;
 } ja;
 static uint32_t own_jam_group(void) { return wn_st.ap.grp >= 1u && wn_st.ap.grp <= WN_GROUPS ? wn_st.ap.grp : 1u; }
@@ -523,8 +522,9 @@ static void ja_rx(const uint8_t *f, uint32_t len, int8_t rssi, int64_t now)
 {
     uint32_t tx_len = 0, ip;
     wl.n_rx++;
-    if (ja_heard(&ja.n, f, len, rssi, own_ms()) != JA_DATA)
+    if (!ja_heard(&ja.n, f, len, rssi, own_ms()))
         return;
+    oq_signal(1u, rssi);                          /* (the quality's signal: as a client's in MODE AP) */
     ip = ja_sender_ip(f, len);
     if (ip == wl.ip.ip) {
         ja_new_addr();
@@ -553,7 +553,6 @@ static void ja_start(void)
     wl.n_rx = wl.n_kept = wl.n_tx = wl.n_tx_err = 0;
     wl.ja = wl.on = 1;
     ja.up = 1;
-    ja.t_beacon = own_ms() - JA_BEACON_MS;
     own_on_addr(0, wl.ip.ip);
 }
 static void ja_stop(void)
@@ -573,19 +572,11 @@ static void ja_poll(void)                 /* after the manager and the access po
     }
     if (ja.up && ja.grp != own_jam_group())
         ja_stop();                        /* (another group: another channel, the next pass) */
-    if (!ja.up) {
-        int r;
-        if (now < WC_RADIO_MS)
-            return;
-        r = own_radio_up();
+    if (!ja.up && now >= WC_RADIO_MS) {
+        int r = own_radio_up();
         ja.fail = r < 0;
         if (r > 0)
             ja_start();
-        return;
-    }
-    if (now - ja.t_beacon >= JA_BEACON_MS) {
-        ja.t_beacon = now;
-        wl_send(ja_beacon(&ja.n, (uint64_t)own_us(), own_frame()));
     }
 }
 static int wc_auto(void) { return wn_st.mode == WN_MODE_AUTO; }   /* (saved networks joined by themselves) */
@@ -971,17 +962,16 @@ int plat_wifi_jam(void)
         return -2;
     return ja.up ? (int)ja_count(&ja.n, own_ms()) : -1;
 }
-int plat_wifi_jam_stat(int i, uint32_t v[5])
+int plat_wifi_jam_stat(int i, uint32_t v[4])
 {
     const struct ja_peer *q = &ja.n.peer[i - 1];
     if (!ja.up || i < 0 || i > (int)JA_PEERS)
         return 0;
     if (!i) {
-        v[0] = ja.n.ch, v[1] = wl.n_tx, v[2] = wl.n_tx_err, v[3] = wl.n_rx, v[4] = wl.n_kept;
+        v[0] = ja.n.ch, v[1] = wl.n_tx, v[2] = wl.n_tx_err, v[3] = wl.n_kept;
         return 1;
     }
-    v[0] = (uint32_t)q->mac[4] << 8 | q->mac[5], v[1] = q->n_data, v[2] = q->n_beacon, v[3] = (uint32_t)-(int32_t)q->rssi;
-    v[4] = own_ms() - q->t_heard;
+    v[0] = (uint32_t)q->mac[4] << 8 | q->mac[5], v[1] = q->n_data, v[2] = (uint32_t)-(int32_t)q->rssi, v[3] = own_ms() - q->t_heard;
     return q->used;
 }
 int plat_wifi_fail(void) { return wc.fail; }

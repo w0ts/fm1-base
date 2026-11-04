@@ -472,7 +472,7 @@ int plat_wifi_ap_channel(void);        /* the channel in use (AUTO: the one chos
 int plat_wifi_ap_channel_auto(void);   /* 1: CHANNEL is AUTO */
 int plat_wifi_ap_name(char *name);     /* the network's name (33 bytes, may be 0): its length */
 int plat_wifi_jam(void);               /* MODE JAM: the FM-1s heard lately (0: none yet), -1 not running (starting, another mode), -2 the radio cannot start */
-int plat_wifi_jam_stat(int i, uint32_t v[5]);   /* MODE JAM running, 1 and v: i 0: the channel, frames sent, failed to send, heard, kept; i 1..: the unit heard (its number, frames of data, beacons, its signal as -dBm, ms since); 0: no such */
+int plat_wifi_jam_stat(int i, uint32_t v[4]);   /* MODE JAM running, 1 and v: i 0: the channel, frames sent, failed to send, kept; i 1..: the unit heard (its number, its frames, its signal as -dBm, ms since); 0: no such */
 int plat_wifi_ap_has_key(void);        /* a typed password's key is kept */
 int plat_wifi_ap_default_key(char *out);   /* the default password of the current name (wifi_ap_default_key, 9 bytes): 1 when it is the one in use (none typed), 0 a typed one replaces it */
 void plat_wifi_ap_forget(void);        /* the typed key goes (the name and channel stay): the default password again, the access point starts again on it */

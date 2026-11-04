@@ -328,26 +328,45 @@ static void sd_dma_probe(void)                       /* block 0 by bytes, then b
  * CRC16: a line stuck low reads zeros with a right CRC16, and differs). A failure sets the floor before the CMD12. */
 #define SD_CLK_SINGLES 8u
 #define SD_CLK_RUN 16u                 /* the CMD18's blocks (fewer on a smaller card) */
+/* The time (the watchdog: 8 s, main_fm1.c fm1_wdt_arm(0x0D), fed once a main loop pass; the card mounts inside one, at
+ * boot before the loop). Every wait in the probe is SD_CLK_WAIT_MS (a token, a busy end), so a pass takes at most
+ * (2 registers + 8 blocks + 16) x 20 ms + 2 busy ends ~ 0.56 s however slowly the card answers, and returns at its first
+ * failure; no step starts after SD_CLK_BUDGET_MS. A step that times out or is refused (PLAT_SD_STEP_ERR) ends the walk
+ * at the floor. Worst case, from the probe's start: the floor's pass 0.56 s, CMD6 twice 0.04, steps until 1 s, the last
+ * one's two passes 1.12 s, its recovery (CMD12 0.02, a pass 0.56, the start-up again: ACMD41 1 s + the CSD 0.1, CMD6
+ * 0.04, a pass 0.56) 2.3 s: ~5 s, with the watchdog fed at every pass and before the start-up again, so ~1.7 s at most
+ * between two feeds (tests/sd_clock_test.c measures both on its slow card) */
+#define SD_CLK_WAIT_MS 20u
+#define SD_CLK_BUDGET_MS 1000u
 
 static void sd_clk_set(uint32_t k) { fm1_sd_hw_baud(FM1B_SD_STEP_BAUD[k]); }
 
 static uint16_t sd_sum16(uint16_t s, uint16_t v) { return sd_crc16_byte(sd_crc16_byte(s, (uint8_t)(v >> 8)), (uint8_t)v); }
 
-static int sd_switch_hs(void)                        /* CMD6 mode 1, group 1 = 1: 1 = the card is at high speed now */
+static int sd_cmd6(uint32_t arg, uint8_t *st)        /* CMD6's switch status: 0 = its 64 bytes in, their CRC16 right */
+{
+    int r = -1;
+    if (sd_cmd(SD_CMD6, arg) == 0 && sd_wait_byte(SD_CLK_WAIT_MS) == SD_TOKEN)
+        r = sd_bytes_in(st, 64u);
+    sd_release();
+    return r;
+}
+
+/* 1 = the card is at high speed now. Asked first (mode 0, group 1 = 1): switched (mode 1) only when that status says
+ * group 1 supports function 1 (bit 401: byte 13 bit 1) and would switch to it (bits 379:376 = 1: byte 16); then the
+ * switch's own status says it did. Every status's CRC16 checked */
+static int sd_switch_hs(void)
 {
     uint8_t st[64];
-    int ok = 0;
-    if (sd_cmd(SD_CMD6, 0x80FFFFF1u) == 0 && sd_wait_byte(100) == SD_TOKEN)
-        ok = sd_bytes_in(st, 64u) == 0 && (st[16] & 15u) == 1u;   /* bits 379:376, group 1's function now */
-    sd_release();
-    return ok;
+    return sd_cmd6(0x00FFFFF1u, st) == 0 && (st[13] & 2u) && (st[16] & 15u) == 1u && sd_cmd6(0x80FFFFF1u, st) == 0 &&
+           (st[16] & 15u) == 1u;
 }
 
 static uint32_t sd_reg_read(uint32_t cmd, uint16_t *sum)   /* the CSD (CMD9) or the CID (CMD10) */
 {
     uint8_t r[16];
     uint32_t res = PLAT_SD_STEP_ERR, i;
-    if (sd_cmd(cmd, 0) == 0 && sd_wait_byte(100) == SD_TOKEN) {
+    if (sd_cmd(cmd, 0) == 0 && sd_wait_byte(SD_CLK_WAIT_MS) == SD_TOKEN) {
         res = sd_bytes_in(r, 16u) ? PLAT_SD_STEP_CRC : PLAT_SD_STEP_PASS;
         for (i = 0; i < 16u; i++)
             *sum = sd_crc16_byte(*sum, r[i]);
@@ -366,7 +385,7 @@ static uint32_t sd_rd_crcs(uint32_t blk, uint32_t n, uint16_t *sum)   /* n block
         return PLAT_SD_STEP_ERR;
     }
     for (i = 0; i < n && res == PLAT_SD_STEP_PASS; i++) {
-        if (sd_wait_byte(100) != SD_TOKEN)
+        if (sd_wait_byte(SD_CLK_WAIT_MS) != SD_TOKEN)
             res = PLAT_SD_STEP_ERR;
         else if ((r = sd_block_in(sd_bounce, sd.dma)) != 0)
             res = r == -2 ? PLAT_SD_STEP_CRC : PLAT_SD_STEP_ERR;
@@ -375,7 +394,7 @@ static uint32_t sd_rd_crcs(uint32_t blk, uint32_t n, uint16_t *sum)   /* n block
     }
     if (res != PLAT_SD_STEP_PASS)
         sd_clk_set(FM1B_SD_FLOOR);
-    if (n > 1u && (sd_cmd(SD_CMD12, 0) & 0x80u || sd_wait_ready(100)) && res == PLAT_SD_STEP_PASS)
+    if (n > 1u && (sd_cmd(SD_CMD12, 0) & 0x80u || sd_wait_ready(SD_CLK_WAIT_MS)) && res == PLAT_SD_STEP_PASS)
         res = PLAT_SD_STEP_ERR;
     sd_release();
     return res;
@@ -384,6 +403,7 @@ static uint32_t sd_rd_crcs(uint32_t blk, uint32_t n, uint16_t *sum)   /* n block
 static uint32_t sd_clk_pass(uint32_t n, uint16_t *sum)
 {
     uint32_t i, r, span = sd.blocks / SD_CLK_SINGLES;
+    fm1_wdt_feed();                                  /* (a pass: 0.56 s at most) */
     *sum = 0;
     if ((r = sd_reg_read(SD_CMD9, sum)) != PLAT_SD_STEP_PASS || (r = sd_reg_read(SD_CMD10, sum)) != PLAT_SD_STEP_PASS)
         return r;
@@ -414,10 +434,11 @@ static int sd_clk_recover(uint32_t n, uint16_t ref)
     fm1_sd_hw_sel();
     (void)sd_rx();
     (void)sd_cmd(SD_CMD12, 0);
-    (void)sd_wait_ready(100);
+    (void)sd_wait_ready(SD_CLK_WAIT_MS);
     sd_release();
     if (sd_clk_pass(n, &s) == PLAT_SD_STEP_PASS && s == ref)
         return 1;
+    fm1_wdt_feed();                                  /* (the start-up again: ACMD41's 1 s at most) */
     fm1_sd_hw_baud(FM1_SD_HW_BAUD_INIT);
     if (sd_start() != 0)
         return 0;
@@ -426,8 +447,10 @@ static int sd_clk_recover(uint32_t n, uint16_t ref)
 }
 
 /* the walk, from the fastest step down: the first that passes is the fastest, the one below it must pass too and is
- * kept (the floor when that is the floor); it failing, the walk goes on after it. sd.force: that step, unchecked. SD v1,
- * the plain pins (no clock to pick), a card of unknown size: the floor, nothing tried. sd.up 0 when the card is lost */
+ * kept (the floor when that is the floor); it failing on a CRC or the data, the walk goes on after it. A step that
+ * times out or is refused, or the time spent (SD_CLK_BUDGET_MS): the walk ends, at the floor unless a step was kept.
+ * sd.force: that step, unchecked. SD v1, the plain pins (no clock to pick), a card of unknown size: the floor, nothing
+ * tried. sd.up 0 when the card is lost */
 static void sd_clock_probe(void)
 {
     uint16_t ref;
@@ -446,11 +469,11 @@ static void sd_clock_probe(void)
     if (!sd.v2 || !sd.blocks || sd.mode == FM1_SD_HW_GPIO)
         return;
     r = sd.res[FM1B_SD_FLOOR] = (uint8_t)sd_clk_pass(n, &ref);
+    sd.probe_ms = sd_since(t0) / SD_MS(1);
     if (r != PLAT_SD_STEP_PASS)
         return;
     sd.hs = (uint8_t)sd_switch_hs();
-    for (k = 0; k < FM1B_SD_FLOOR; k++) {
-        fm1_wdt_feed();                              /* (a failing step: its timeouts, a start-up again: 1 s and more) */
+    for (k = 0; k < FM1B_SD_FLOOR && sd_since(t0) < SD_MS(SD_CLK_BUDGET_MS); k++) {
         if (k < FM1B_SD_NSTEP_HS && !sd.hs) {
             sd.res[k] = PLAT_SD_STEP_NOHS;
             continue;
@@ -473,6 +496,8 @@ static void sd_clock_probe(void)
             sd.up = 0;
             break;
         }
+        if (r == PLAT_SD_STEP_ERR)                   /* (a timeout or a refusal: no slower step tried, the floor) */
+            break;
     }
     sd.probe_ms = sd_since(t0) / SD_MS(1);
 }
@@ -536,6 +561,7 @@ uint32_t plat_sd_clock_khz(void)
     return sd.up && sd.mode != FM1_SD_HW_GPIO ? FM1B_SD_STEP_KHZ(sd.step) : 0u;
 }
 
+#if FM1B_CDC                           /* (the console's alone: flash) */
 void plat_sd_clock(plat_sd_clock_t *c)
 {
     uint32_t k;
@@ -555,6 +581,7 @@ void plat_sd_clock(plat_sd_clock_t *c)
 }
 
 void plat_sd_clock_set(uint32_t k) { sd.force = (uint8_t)(k <= FM1B_SD_NSTEP ? k : FM1B_SD_NSTEP); }
+#endif
 
 int plat_sd_present(void) { return sd.up; }
 
@@ -613,6 +640,7 @@ int plat_sd_read(uint32_t blk, void *p, uint32_t n)
     int r = sd_ready_for(blk, n);
     if (r || !n)
         return r;
+    fm1_wdt_feed();                                  /* (see plat.h: a pass over the card is many of these) */
     sd_take(FM1B_SD_STEP_BAUD[sd.step]);
     while (i < n) {
         r = sd_read_run(blk + i, d + i * 512u, n - i, &got);
@@ -634,6 +662,7 @@ int plat_sd_write(uint32_t blk, const void *p, uint32_t n)
     int r = sd_ready_for(blk, n);
     if (r || !n)
         return r;
+    fm1_wdt_feed();                                  /* (see plat.h: a pass over the card is many of these) */
     sd_take(FM1B_SD_STEP_BAUD[sd.step]);
     if (n == 1u) {
         if (sd_cmd(SD_CMD24, sd_addr(blk)) != 0 || sd_block_out(s, SD_TOKEN) || sd_wait_ready(500))
@@ -774,6 +803,7 @@ int plat_sd_close(void)
     return sd_fail(r);
 }
 
+#if FM1B_CDC
 int plat_sd_clock_try(uint32_t k)                    /* (the console's sd speed) */
 {
     uint16_t ref;
@@ -794,3 +824,4 @@ int plat_sd_clock_try(uint32_t k)                    /* (the console's sd speed)
     sd.crc_fails = fails;
     return r;
 }
+#endif

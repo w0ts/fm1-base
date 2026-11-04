@@ -627,7 +627,9 @@ uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; el
  *   plat_sd_present()          1 while a started card answers
  *   plat_sd_blocks()           its size (its CSD), 0 when unknown
  *   plat_sd_read(blk, p, n)    n blocks from blk into p (one multi-block read), each block's CRC16 checked (a failure
- *                              read again, twice at most: then PLAT_SD_CRC); 0 = done
+ *                              read again, twice at most: then PLAT_SD_CRC); 0 = done. This and plat_sd_write
+ *                              feed the watchdog (8 s): a pass over the card's files inside one main loop pass
+ *                              takes as long as it takes, the card moving; a stuck card fails its call first
  *   plat_sd_write(blk, p, n)   n blocks from p to blk (one multi-block write for n > 1), the card's busy waited for
  * Runs, for streaming (one at a time; the other calls answer PLAT_SD_BUSY meanwhile):
  *   plat_sd_read_open(blk)     a multi-block read from blk: the bus stays the card's (the screen waits) until
@@ -647,9 +649,11 @@ uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; el
  * must); the step below the fastest that passed must pass too and is the clock kept (the margin). A card that no longer
  * reads at the floor after a failed step: PLAT_SD_ERR. At run time a block whose CRC16 fails above the floor drops the
  * clock one step at once (counted) and plat_sd_read reads it again there; plat_sd_read_next steps down the same and
- * answers PLAT_SD_CRC. The detection takes up to about a second (a card that fails at every step: its timeouts).
+ * answers PLAT_SD_CRC. A step that times out or is refused ends the walk at the floor, no step starts after 1 s, every
+ * wait is 20 ms: the detection takes ~5 s at the very worst, ~1.7 s at most between its watchdog feeds.
  *   plat_sd_clock_khz()        the clock the card runs at now, kHz; 0: no card, the plain pins (no clock to pick), the host
- *   plat_sd_clock(c)           what the detection found (plat_sd_clock_t below), for a console
+ * For a console (built with usb_console: FM1B_CDC, on the host always):
+ *   plat_sd_clock(c)           what the detection found (plat_sd_clock_t below)
  *   plat_sd_clock_set(k)       0: detect at the next plat_sd_init (the default); k: step k - 1 from then on, unchecked
  *   plat_sd_clock_try(k)       step k tried now (the reference at the floor, two passes at k): PLAT_SD_STEP_*, or
  *                              PLAT_SD_NOCARD / PLAT_SD_BUSY / PLAT_SD_ERR; the clock kept as it was

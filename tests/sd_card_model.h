@@ -11,7 +11,12 @@
  *   flaky_from, flaky_every   steps faster than flaky_from: every flaky_every-th block flipped
  *   bad_only     > 0: step bad_only - 1 alone reads wrong (a resonance)
  *   die_from     steps faster than this: the card stops answering for good
- *   no_hs        CMD6 answers, the card stays at default speed (30 MHz then reads wrong, as without CMD6) */
+ *   no_hs        CMD6 answers, the card stays at default speed (30 MHz then reads wrong, as without CMD6)
+ *   cmd6_crc_bad CMD6's status comes with a wrong CRC16
+ * and the failure the black FM-1 showed (Optimist 47524040: garbage past the start-up):
+ *   garbage_from steps faster than this: every byte read back is noise; the card still hears the commands
+ *   slow_ms      every token (a block's, a register's) comes this late, at every clock
+ *   wedge_from   a command at a step faster than this leaves the card deaf until a CMD0 */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,12 +25,18 @@
 #include "../device/sd_clock.h"
 
 /* ---- the stand-ins: the LCD (lcd.c), the time base, fm1_sd_hw.h, the watchdog ---- */
-static uint32_t wdt_feeds;
-static void fm1_wdt_feed(void) { wdt_feeds++; }
 #define LCD_BAUD 0u
 #define FM1_TICKS_PER_US 24u
 static uint32_t now;                                 /* ticks: each byte on the bus 0.4 us at 20 MHz (10 ticks) */
 static uint32_t fm1_ticks(void) { return now += 2u; }
+static uint32_t wdt_feeds, wdt_last, wdt_gap;       /* the feeds, the last one's time, the longest gap (ticks) */
+static void fm1_wdt_feed(void)
+{
+    if (now - wdt_last > wdt_gap)
+        wdt_gap = now - wdt_last;
+    wdt_last = now;
+    wdt_feeds++;
+}
 static uint8_t lcd_up = 1;
 static uint32_t lcd_nops, lcd_syncs, lcd_baud_now = LCD_BAUD, lcd_cs_low = 1;
 static void lcd_sync(void) { lcd_syncs++; }
@@ -52,7 +63,8 @@ static uint32_t fm1_sd_hw_take(uint32_t baud, uint32_t mode)
 }
 static void fm1_sd_hw_baud(uint32_t b) { spi_baud = b; }
 static void fm1_sd_hw_sel(void) { sel = 1; lcd_cs_low = 0; }
-static void fm1_sd_hw_desel(void) { sel = 0; lcd_cs_low = 1; }
+static void card_desel(void);
+static void fm1_sd_hw_desel(void) { sel = 0; lcd_cs_low = 1; card_desel(); }
 static void fm1_sd_hw_give(uint32_t con, uint32_t mode)
 {
     (void)mode;
@@ -87,8 +99,19 @@ static struct {
     int ok_from, dead_from, zero_from, flaky_from, flaky_every, bad_only, die_from, no_hs;   /* the clock faults (above) */
     long flaky_n;
     int hs;                                          /* CMD6 switched it to high speed */
-    long cmd6s, cmd10s;
+    long cmd6s, cmd10s, cmd6_switches;
+    int cmd6_crc_bad, garbage_from, slow_ms, wedge_from, wedged;
+    int hold_at;                                     /* out[] index of a late token (-1 none), hold_end its time */
+    uint32_t hold_end;
+    uint32_t noise;
 } c;
+static void card_desel(void)                         /* (a late token never sent: dropped with the selection) */
+{
+    if (c.hold_at >= 0) {
+        c.nout = c.pos = 0;
+        c.hold_at = -1;
+    }
+}
 static int clock_bad(void)                           /* this clock reads wrong: past what the card takes, or 30 without CMD6 */
 {
     int k = t_step();
@@ -120,6 +143,13 @@ static uint8_t crc7(const uint8_t *p, int n)
     return (uint8_t)(r << 1 | 1);
 }
 static uint32_t blk_of(uint32_t a) { return c.kind == 1 ? a : a / 512u; }
+static void hold(void)                              /* slow_ms: what comes next comes late */
+{
+    if (c.slow_ms) {
+        c.hold_at = c.nout;
+        c.hold_end = now + (uint32_t)c.slow_ms * 1000u * FM1_TICKS_PER_US;
+    }
+}
 static void say_block(uint32_t b)
 {
     uint8_t d[512];
@@ -127,6 +157,7 @@ static void say_block(uint32_t b)
     int st = t_step();
     for (int i = 0; i < c.late; i++)
         say1(0xFF);
+    hold();
     say1(0xFE);
     memcpy(d, img[b], 512);
     k = crc16(d, 512);
@@ -154,6 +185,7 @@ static void say_reg(uint8_t *r16)                   /* a register's data block (
     if (clock_bad())
         r16[3] ^= 0x20;
     say1(0);
+    hold();
     say1(0xFE);
     say(r16, 16);
     say1((uint8_t)(k16 >> 8)), say1((uint8_t)k16);
@@ -177,6 +209,7 @@ static void command(void)
     if (n == 12) {
         c.rd_multi = 0;
         c.nout = c.pos = 0;
+        c.hold_at = -1;
         say1(0xFF);
         say1(r1);
         say1(0x00);
@@ -184,7 +217,13 @@ static void command(void)
         say1(0xFF);
         return;
     }
+    if (t_step() < c.wedge_from)
+        c.wedged = 1;
+    if (c.wedged && n != 0)
+        return;
     if (n == 0) {
+        c.wedged = 0;
+        c.hs = 0;
         c.idle = 1;
         c.ready41 = 0;
         say1(1);
@@ -257,9 +296,13 @@ static void command(void)
             say1(0x04);
             return;
         }
-        c.hs = !c.no_hs && (arg >> 31) && (arg & 15u) == 1u;
+        if (arg >> 31) {
+            c.cmd6_switches++;
+            c.hs = !c.no_hs && !c.cmd6_crc_bad && (arg & 15u) == 1u;
+        }
+        st[13] = c.no_hs ? 0u : 2u;                  /* bits 407:400: group 1's functions supported */
         st[16] = (uint8_t)(c.no_hs ? 0u : arg & 15u);   /* bits 379:376: group 1's function now */
-        k16 = crc16(st, 64);
+        k16 = (uint16_t)(crc16(st, 64) ^ (c.cmd6_crc_bad ? 1u : 0u));
         say1(0);
         say1(0xFE);
         say(st, 64);
@@ -324,10 +367,15 @@ static void wr_byte(uint8_t b)                       /* a write's data phase */
 static uint8_t card_byte(uint8_t in)                 /* one byte clocked while selected: what DO says */
 {
     uint8_t o = 0xFF;
-    if (c.pos < c.nout)
-        o = c.out[c.pos++];
-    if (c.pos == c.nout)
-        c.pos = c.nout = 0;
+    int held = c.hold_at >= 0 && c.pos == c.hold_at && (int32_t)(now - c.hold_end) < 0;
+    if (!held) {                                     /* (a late token: not before its time; the card still hears) */
+        if (c.pos == c.hold_at)
+            c.hold_at = -1;
+        if (c.pos < c.nout)
+            o = c.out[c.pos++];
+        if (c.pos == c.nout)
+            c.pos = c.nout = 0;
+    }
     if (c.wr) {
         wr_byte(in);
         return o;
@@ -352,6 +400,10 @@ static uint8_t fm1_sd_hw_xfer(uint8_t b, uint32_t mode)
     if (!c.kind || !sel || t_step() < c.dead_from)   /* (too fast for the line: the card hears nothing, says nothing) */
         return 0xFF;
     uint8_t o = card_byte(b);
+    if (t_step() < c.garbage_from) {
+        c.noise = c.noise * 1103515245u + 12345u;
+        return (uint8_t)(c.noise >> 16);
+    }
     return c.reads_in < 0 || (uint32_t)c.reads_in == mode ? o : 0xFF;
 }
 static uint8_t *dma_p;
@@ -379,6 +431,7 @@ static void card(int kind)
     memset(&c, 0, sizeof c);
     c.kind = kind;
     c.reads_in = -1;
+    c.hold_at = -1;
     for (uint32_t b = 0; b < NBLK; b++)
         for (int i = 0; i < 512; i++)
             img[b][i] = (uint8_t)(b * 7u + (uint32_t)i * 13u + (b >> 3));

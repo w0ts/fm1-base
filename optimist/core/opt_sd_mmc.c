@@ -9,7 +9,7 @@
  * start-up; fm1_sd_mode / fm1_sd_dma stay for Optimist's code to read), the CRCs and their retries (fm1-base checks
  * every block's CRC16 and reads a failed one again; sd_crc_retry here lets the stream read it once more), the clock
  * (fm1-base detects it at plat_sd_init with Optimist's walk on the same steps: plat.h "The clock", device/sd.c; one step
- * down there at run time on a CRC failure): sd_clock_probe here only says how many steps failed, SD_CLOCK_KHZ() is
+ * down there at run time on a CRC failure): sd_clock_probe here does nothing, SD_CLOCK_KHZ() is
  * plat_sd_clock_khz() (SYSTEM > SD CARD's CLOCK, sdcard.c sd_clock_khz).
  *   Petit FatFs  (SDCARD without the SD card mode's layout: core/opt_pff.c) its disk_initialize, disk_readp (a block
  *                read whole into a buffer, the part asked copied: fm1-base reads whole blocks, each one's CRC checked)
@@ -31,6 +31,7 @@ enum { FM1_SD_DUPLEX = 0, FM1_SD_DIRRX = 1, FM1_SD_BITBANG = 2 };
 #define FM1_SD_BAUD_FAST 1u
 #define SD_BAUD() FM1_SD_BAUD_FAST                /* (sdcard.c's sessions: fm1-base's own, at the clock it detected) */
 #define SD_CLOCK_RESET() ((void)0)                /* (plat_sd_init starts every card at the floor) */
+#define SD_WDT() ((void)0)                        /* (sd_diskio.c: plat_sd_read and plat_sd_write feed it) */
 #define SD_CLOCK_KHZ() plat_sd_clock_khz()        /* (0: no card, the plain pins, the host) */
 /* fm1-base's steps are Optimist's (hal/fm1_sd_clock.h, the classic driver's): the counts and the floor here, every step
  * by optimist/tests/sd/sd_clock_steps.c (run.sh's sd run) */
@@ -161,12 +162,10 @@ static DRESULT disk_readblocks(BYTE *buf, DWORD sector, UINT n)
     return RES_OK;
 }
 
-static UINT sd_clock_probe(BYTE *buf, UINT n, BYTE force)   /* (fm1-base's plat_sd_init detected it: the steps failed) */
+static UINT sd_clock_probe(BYTE *buf, UINT n, BYTE force)   /* (fm1-base's plat_sd_init detected it) */
 {
-    plat_sd_clock_t c;
     (void)buf, (void)n, (void)force;
-    plat_sd_clock(&c);
-    return (UINT)c.failed;
+    return 0;
 }
 
 static DRESULT disk_writeblock(const BYTE *buf, DWORD sector)

@@ -96,6 +96,13 @@ static BYTE sd_crc_retry(BYTE *fails)
     return ++*fails < 2u;
 }
 
+/* a timeout: fm1-base's plat_sd_read and plat_sd_read_next stepped down already (device/sd.c sd_slip): the failure stands */
+static BYTE sd_time_retry(DWORD t0)
+{
+    (void)t0;
+    return 0;
+}
+
 /* ---- whole blocks */
 enum { SDR_IDLE = 0, SDR_TOKEN, SDR_DMA, SDR_READY, SDR_ERR };
 #define SDR_BUSY SDR_TOKEN

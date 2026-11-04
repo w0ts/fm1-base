@@ -290,6 +290,83 @@ static void run_time(int dma)
     c.crc_bad = 0;
 }
 
+/* at run time: a timeout or a wrong R1 or token above the floor (a late line reads a bad token, 2026-11-04 on an FM-1, not a bad
+ * CRC): a step down and read on, as for a CRC failure; at the floor a real failure; a card taken out reads as gone at once */
+static void run_slip(void)
+{
+    uint32_t d0, t0;
+    card(1);
+    c.ok_from = 3;
+    ok(plat_sd_init() == 0 && sd.step == 3, "slip: 12 MHz kept");
+    c.ok_from = 0;
+    c.dead_from = 4;                                 /* 12 MHz answers nothing */
+    d0 = sd.steps_down;
+    ok(plat_sd_read(200, buf, 16) == 0 && same(200, buf, 16) && sd.step == 4 && sd.steps_down == d0 + 1 && plat_sd_present() &&
+       bus_back(), "slip: a session's timeout: one step down, read right, the card kept");
+    c.dead_from = 0;
+    c.garbage_from = 5;                              /* 10 MHz answers garbage: a wrong R1, a wrong token */
+    ok(plat_sd_read(300, buf, 4) == 0 && same(300, buf, 4) && sd.step == 5 && plat_sd_present() && bus_back(),
+       "slip: a session's wrong answer: one step down, read right");
+    c.garbage_from = 0;
+    c.dead_from = 6;
+    ok(plat_sd_read_open(320) == 0 && sd.step == 6 && plat_sd_read_next(buf, 1000000) == 0 && same(320, buf, 1) &&
+       plat_sd_close() == 0 && bus_back(), "slip: a run's open: one step down, then read right");
+    c.dead_from = 0;
+    ok(plat_sd_read_open(330) == 0 && plat_sd_read_next(buf, 1000000) == 0 && same(330, buf, 1), "slip: a run started");
+    c.garbage_from = 7;                              /* 7.5 MHz goes bad inside the run: the next block read right, a step down */
+    {
+        int r;
+        uint32_t n = 0;
+        while ((r = plat_sd_read_next(buf, 1000000)) == PLAT_SD_BUSY && n++ < 8u)
+            ;
+        ok(r == 0 && same(331, buf, 1) && sd.step == 7 && plat_sd_present(), "slip: a run's wrong token: the next block read right");
+    }
+    c.garbage_from = 0;
+    c.dead_from = 8;                                 /* nothing at all at 6.67 MHz: a run's silence, a step down, read on */
+    {
+        int r;
+        uint32_t n = 0;
+        while ((r = plat_sd_read_next(buf, 1000000)) == PLAT_SD_BUSY && n++ < 8u)
+            ;
+        ok(r == 0 && same(332, buf, 1) && sd.step == 8 && plat_sd_close() == 0 && bus_back(), "slip: a run's silence: the next block read right");
+    }
+    c.dead_from = 0;
+    c.garbage_from = 0;
+    /* the floor reached: a real failure */
+    c.dead_from = (int)FM1B_SD_NSTEP;
+    d0 = sd.steps_down;
+    ok(plat_sd_read(400, buf, 1) == PLAT_SD_ERR && !plat_sd_present() && sd.steps_down == d0 && bus_back(), "slip: at the floor: gone");
+    c.dead_from = 0;
+    /* taken out, from the clock kept: gone, and soon */
+    card(1);
+    c.ok_from = 3;
+    ok(plat_sd_init() == 0 && sd.step == 3, "slip: 12 MHz kept again");
+    c.kind = 0;
+    t0 = fm1_ticks();
+    ok(plat_sd_read(400, buf, 1) == PLAT_SD_ERR && !plat_sd_present() && bus_back(), "slip: a card taken out reads as gone");
+    t0 = (fm1_ticks() - t0) / (1000u * FM1_TICKS_PER_US);
+    printf("sd_clock_test: a card taken out: gone in %u ms\n", (unsigned)t0);
+    ok(t0 < 5u, "slip: gone within 5 ms");
+    /* taken out inside a run: gone within the wait for a block */
+    card(1);
+    c.ok_from = 3;
+    ok(plat_sd_init() == 0 && plat_sd_read_open(10) == 0 && plat_sd_read_next(buf, 1000000) == 0, "slip: a run on the clock kept");
+    c.kind = 0;
+    t0 = fm1_ticks();
+    {
+        int r;
+        uint32_t n = 0;
+        while ((r = plat_sd_read_next(buf, 1000000)) == PLAT_SD_BUSY && n++ < 8u)
+            ;
+        ok(r == PLAT_SD_ERR, "slip: a run with the card taken out: an error");
+    }
+    (void)plat_sd_close();
+    ok(!plat_sd_present() && bus_back(), "slip: and gone");
+    t0 = (fm1_ticks() - t0) / (1000u * FM1_TICKS_PER_US);
+    printf("sd_clock_test: a card taken out in a run: gone in %u ms\n", (unsigned)t0);
+    ok(t0 < 150u, "slip: within 150 ms");
+}
+
 static void tries(void)
 {
     card(1);
@@ -312,6 +389,7 @@ int main(void)
     walks();
     run_time(0);
     run_time(1);
+    run_slip();
     tries();
     printf("sd_clock_test: %d checks, %d failed\n", checks, fails);
     return fails != 0;

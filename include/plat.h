@@ -650,7 +650,8 @@ uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; el
  * the card checked there (started again when it must), then the step below the failure is kept and checked once more
  * (that failing: the floor). No step failed (the top reached, or 1 s spent): the step below the fastest that passed, so a
  * card that reads everything runs at 20 MHz. A card that no longer reads at the floor after a failed step: PLAT_SD_ERR.
- * At run time a block whose CRC16 fails above the floor drops the clock one step at once (counted) and plat_sd_read reads
+ * At run time a block whose CRC16 fails above the floor, or a timeout or a wrong answer above it (a read session, a read run: see
+ * device/sd.c sd_slip, bounded to 150 ms), drops the clock one step at once (counted) and plat_sd_read reads
  * it again there; plat_sd_read_next steps down the same and answers PLAT_SD_CRC. Every wait is 20 ms: the detection takes
  * ~7 s at the very worst, every wait at its limit, ~1.7 s at most between its watchdog feeds.
  *   plat_sd_clock_khz()        the clock the card runs at now, kHz; 0: no card, the plain pins (no clock to pick), the host

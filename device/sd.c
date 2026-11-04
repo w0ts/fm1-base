@@ -43,6 +43,7 @@ static struct {
     uint32_t con;                      /* SPI1's CON to give back */
     uint32_t blocks;                   /* the card's size (CSD), 512-byte blocks */
     uint32_t t0;                       /* a write run's busy start */
+    uint32_t next, run_t0;             /* a read run: its next block, when the wait for it began (0: no wait yet) */
     uint32_t crc_fails;                /* blocks whose CRC16 failed */
     uint16_t crc;                      /* the last block's CRC16 (the clock detection's fingerprint) */
     uint8_t v2;                        /* an SD v2 card (CMD8 answered): the clock detection's */
@@ -514,6 +515,26 @@ static int sd_step_down(void)                        /* a CRC16 failed at run ti
     return 1;
 }
 
+/* A timeout or a wrong R1 or token at run time, above the floor: a clock gone too fast reads so, not as a CRC failure (the data a
+ * bit late: FE reads FF, measured 2026-11-04): one step down at once and the read again, as for a CRC failure. A card taken out
+ * answers nothing at any clock: its commands fail in microseconds each, so the walk to the floor costs nothing and the floor's
+ * failure is the real one. SD_DOWN_MS bounds it all for the main loop: past it a failure stands, whatever the step */
+#define SD_DOWN_MS 150u
+#define SD_RUN_SILENT_MS 100u          /* a read run with no block this long (the spec's read limit): as a timeout */
+
+static int sd_slip(uint32_t t0)                      /* 1: a step down, the card stopped: read again */
+{
+    if (sd_since(t0) >= SD_MS(SD_DOWN_MS) || !sd_step_down())
+        return 0;
+    sd_release();
+    fm1_sd_hw_sel();
+    (void)sd_rx();
+    (void)sd_cmd(SD_CMD12, 0);
+    (void)sd_wait_ready(SD_CLK_WAIT_MS);
+    sd_release();
+    return 1;
+}
+
 static void sd_lcd(void)                             /* the LCD wants the bus: a session left open ends first */
 {
     if (!sd.on_bus)
@@ -644,7 +665,7 @@ static int sd_read_run(uint32_t blk, uint8_t *p, uint32_t n, uint32_t *done)   /
 int plat_sd_read(uint32_t blk, void *p, uint32_t n)
 {
     uint8_t *d = p;
-    uint32_t i = 0, got, again = 0;
+    uint32_t i = 0, got, again = 0, t0 = fm1_ticks();
     int r = sd_ready_for(blk, n);
     if (r || !n)
         return r;
@@ -653,7 +674,7 @@ int plat_sd_read(uint32_t blk, void *p, uint32_t n)
     while (i < n) {
         r = sd_read_run(blk + i, d + i * 512u, n - i, &got);
         i += got;
-        if (r == -2 && (sd_step_down() || again++ < 2u))   /* a block's CRC16 failed: read again from it, a step down
+        if ((r == -1 && sd_slip(t0)) || (r == -2 && (sd_step_down() || again++ < 2u)))   /* a block's CRC16 failed: read again from it, a step down
                                                       * above the floor, at the floor twice at most */
             continue;
         if (r)
@@ -694,19 +715,41 @@ int plat_sd_write(uint32_t blk, const void *p, uint32_t n)
     return sd_fail(r);
 }
 
+static int sd_run_start(uint32_t blk)                /* CMD18 from blk, stepping down: 0 = the card answered */
+{
+    uint32_t t0 = fm1_ticks();
+    while (sd_cmd(SD_CMD18, sd_addr(blk)) != 0) {
+        sd_release();
+        if (!sd_slip(t0))
+            return -1;
+    }
+    sd.next = blk;
+    sd.run_t0 = 0;
+    return 0;
+}
+
 int plat_sd_read_open(uint32_t blk)
 {
     int r = sd_ready_for(blk, 1u);
     if (r)
         return r;
     sd_take(FM1B_SD_STEP_BAUD[sd.step]);
-    if (sd_cmd(SD_CMD18, sd_addr(blk)) != 0) {
+    if (sd_run_start(blk)) {
         sd_release();
         sd_give();
         return sd_fail(-1);
     }
     sd.run = SD_RUN_READ;
     return 0;
+}
+
+/* a run read wrong above the floor (sd_slip): the card stopped and started again from the block not read, a step down; the block
+ * comes at the next call. At the floor, or the card no longer answering: an error, and plat_sd_close finds out which */
+static int sd_run_slip(void)
+{
+    if (!sd_slip(fm1_ticks()) || sd_run_start(sd.next))
+        return PLAT_SD_ERR;
+    return PLAT_SD_BUSY;
 }
 
 int plat_sd_read_next(void *p, uint32_t wait_us)
@@ -716,16 +759,25 @@ int plat_sd_read_next(void *p, uint32_t wait_us)
     int r;
     if (sd.run != SD_RUN_READ)
         return PLAT_SD_ERR;
+    if (!sd.run_t0)
+        sd.run_t0 = t0 | 1u;                         /* (the wait begins with this call, not at the block before: a slow
+                                                      * reader is not a silent card) */
     do {
         b = sd_rx();
         if (b == SD_TOKEN) {
             r = sd_block_in(p, sd.dma);
             if (r == -2)
                 (void)sd_step_down();                /* (the caller reads it again: at the next step) */
+            if (!r) {
+                sd.next++;
+                sd.run_t0 = 0;
+            }
             return r == -2 ? PLAT_SD_CRC : r ? PLAT_SD_ERR : 0;
         }
         if (b != 0xFFu)
-            return PLAT_SD_ERR;                      /* an error token */
+            return sd_run_slip();                    /* a wrong token; at the floor an error token */
+        if (sd_since(sd.run_t0) >= SD_MS(SD_RUN_SILENT_MS))
+            return sd_run_slip();                    /* silence; at the floor an error, as the caller would have found */
     } while (sd_since(t0) < wait_us * FM1_TICKS_PER_US);
     return PLAT_SD_BUSY;
 }

@@ -17,7 +17,22 @@
 
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
 static void lcd_sync(void) { opt_lcd_sync(); }
+static uint32_t opt_sd_late(void);               /* ui/opt_sd.h: the frame held back for the card */
 static void opt_sd_strip(void);                  /* ui/opt_sd.h: the card's turn between two of the screen's strips */
+#if FELUCCA_SD_STREAM
+#define OPT_FILL_ROWS 16u                        /* a fill between the card's turns (a page change's clear: 21 ms of the bus otherwise) */
+static void opt_fill_rows(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
+{
+    uint32_t r, n;
+    for (r = 0; r < h; r += n) {
+        n = h - r < OPT_FILL_ROWS ? h - r : OPT_FILL_ROWS;
+        opt_sd_strip();
+        opt_lcd_fill(x, y + r, w, n, c);
+    }
+}
+#else
+#define opt_fill_rows opt_lcd_fill
+#endif
 #if FELUCCA_ED_MIRROR
 /* the screen mirrored (editor cmd 106, io/editor/ed_mirror.c, ui/opt_editor.h): what is drawn goes to the client too, as
  * Optimist's display/lcd.c sends it */
@@ -34,7 +49,7 @@ static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
         w = 240u - x;                   /* (clipped as lcd.c clips it: the mirror gets what the panel shows) */
     if (y + h > 240u)
         h = 240u - y;
-    opt_lcd_fill(x, y, w, h, c);
+    opt_fill_rows(x, y, w, h, c);
     mir_fill(x, y, w, h, c);
 }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
@@ -46,7 +61,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     mir_blit(x, y, w, h, px);
 }
 #else
-static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { opt_lcd_fill(x, y, w, h, c); }
+static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { opt_fill_rows(x, y, w, h, c); }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
 {
     opt_sd_strip();
@@ -279,7 +294,8 @@ void opt_ui_frame(void)
     opt_ui_polls();
     ui_leds();
     opt_leds_out();
-    ui_draw();
+    if (!opt_sd_late())                          /* (a stream short of data: the card first, this frame not drawn, opt_sd.h) */
+        ui_draw();
     opt_sd_poll();                               /* the card's streams and recorder (opt_sd.h) */
     autosave_tick();                             /* the working project into flash, when quiet */
     opt_sd_mode_poll();                          /* the SD card mode's card after a mount, a save left pending */

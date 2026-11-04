@@ -25,10 +25,18 @@ static void fm1_reboot(void);                   /* (ui/opt_editor.h: plat_restar
 #if FELUCCA_SD_STREAM
 #define OPT_SD_RUNS 16u                         /* after a frame: runs at most (8 streams, twice), this long at most */
 #define OPT_SD_RUNS_MS 12u
-static void opt_sd_strip(void) { (void)sst_strip(); }   /* (Optimist's lcd.c lcd_blit: a stream close to dry goes before the
-                                                 * screen's next strip, the screen just later) */
+static void opt_in_scan(void);                  /* (ui/opt_in.h) */
+static void opt_sd_strip(void)                  /* (Optimist's lcd.c lcd_blit, a clear's every 16 rows: the streams short of data go
+                                                 * before the screen's next strip, sd_stream.c sst_strip; a long turn keeps the
+                                                 * panel's edges, read at the next frame) */
+{
+    if (sst_strip())
+        opt_in_scan();
+}
+static uint32_t opt_sd_late(void) { return sst_frame_late(); }   /* (a frame not drawn for the card, sd_stream.c) */
 #else
 static void opt_sd_strip(void) {}
+static uint32_t opt_sd_late(void) { return 0u; }
 #endif
 
 static void opt_sd_boot(void)                   /* power-on: the card's filesystem (main.c sd_mount_boot) */

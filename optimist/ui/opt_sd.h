@@ -22,6 +22,15 @@ static void fm1_reboot(void);                   /* (ui/opt_editor.h: plat_restar
 #include "storage/sd/sd_mode.c"
 #endif
 
+#if FELUCCA_SD_STREAM
+#define OPT_SD_RUNS 16u                         /* after a frame: runs at most (8 streams, twice), this long at most */
+#define OPT_SD_RUNS_MS 12u
+static void opt_sd_strip(void) { (void)sst_strip(); }   /* (Optimist's lcd.c lcd_blit: a stream close to dry goes before the
+                                                 * screen's next strip, the screen just later) */
+#else
+static void opt_sd_strip(void) {}
+#endif
+
 static void opt_sd_boot(void)                   /* power-on: the card's filesystem (main.c sd_mount_boot) */
 {
 #if FELUCCA_SDCARD
@@ -33,7 +42,13 @@ static void opt_sd_poll(void)                   /* a main loop pass (main.c's or
 {
 #if FELUCCA_SD_STREAM
     sst_plan_poll();                            /* the card samples' heads and rings in the arena (sd_stream_plan.c) */
-    (void)sst_service();                        /* a run for the stream with the least left (sd_stream.c) */
+    {                                           /* (main.c: a run, then its idle wait gave more. Here a frame that took 16 ms is
+                                                 * followed by the next at once, no pass between: the rings filled now, every
+                                                 * stream's turn, or one run a frame is all the card gets) */
+        uint32_t t0 = SD_NOW(), k;
+        for (k = 0; k < OPT_SD_RUNS && sst_service() && (uint32_t)(SD_NOW() - t0) < OPT_SD_RUNS_MS * SD_TICKS_MS; k++)
+            ;
+    }
 #endif
 #if FELUCCA_SD_REC
     (void)sdr_service();                        /* a recording's next block to the card (sd_rec.c) */

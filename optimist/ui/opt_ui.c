@@ -17,6 +17,7 @@
 
 /* ---- the screen: fm1-base's canvas, its LCD in the app's unit */
 static void lcd_sync(void) { opt_lcd_sync(); }
+static void opt_sd_strip(void);                  /* ui/opt_sd.h: the card's turn between two of the screen's strips */
 #if FELUCCA_ED_MIRROR
 /* the screen mirrored (editor cmd 106, io/editor/ed_mirror.c, ui/opt_editor.h): what is drawn goes to the client too, as
  * Optimist's display/lcd.c sends it */
@@ -40,12 +41,17 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 {
     if (!w || !h)
         return;
+    opt_sd_strip();
     opt_lcd_blit(x, y, w, h, px);
     mir_blit(x, y, w, h, px);
 }
 #else
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c) { opt_lcd_fill(x, y, w, h, c); }
-static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px) { opt_lcd_blit(x, y, w, h, px); }
+static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
+{
+    opt_sd_strip();
+    opt_lcd_blit(x, y, w, h, px);
+}
 #endif
 /* one canvas for the two units: gfx.c's cv_px (59,520 B of the pool; 29,760 or 14,880 B with CANVAS_STRIP) is the app's unit's (app.c opt_canvas), this unit's
  * gfx.c a pointer to it (set at power-on: opt_core_init, before anything draws). Both units' gfx.c are the same file

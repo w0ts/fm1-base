@@ -384,7 +384,8 @@ static HOT void mix_block(int32_t *out, uint32_t n)
 #else
     jobs = (1u << NPART) - 1u;
 #endif
-    if (dual.up && !early && fm1_ms - dual_loop_ms > DUAL_STARVE_MS)   /* (an early frame out: the next block) */
+    if (dual.up && !early && fm1_ms - dual_loop_ms > DUAL_STARVE_MS &&   /* (an early frame out: the next block) */
+        FAR(plat_cpu_pct)() >= DUAL_STARVE_LOAD)
         FAR(dual_down)(DUAL_OVERLOAD, 0u, 0u);        /* (the main loop starved: one core; opt_dual_loop holds it) */
 #if REV_LATE
     rev_late = (uint8_t)(dual.up && n == CTL);     /* CPU1 up: the reverb one block late (fx.c fx_buses) */

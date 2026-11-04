@@ -23,9 +23,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../include/plat.h"
+#undef PLAT_RAM_CODE                                 /* (the host: no .app_ram) */
+#define PLAT_RAM_CODE
+#undef PLAT_FAR
+#define PLAT_FAR(fn) (&(fn))
 #include "../device/sd_clock.h"
 
 /* ---- the stand-ins: the LCD (lcd.c), the time base, fm1_sd_hw.h, the watchdog ---- */
+/* (felucca-bsp's fm1_crc.h: CRC-16/XMODEM, as the SD card's; here by bits) */
+static uint16_t fm1_crc_reg;
+static void fm1_crc_start(void) { fm1_crc_reg = 0; }
+static void fm1_crc_byte(uint8_t b)
+{
+    uint32_t i, c = fm1_crc_reg ^ (uint32_t)b << 8;
+    for (i = 0; i < 8u; i++)
+        c = c & 0x8000u ? (c << 1) ^ 0x1021u : c << 1;
+    fm1_crc_reg = (uint16_t)c;
+}
+static uint16_t fm1_crc_end(void) { return fm1_crc_reg; }
 #define LCD_BAUD 0u
 #define FM1_TICKS_PER_US 24u
 static uint32_t now;                                 /* ticks: each byte on the bus 0.4 us at 20 MHz (10 ticks) */

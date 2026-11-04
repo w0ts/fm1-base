@@ -79,6 +79,7 @@
 #include "fm1_lcd_hw.h"
 #if FM1B_SD
 #include "fm1_sd_hw.h"
+#include "fm1_crc.h"
 #endif
 #if FM1B_WIFI || FM1B_BLE || defined(FELUCCA_USB_NAME_FN)
 #define FL_UID 1                          /* the flash's unique ID: the WiFi MAC, the Bluetooth name (plat_chip_uid) */

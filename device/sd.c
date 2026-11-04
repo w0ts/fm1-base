@@ -72,13 +72,18 @@ static uint16_t sd_crc16_byte(uint16_t c, uint8_t b)   /* CRC16-CCITT (x^16 + x^
     return c;
 }
 
-static uint16_t sd_crc16(const uint8_t *p, uint32_t n)
+/* a block's CRC16 by the chip's CRC block (bsp fm1_crc.h: the same sum, 18 us a block against the bit loop's 200, measured at 12 MHz
+ * on an FM-1, 2026-11-04: nearly a third of a block's time), from RAM; the main loop only, as everything here, and nothing else
+ * uses that block (the interrupts neither) */
+PLAT_RAM_CODE static uint16_t sd_crc16_ram(const uint8_t *p, uint32_t n)
 {
-    uint16_t c = 0;
+    fm1_crc_start();
     while (n--)
-        c = sd_crc16_byte(c, *p++);
-    return c;
+        fm1_crc_byte(*p++);
+    return fm1_crc_end();
 }
+
+static uint16_t sd_crc16(const uint8_t *p, uint32_t n) { return PLAT_FAR(sd_crc16_ram)(p, n); }
 
 static uint8_t sd_crc7(const uint8_t *p, uint32_t n)   /* x^7 + x^3 + 1, the command's last byte: CRC << 1 | 1 */
 {
@@ -191,12 +196,9 @@ static int sd_crc_in(uint16_t c)                     /* the data block's CRC16 a
 static int sd_bytes_in(uint8_t *p, uint32_t n)       /* n data bytes by the CPU, then their CRC16: 0 = right */
 {
     uint32_t i;
-    uint16_t c = 0;
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n; i++)
         p[i] = sd_rx();
-        c = sd_crc16_byte(c, p[i]);
-    }
-    return sd_crc_in(c);
+    return sd_crc_in(sd_crc16(p, n));
 }
 
 static int sd_block_in(uint8_t *p, uint32_t dma)     /* a data block after its token: 0 = in, its CRC16 right */

@@ -52,7 +52,8 @@ def card_tree(work: Path) -> Path:
     import gen_optimist
     tree = gen_optimist.optimist_tree()
     zp = work / "card.zip"
-    subprocess.run([sys.executable, str(tree / "tools" / "sd_zip.py"), str(zp)], check=True, cwd=tree)
+    # every set, kit sound and pack (sd_zip.py --all): never the tree's build/builder.config, whatever a build left there
+    subprocess.run([sys.executable, str(tree / "tools" / "sd_zip.py"), "--all", str(zp)], check=True, cwd=tree)
     root = work / "card"
     with zipfile.ZipFile(zp) as z:
         z.extractall(root)

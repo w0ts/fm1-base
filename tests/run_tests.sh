@@ -108,14 +108,14 @@ run gen-words "$PY" tests/gen_words_test.py
 # its port (unusual names, the loader under a new name, M-VAVE's Open firmware, resume's check, package checksums),
 # and writing the resource region after it
 if command -v node >/dev/null 2>&1; then
-    run installer-boot node tests/installer_boot_test.mjs web/m-bootloader/fm1-uboot-1.2.fwsc
-    run installer-ports node tests/installer_ports_test.mjs web/m-bootloader/fm1-uboot-1.2.fwsc
+    run installer-boot node tests/installer_boot_test.mjs web/m-bootloader/fm1-uboot-1.4.fwsc
+    run installer-ports node tests/installer_ports_test.mjs web/m-bootloader/fm1-uboot-1.4.fwsc
     run installer-res node tests/installer_res_test.mjs   # the resource region after an install (Updater.installRes)
     run installer-bluetooth node tests/installer_bluetooth_test.mjs
     run installer-foreign-loader node tests/installer_foreign_loader_test.mjs
     run installer-stock node tests/installer_stock_test.mjs
     # FM1_STOCK_FWSC=<path to M-VAVE's FM-1_015.fwsc> adds the stock file's cases (that file is not in this repository)
-    run checkufw node tests/checkufw_test.mjs web/m-bootloader/fm1-uboot-1.2.fwsc ${FM1_STOCK_FWSC:-}
+    run checkufw node tests/checkufw_test.mjs web/m-bootloader/fm1-uboot-1.4.fwsc ${FM1_STOCK_FWSC:-}
 else
     echo "  skip installer-boot (no node)"
 fi
@@ -140,7 +140,7 @@ run update-begin sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function 
     tests/update_begin_test.c && $OUT/update_begin_test"
 PKG=template/build/template.fwsc
 if [ -f "$PKG" ]; then
-    run ota-entry sh -c "$CC -w -o $OUT/ota_test tests/ota_test.c && $OUT/ota_test $PKG web/m-bootloader/fm1-uboot-1.2.fwsc"
+    run ota-entry sh -c "$CC -w -o $OUT/ota_test tests/ota_test.c && $OUT/ota_test $PKG web/m-bootloader/fm1-uboot-1.4.fwsc"
     run update-loader sh -c "head -c 60000 template/build/template.bin > $OUT/old_app.bin && \
         $PY tools/fm1pkg_make.py $OUT/old_app.bin template/build/loader/ota.bin $OUT/old.fwsc >/dev/null && \
         $CC -w -o $OUT/ldr_test tests/ldr_test.c && $OUT/ldr_test $OUT/old.fwsc $PKG"

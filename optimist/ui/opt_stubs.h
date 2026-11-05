@@ -11,6 +11,6 @@ static struct {
     uint32_t resets;                            /* (the editor's sessions: plat_usb_session, ui/opt_editor.h) */
 } usb;
 #if FELUCCA_CDC
-static uint8_t usb_serial, usb_cdc_on;          /* (usb.c's: SYSTEM > USB SERIAL, and what this start presents: the console
+static uint8_t usb_cdc_on;                      /* (usb.c's: what this start presents, always 1: the console
                                                  * on fm1-base's, ui/opt_console.h) */
 #endif

@@ -2,8 +2,7 @@
  * Copyright (C) 2026 Henri David */
 /* Optimist's USB serial console in the trial (USB_CONSOLE: FELUCCA_CDC; SYSTEM > USB SERIAL, op_project.c) on fm1-base's
  * (fm1.toml usb_console, from the configuration: gen_optimist.py --conf; plat.h plat_console_*). The setting as
- * Optimist keeps it (usb.c's usb_serial: the settings word's bit 16, storage/settings_word.c), presented from the next
- * start (usb_cdc_on: opt_con_boot, before fm1-base starts USB). The command line is Optimist's (io/console.c cdc_task:
+ * presented at every start (usb.c's usb_cdc_on: opt_con_boot, before fm1-base starts USB; no device switch since 2026-11-05). The command line is Optimist's (io/console.c cdc_task:
  * the prompt, the line editing, "help", "? (help)"), with the commands that mean something on fm1-base's platform:
  *   play | pause | stop | rec on|off | proj load N | heavy [N]   Optimist's run control (io/console_run.c, as it is)
  *   status       the version, the time, the load, the guard, the late halves, the voices, the second core
@@ -38,9 +37,6 @@
 #pragma once
 
 #if FELUCCA_CDC
-#ifndef FELUCCA_CDC_FORCE
-#define FELUCCA_CDC_FORCE 0                     /* (usb.c's: 1, the console whatever USB SERIAL says) */
-#endif
 #define CON_LINE 64u
 #include "io/console_parse.h"                   /* con_word, con_num, con_run_parse (Optimist's, pure) */
 static struct {
@@ -551,12 +547,12 @@ static void opt_con_task(void)
         }
     }
 }
-/* at power-on, after the settings (USB SERIAL read): the console presented or not from this start, before fm1-base
- * starts USB (app_init: no re-enumeration), as usb.c's usb_start takes usb_cdc_on from usb_serial */
+/* at power-on: the console presented from this start, before fm1-base starts USB (app_init: no re-enumeration), as
+ * usb.c's usb_start sets usb_cdc_on (always: the console comes with the build, no switch since 2026-11-05) */
 static void opt_con_boot(void)
 {
-    usb_cdc_on = (uint8_t)(usb_serial || FELUCCA_CDC_FORCE);
-    plat_console_present(usb_cdc_on);
+    usb_cdc_on = 1;
+    plat_console_present(1);
 }
 #else
 static void opt_con_task(void) {}

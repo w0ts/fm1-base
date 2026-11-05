@@ -1,20 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # The serial console's card commands (run.sh's sd run: profiles/sd-console.config, USB_CONSOLE on the SD card layout; the card
-# optimist/build/host/sd/card.img): SERIAL on and a restart, then the card's state, a folder, a file and a raw sector
+# optimist/build/host/sd/card.img): the console from the first start (USB_CONSOLE, no device switch since 2026-11-05), then the card's state, a folder, a file and a raw sector
 # through Optimist's card code and plat_sd_read; the clock (sd diag, sd speed, sd clock: the host has none, every step untried)
 #   FM1B_SD=optimist/build/host/sd/card.img optimist/build/host/optimist_host optimist/tests/sd/console.txt OUT
-wait 2000
-tap GLO
-wait 100
-tap GLO
-wait 100
-turn SELECT 5                                           # (SERIAL: General's fourth card; General after SD CARD (two pages), SD STREAM and SETTINGS)
-wait 100
-expect gv4 0
-turn K4 1
-wait 3000
-expect gv4 1
-reboot
 wait 2000
 console help
 expect_console sd [ls

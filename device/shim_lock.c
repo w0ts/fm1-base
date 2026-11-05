@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+ * Copyright (C) 2026 Charles Vestal
+ * Copyright (C) 2026 Henri David */
 /* shim_irq_save / shim_irq_restore (ble/shim/shim.h): the shim's critical sections, which JieLi's libraries take
  * through local_irq_disable / local_irq_enable (misc.c) and the shim's own heap, queues, semaphores and timers. Part
  * of radio.c; on its own for tests/shim_lock_test.c, which gives it fm1_icfg, fm1_irq_off, fm1_irq_on and fm1_ticks

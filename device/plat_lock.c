@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+ * Copyright (C) 2026 Charles Vestal
+ * Copyright (C) 2026 Henri David */
 /* plat_lock / plat_unlock (plat.h): interrupts off around what the main loop shares with the 1 kHz tick (app_tick, in
  * the timer interrupt) or the audio render (app_render, in the ALNK0 interrupt). Part of plat_fm1.c; on its own for
  * tests/lock_test.c, which gives it fm1_icfg, fm1_irq_off, fm1_irq_on and fm1_ticks over a simulated CPU.

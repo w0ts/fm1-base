@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+ * Copyright (C) 2026 Henri David */
 /* plat_lock / plat_unlock (device/plat_lock.c) over a simulated CPU: icfg's global enable (bit 9), which cli clears
  * and sti sets. The outermost unlock switches interrupts on only if they were on at its lock: in the main loop, back
  * on; inside an interrupt (where they are off), they stay off, nested or not. Not the hardware: on the FM-1 it is

@@ -42,6 +42,7 @@
  *   APP_TOUCH               velocity and pressure from the keys (lib/touch.h)
  *   FM1B_BLE 0              Bluetooth MIDI (fm1.toml ble = true; tools/build.py --no-ble leaves it out)
  *   FM1B_MIRROR 0           the screen and panel mirrored over USB (fm1.toml mirror = true: mirror.c)
+ *   FM1B_MSC 0              disk mode: the FM-1 as a USB drive of the app's blocks (fm1.toml msc = true: msc.c)
  *   FM1B_BACKUP 0           backup and restore of the app's objects over USB (fm1.toml backup = true: backup.c)
  *   FM1B_RES 0              the resource region (fm1.toml resources = FILE: res.c; with backup)
  *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h)
@@ -205,6 +206,10 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #if defined APP_USB_HOST_NAME && FM1B_USB_HOST
 #define FELUCCA_USB_HOST_NAME 1      /* the device's product string (plat_usb_host_name) */
 #endif
+#ifndef FM1B_MSC
+#define FM1B_MSC 0
+#endif
+#define FELUCCA_MSC FM1B_MSC      /* disk mode: usb.c's mass-storage descriptors and EP3 (msc.c) */
 #define SXQ 128u                  /* the SysEx send ring, in packets: a whole screen-reader SAY (ANN_MAX + 9 bytes) */
 #ifdef APP_SYSEX_BYTE
 #define FELUCCA_SYSEX_BYTE(b) app_sysex_byte(b)   /* the app's, every SysEx byte from USB (plat.h APP_SYSEX_BYTE) */
@@ -369,6 +374,9 @@ static void mirror_leds(uint32_t buttons, uint32_t keys) { (void)buttons, (void)
 #include "plat_fm1.c"
 #if FM1B_CPU2
 #include "cpu2.c"                 /* the second core: plat_cpu2_* */
+#endif
+#if FM1B_MSC
+#include "msc.c"                  /* disk mode: the FM-1 as a USB drive (plat_disk_*) */
 #endif
 #if FM1B_BACKUP
 #include "backup.c"               /* backup and restore of the app's objects over USB (tools/fm1_backup.py) */

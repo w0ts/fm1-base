@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Copyright (C) 2026 Charles Vestal
+// Copyright (C) 2026 Henri David
 // The web installer (web/fm1ota.js) leaves Bluetooth MIDI ports alone, against fake WebMIDI ports: an FM-1 paired over
 // Bluetooth shows a port named "... Bluetooth" beside its USB one (a Mac lists the paired one first) and it never
 // answers an update. Such a port is never asked, not even when the user allowed it or it appeared during an update,

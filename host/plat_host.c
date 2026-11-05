@@ -1083,6 +1083,7 @@ static uint8_t data_area[DATA_TOP - DATA_BASE];
 static uint8_t data_ready;
 static int data_cmd_rc;                   /* the last script data_erase / data_write: what it returned (expect data_rc) */
 static uint32_t data_writes;            /* every erase and write */
+static int data_cmd_rc;                   /* the last script data_erase / data_write: what it returned (expect data_rc) */
 static void data_init(void)
 {
     if (!data_ready) {
@@ -1854,6 +1855,17 @@ uint32_t plat_cpu_khz(void) { return 0; }        /* (no clock to speak of: the h
 #endif
 uint32_t plat_xruns(void) { return 0; }
 uint32_t plat_midi_in_t24(void) { return plat_ticks24(); }   /* (no Bluetooth timestamps here: now) */
+void plat_code_window(const void *end) { (void)end; }
+/* disk mode: no computer in the simulator; the app's screen and flush still run */
+static const plat_disk_t *host_disk;
+void plat_disk_mode(const plat_disk_t *d)
+{
+    if (!d && host_disk && host_disk->flush)
+        host_disk->flush();
+    host_disk = d;
+}
+int plat_disk_poll(void) { return host_disk ? PLAT_DISK_WAITING : PLAT_DISK_OFF; }
+uint32_t plat_disk_idle_ms(void) { return 0; }
 uint32_t plat_ticks24(void)                     /* the host's monotonic clock, at the device's rate */
 {
     struct timespec t;

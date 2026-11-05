@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+ * Copyright (C) 2026 Henri David */
 /* shim_irq_save / shim_irq_restore (device/shim_lock.c) over a simulated CPU: icfg's global enable (bit 9), which cli
  * clears and sti sets. The outermost restore switches interrupts on only if they were on at its save: in the main
  * loop, back on; inside an interrupt (where they are off), they stay off, nested or not. The interrupt here has the

@@ -575,3 +575,4 @@ const struct plat_cache_ram *plat_cache_ram(void)
 #endif
     return &r;
 }
+void plat_code_window(const void *end) { fm1_guard_pc_extend((uint32_t)(uintptr_t)end); }

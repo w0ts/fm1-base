@@ -53,6 +53,7 @@ void plat_bta_job_keep(int on) { (void)on; }
 uint32_t plat_bta_job_inline(void) { return 0; }
 #endif
 #include "uac_mix.h"                                /* the USB recording, the computer's audio, in that order */
+#include "fm1_flash_ok.h"                          /* the flash parts the storage may use (FM1B_FLASH_JEDEC_OK) */
 static void render_block(int32_t *o)                /* ALNK0: one half, measured */
 {
     uint32_t t0 = fm1_ticks(), us, budget = HALF_FRAMES * 1000000u / FS;
@@ -1330,8 +1331,9 @@ static void safe_main(void)
             uint32_t n;
             if (ota_frame_get(&p, &n) && (log_frame(p, n) || cl_request(p, n) || ds_request(p, n)))
                 ota_frame_done();
+            else
+                ota_service();                      /* (only at a frame the log didn't take) */
         }
-        ota_service();
         if (usb.ota_req) {
             usb.ota_req = 0;
             if (flash_ok)
@@ -1368,6 +1370,7 @@ static void fm1_main(void)
     uint32_t batt_t = 0;                            /* (the battery's last reading, fm1_ms) */
     uint32_t supply_t = 0;                          /* (the supply's: plat_battery_charging) */
     uint32_t last_frame = 0;
+    int took;                                       /* a SysEx frame taken this pass (not the updater's) */
     {
         uint32_t f = irq_save();
         pst_boot(&knob);                            /* the stacks painted below what is live (stacks.c: the room a crash
@@ -1391,7 +1394,7 @@ static void fm1_main(void)
                                                      * VDDIO 3.2 V, WiFi's regulator automatic (fm1_sys.h) */
         fm1_clock_read(clock_boot);
         clock_fix = (int8_t)fm1_clock_stock();      /* the stock 360 MHz, whichever bootloader started us (fm1_clock.h) */
-        flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;   /* the expected 1 MiB part, else RAM only */
+        flash_ok = FM1B_FLASH_JEDEC_OK(FL_FAR(fl_jedec_ram)());   /* a known 1 MiB part, else RAM only */
 #if FM1B_WIFI || FM1B_BLE || defined(FELUCCA_USB_NAME_FN)
         if (flash_ok)
             FL_FAR(fl_uid_ram)(flash_uid);
@@ -1530,8 +1533,14 @@ static void fm1_main(void)
                 master_pos = mirror_in_master(remote.master >= 0 ? (uint32_t)remote.master : (uint32_t)(knob / 4));
             }
         }
+#ifdef FM1_BATT_EVERY                               /* (felucca-bsp's scan reads the battery too) */
+        if (fm1_ms - batt_t >= 100u) {              /* the battery, ten times a second (plat_battery); the scan's
+                                                     * reading while it owns the converter (the keys' readings on) */
+            int32_t b = fm1_an.con || fm1_an.pend ? (int32_t)fm1_an.batt : fm1_adc_read(FM1_ADC_BATT);
+#else
         if (!fm1_an.con && !fm1_an.pend && fm1_ms - batt_t >= 100u) {   /* the battery, ten times a second (plat_battery) */
             int32_t b = fm1_adc_read(FM1_ADC_BATT);
+#endif
             batt_t = fm1_ms;
             if (b > 0)
                 batt_raw = batt_raw ? batt_raw + (b - batt_raw) / 16 : b;
@@ -1553,9 +1562,11 @@ static void fm1_main(void)
 #ifdef APP_LOOP
         app_loop();                                 /* the app's background (a radio's tasks) */
 #endif
-        {   /* a screen reader's SysEx (announce.c), before the updater looks */
+        {   /* a screen reader's SysEx (announce.c), before the updater looks; the updater only at a frame none took
+             * (the next one waiting, else, would be its own, dropped if not) */
             const uint8_t *p;
             uint32_t n;
+            took = 0;
             if (ota_frame_get(&p, &n) && (ann_frame(p, n, fm1_ms) || log_frame(p, n) || cl_request(p, n) ||
                                           ds_request(p, n) || remote_frame(p, n)
 #if FM1B_WIFI
@@ -1570,11 +1581,14 @@ static void fm1_main(void)
 #ifdef APP_SYSEX
                                           || app_sysex(p, n)
 #endif
-                                          ))
+                                          )) {
                 ota_frame_done();
+                took = 1;
+            }
         }
         fm1b_dbg.stage = 4;
-        usb_cmd(ota_service());                     /* M-UPGRADE handshake; the commands in its framing (backup,
+        if (!took)
+            usb_cmd(ota_service());                 /* M-UPGRADE handshake; the commands in its framing (backup,
                                                      * mirror, the app's); other SysEx is dropped */
 #if FM1B_BACKUP
         bu_step();                                  /* a backup streaming to the host */

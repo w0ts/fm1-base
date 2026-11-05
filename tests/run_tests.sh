@@ -94,6 +94,7 @@ run ramcode "$PY" tests/ramcode_test.py
 run romref "$PY" tests/romref_test.py
 # the build's check that a function is in the RAM code run, _rt_start.._rt_end wherever app.ld puts it (tools/ram_run.py)
 run ram-run "$PY" tests/ram_run_test.py
+run flash-ok sh -c "$CC -std=c99 -Wall -Wextra -Werror -o $OUT/flash_ok_test tests/flash_ok_test.c && $OUT/flash_ok_test"   # device/fm1_flash_ok.h: the flash parts the storage may use
 run midi-rel sh -c "$CC -O2 -std=c99 -Wall -Wextra -Werror -o $OUT/midi_rel_test tests/midi_rel_test.c && $OUT/midi_rel_test"   # include/midi_rel.h
 run boot-pack sh tests/boot_pack_test.sh               # the boot's LZMA load images (boot_pack = true)
 # the screen reader's firmware side (device/announce.c, the one copy: fm1-reader's tools/sync_announce.sh copies it to
@@ -104,6 +105,10 @@ run announce sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -o $
 run ports "$PY" tests/ports_test.py
 # the screen reader's words file (tools/gen_words.py): made, and refused over the reader's limits
 run gen-words "$PY" tests/gen_words_test.py
+# the build's check that a function is in the RAM code run, _rt_start.._rt_end wherever app.ld puts it (tools/ram_run.py)
+run ram-run "$PY" tests/ram_run_test.py
+# the check that nothing calls the chip ROM or uses its addresses (tools/romref.py): a constant kept as a number passes
+run romref "$PY" tests/romref_test.py
 # the web installer's m-bootloader step (web/fm1ota.js installBoot) against a simulated FM-1, and finding the FM-1 by
 # its port (unusual names, the loader under a new name, M-VAVE's Open firmware, resume's check, package checksums),
 # and writing the resource region after it
@@ -116,6 +121,8 @@ if command -v node >/dev/null 2>&1; then
     run installer-stock node tests/installer_stock_test.mjs
     # FM1_STOCK_FWSC=<path to M-VAVE's FM-1_015.fwsc> adds the stock file's cases (that file is not in this repository)
     run checkufw node tests/checkufw_test.mjs web/m-bootloader/fm1-uboot-1.4.fwsc ${FM1_STOCK_FWSC:-}
+    # the handshake: a firmware that answers M-UPGRADE 3.11's query short and its whole identity to the one with 01
+    run installer-hs node tests/installer_hs_test.mjs
 else
     echo "  skip installer-boot (no node)"
 fi
@@ -313,5 +320,10 @@ if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
 else
     echo "  skip rfm1 (no emcc or node)"
 fi
+# the simulated data area: a file put at its offset in each window, read back there by plat_data (tests/data.txt)
+run host-data sh -c "printf '\\022\\064\\126\\170' > $OUT/data4.bin && \
+    template/build/host/template_host tests/data.txt template/build/host"
+# plat_data_write clears bits in place, as the device's NOR (tests/data_bits.txt; plat.h's promise)
+run host-data-bits template/build/host/template_host tests/data_bits.txt template/build/host
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

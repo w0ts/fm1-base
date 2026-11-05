@@ -35,6 +35,12 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              that nothing calls or loads the chip ROM skips them
   mul64_check_skip = ["mul_f256"]   functions the note on inlined 64-bit multiplies beside loads leaves out
                              (felucca-bsp docs/CPU.md; the compiler runtime's __* are left out anyway)
+  web_cflags = ["-sX=1"]     more emcc flags for the emulator, compiling and linking (fm1-ripple: Lua's setjmp in
+                             WebAssembly itself, -sSUPPORT_LONGJMP=wasm)
+  web = ["build/web/*.c"]    units for the browser's emulator only (relative to APP_DIR, globs too): what the device
+                             loads at run time, linked in (fm1-ripple's currents)
+  web_link = ["build/web/*.a"]   archives linked into the browser's emulator as they are (relative to APP_DIR, globs
+                             too): what a firmware builds for it itself (fm1-ripple: its C++ currents, by emcc)
   vendored = ["third_party/"]   other people's libraries, compiled for the FM-1 with their machine-specific code off
                              by flags: the register check skips them entirely (it reads the text: x86 asm behind
                              an #if would fail it)
@@ -129,6 +135,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   crk_diag = true            the crackle hunt's counters (FM1B_CRK_DIAG; default off, none of their code or RAM in a build
                              without): "crk ..." lines in the log (late halves, longest render, TIMER5 nesting, longest
                              main-loop pass, LCD writes with the interrupts off, the second core's state)
+  msc = true                 disk mode: the FM-1 as a USB drive of the app's blocks (FM1B_MSC: device/msc.c, plat_disk_* in
+                             plat.h; felucca-bsp usb.c FELUCCA_MSC), no USB MIDI or audio meanwhile
   backup = true              backup and restore of the app's saved objects over USB (FM1B_BACKUP: device/backup.c;
                              tools/fm1_backup.py); app.h gives APP_BACKUP_OBJS, _MAGIC, _VERSION and the app_backup_* hooks
   companion = true           the companion services over USB (FM1B_COMPANION: device/companion.c, docs/COMPANION.md;
@@ -1359,6 +1367,25 @@ def o2_objects(cc, base_flags, out):
     return [str(o) for _, o in jobs]
 
 
+def web_objects(base_flags, out):
+    """fm1.toml web = [...]: units compiled into the browser's emulator only (a firmware's plug-ins, linked in where
+    the device loads them at run time), relative to APP_DIR (globs too); their objects"""
+    files = [f for u in CONF.get("web", []) for f in (sorted(APP.glob(u)) if any(ch in u for ch in "*?[") else [APP / u])]
+    out.mkdir(parents=True, exist_ok=True)
+    jobs = [(f, out / ("web_" + "_".join(f.relative_to(APP).with_suffix("").parts) + ".o")) for f in files]
+
+    def one(job):
+        f, o = job
+        r = subprocess.run(["emcc", *base_flags, f"-I{f.parent}", "-c", str(f), "-o", str(o)], capture_output=True, text=True)
+        return r.stderr if r.returncode else ""
+    with ThreadPoolExecutor(8) as ex:
+        errs = [e for e in ex.map(one, jobs) if e]
+    if errs:
+        sys.stderr.write(errs[0])
+        raise SystemExit("build: a web unit failed")
+    return [str(o) for _, o in jobs]
+
+
 @functools.cache
 def build_id():
     """this build's sources (the app's, fm1-base's, felucca-bsp's chip/) and version, hashed: the second core's bar
@@ -1441,7 +1468,7 @@ def slot_flags():
 
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
-    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("companion", "FM1B_COMPANION"),
+    flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("msc", "FM1B_MSC"), ("companion", "FM1B_COMPANION"),
                                                        ("resources", "FM1B_RES"), ("xdata2", "FM1B_XDATA2"), ("sd", "FM1B_SD"), ("crk_diag", "FM1B_CRK_DIAG"))
              if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
     if "-DFM1B_COMPANION=1" in flags and PRODUCT:
@@ -1562,14 +1589,19 @@ def build_web():
     emu = OUT / "emu"
     emu.mkdir(parents=True, exist_ok=True)
     web_inc = [f"-I{d}" for d in (SRC / "host", SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))]
-    o2_objs = o2_objects("emcc", ["-O2", "-ffp-contract=off", "-std=gnu99", "-w", "-DPLAT_HOST", "-DPLAT_WEB", *opt_flags(), *web_inc],
+    wf = CONF.get("web_cflags", [])
+    o2_objs = o2_objects("emcc", ["-O2", "-ffp-contract=off", "-std=gnu99", "-w", "-DPLAT_HOST", "-DPLAT_WEB", *wf, *opt_flags(), *web_inc],
                          emu / "o2")
+    o2_objs += web_objects(["-O2", "-ffp-contract=off", "-std=gnu99", "-w", "-DPLAT_HOST", "-DPLAT_WEB", *wf, *opt_flags(), *web_inc],
+                           emu / "web")
     parts = emu_parts()
     cmd = ["emcc", "-O2", "-ffp-contract=off", "-std=gnu99", "-Wall", "-Wno-unused-function", "-Wno-unused-parameter",
            "-Wno-unused-variable", "-DPLAT_HOST", "-DPLAT_WEB", *opt_flags(), *(f"-DFM1B_EMU_{p.upper()}=1" for p in parts), *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * (BLE and OWN and bool(CONF.get("bt_audio"))), *(bta_mem_flags() if BLE and OWN else []), *["-DFM1B_WIFI=1"] * WIFI, *wifi_own_flags(host=True), *(f'-DAPP_VERSION="{VERSION}"',) * bool(VERSION),
            *(f"-I{d}" for d in (SRC / "host", SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
-           "--no-entry", "-sSTANDALONE_WASM", "-sSTACK_SIZE=1048576", "-sINITIAL_MEMORY=33554432", "-sFILESYSTEM=0",
-           "-o", str(emu / "app.wasm"), str(SRC / "web" / "emu" / "emu_web.c"), *o2_objs]
+           *wf, "--no-entry", "-sSTANDALONE_WASM", "-sSTACK_SIZE=1048576", "-sINITIAL_MEMORY=33554432", "-sFILESYSTEM=0",
+           "-o", str(emu / "app.wasm"), str(SRC / "web" / "emu" / "emu_web.c"), *o2_objs,
+           *[str(f) for u in CONF.get("web_link", []) for f in (sorted(APP.glob(u)) if any(ch in u for ch in "*?[")
+                                                               else [APP / u])]]
     r = subprocess.run(cmd, capture_output=True, text=True)
     sys.stderr.write(r.stderr)
     if r.returncode:

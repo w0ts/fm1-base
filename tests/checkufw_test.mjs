@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Copyright (C) 2026 Charles Vestal
+// Copyright (C) 2026 Henri David
 // web/fm1pkg.js checkUfw: fm1-base's own package (every part checked), M-VAVE's stock file (optional; its
 // file is not in this repository, pass its path), and a damaged byte in each part.
 //   node tests/checkufw_test.mjs web/m-bootloader/fm1-uboot-1.4.fwsc [path/to/FM-1_015.fwsc]

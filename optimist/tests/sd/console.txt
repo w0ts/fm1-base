@@ -8,7 +8,7 @@ tap GLO
 wait 100
 tap GLO
 wait 100
-turn SELECT 4                                           # (SERIAL: General's fourth card; General after SD CARD and SETTINGS since 2026-11-03)
+turn SELECT 5                                           # (SERIAL: General's fourth card; General after SD CARD (two pages), SD STREAM and SETTINGS)
 wait 100
 expect gv4 0
 turn K4 1
@@ -23,7 +23,7 @@ expect_console sd ready
 expect_console fat 32
 expect_console MB 64
 console sd ls /
-expect_console <dir> OPTIMIST
+expect_console <dir> Optimist
 console sd ls /OPTIMIST/SAMPLES
 expect_console kick.wav 44144
 console sd cat /OPTIMIST/SAMPLES/kick.wav

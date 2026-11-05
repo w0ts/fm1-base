@@ -7,31 +7,30 @@
 #   FM1B_SD=optimist/build/host/sd/card.img optimist/build/host/optimist_host optimist/tests/sd/card.txt OUT
 wait 2000
 # the power-on: the card mounted (fm1-base's start-up, then Optimist's sd_mount_boot): read, and the SD card mode's own
-# files made where missing (SYSTEM/INDEX.BIN, the samples' index)
+# files made where missing (SYSTEM/INDEX.BIN, the samples' index; its pass runs in slices now and says nothing: no toast to expect)
 expect sd_present 1
 expect sd_reads >10
 expect sd_writes >0
-msg SD
 shot sd-boot.png
 # PROJECT's rows on the card: PROJECT (the card's projects), PRESETS, KITS, SAMPLES
 tap SAVE
 wait 300
 expect scr 3
 expect row 0
-# SAMPLES: loops/ (key 1), kick.wav (key 2); key 2 asks USE, key 2 again uses it on track 1 (SAMPLE, its CARD set)
+# SAMPLES: the card's sets as folders (BASS/ .. X0X/), loops/ and kick.wav last (the 12th item: key 12, w11); the key asks USE, again uses it on track 1 (SAMPLE, its CARD set)
 spin SELECT 3
 wait 200
 expect row 3
 shot sd-samples.png
-key w1 down
+key w11 down
 wait 50
-key w1 up
+key w11 up
 wait 200
-key w1 down
+key w11 down
 wait 50
-key w1 up
+key w11 up
 wait 500
-msg kick.wav
+msg KICK.WAV
 tap HOME
 wait 300
 # track 1 plays the card's kick: streamed from the card (no sample set is built in: the sound can only be the card's)
@@ -42,7 +41,7 @@ expect voices >0
 expect peak_db_min -40
 key 12 up
 wait 300
-# a factory preset from the card: PRESETS, FACTORY/ (key 1), ANALOG/ (key 2), the first preset asked, loaded
+# a preset from the card: PRESETS on its flat NAME list of the track's engine (SAMPLE: the kick is on track 1): key 2 asks DUSTY PNO, key 1 asks DEEP BASS instead, again loads it (DEC 127)
 tap SAVE
 wait 300
 spin SELECT -2
@@ -72,13 +71,13 @@ tap HOME
 wait 300
 tap HOME
 wait 300
-# a project saved to the card by name: track 1's ENV, DEC up 4 (its value seen: gv2), PROJECT's ACTION SAVE, key 1,
-# the NAME page's SAVE
+# a project saved to the card by name: track 1's ENV, DEC down 4 from the preset's 127 (its value seen: gv2), PROJECT's ACTION (K3) SAVE, key 1 (the free slot A-01),
+# the NAME page (named A-01 by default) and its SAVE
 tap ENV
 wait 100
-turn K2 4
+turn K2 -4
 wait 100
-expect gv2 116
+expect gv2 123
 tap HOME
 wait 300
 tap SAVE
@@ -86,7 +85,7 @@ wait 300
 spin SELECT -1
 wait 200
 expect row 0
-turn K2 1
+turn K3 1
 wait 100
 key w0 down
 wait 50
@@ -97,13 +96,13 @@ wait 600
 msg SAVED
 tap HOME
 wait 300
-# the work changed (DEC 4 more), then the card's project loaded: key 1 asks to save the changed work first, HOME (no),
+# the work changed (DEC 4 less), then the card's project loaded: key 1 asks to save the changed work first, HOME (no),
 # then the LOAD asked, SAVE (yes): DEC as saved
 tap ENV
 wait 100
-turn K2 4
+turn K2 -4
 wait 100
-expect gv2 120
+expect gv2 119
 tap HOME
 wait 300
 tap SAVE
@@ -120,7 +119,7 @@ wait 800
 msg LOADED
 tap ENV
 wait 100
-expect gv2 116
+expect gv2 123
 shot sd-project.png
 tap HOME
 wait 300

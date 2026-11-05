@@ -7,7 +7,7 @@ mode needs on it, for fm1-base's simulated card (host/plat_host.c, FM1B_SD=FILE)
   sdcard.py OUT.img
   sdcard.py check IMG    after tests/sd/card.txt: the card read back as a computer reads it (mounted read-only): the
                          take RECORD/REC-0001.WAV a WAV of the master (44.1 kHz 16-bit stereo, a second at least, not
-                         silent), the project PROJECTS/PROJECT/PROJECT.OPP, the samples' index SYSTEM/INDEX.BIN
+                         silent), the project PROJECTS/A/01 - a-01/01 - a-01.opp (slot A-01, the NAME page's default name), the samples' index SYSTEM/INDEX.BIN
 
   the card       64 MiB, formatted FAT32 by the system's own formatter (macOS: newfs_msdos on an hdiutil disk image,
                  as Optimist's tests/fixtures/sd/make_images.sh makes its test cards), a disk image file, never a real card
@@ -121,7 +121,7 @@ def check(img: Path) -> int:
             peak = max(abs(v) for (v,) in struct.iter_unpack("<h", pcm)) if pcm else 0
             for what, ok in ((f"RECORD/REC-0001.WAV: {fmt[0]} ch {fmt[1]} Hz {8 * fmt[2]}-bit, {n} frames, peak {peak}",
                               fmt == (2, 44100, 2) and n >= 44100 and peak > 300),
-                             ("PROJECTS/PROJECT/PROJECT.OPP", (opt / "PROJECTS" / "PROJECT" / "PROJECT.OPP").is_file()),
+                             ("PROJECTS/A/01 - a-01/01 - a-01.opp", (opt / "PROJECTS" / "A" / "01 - a-01" / "01 - a-01.opp").is_file()),
                              ("SYSTEM/INDEX.BIN", (opt / "SYSTEM" / "INDEX.BIN").is_file())):
                 print(f"  {'ok  ' if ok else 'FAIL'} the card: {what}")
                 bad += not ok

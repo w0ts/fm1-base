@@ -124,6 +124,10 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_host = true            the USB port as a MIDI host when the app asks (FM1B_USB_HOST: felucca-bsp's
                              FELUCCA_USB_HOST, docs/USB_HOST.md; plat_usb_host in plat.h): a USB-MIDI controller or
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
+  sd = true                  an SD card on the LCD's bus (a hardware mod; FM1B_SD: device/sd.c, felucca-bsp's
+                             fm1_sd_hw.h; plat_sd_* in plat.h, felucca-bsp docs/SD.md): the screen idles selected,
+                             the card's chip select being its own inverted; the host simulator reads a card image
+                             (FM1B_SD=FILE)
   conf_gen = "x.py args"     a script of the app (cwd APP_DIR) whose output, fm1.toml lines (ble = false), replaces the
                              file's own before the build: a setting the app's configuration chooses
   app_end = 0xCE000          a bigger app slot (FM1B_APP_END; FM1B_APP_END=0x... in the environment for one build): the
@@ -1503,6 +1507,7 @@ def opt_flags():
                                            ("resources", "FM1B_RES"), ("lcd_panel", "FM1B_LCD_PANEL"), ("xdata2", "FM1B_XDATA2"),
                                            ("headphones", "FM1B_HEADPHONES"))
             if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+    flags += ["-DFM1B_SD=1"] if (CONF.get("sd") and os.environ.get("FM1B_SD") != "0") or os.environ.get("FM1B_SD") == "1" else []
     flags += ["-DFM1B_CRK_DIAG=1"] if (CONF.get("crk_diag") and os.environ.get("FM1B_CRK_DIAG") != "0") or os.environ.get("FM1B_CRK_DIAG") == "1" else []
     if cache_ram_ways():
         flags.append(f"-DFM1B_CACHE_RAM={cache_ram_ways()}")   # (the host and the web: plat_cache_ram's stand-in)
@@ -1889,6 +1894,8 @@ def main():
     if errors:
         raise SystemExit("build: checks failed")
     parts = [(label, have[f]) for f, label in firmware_json.FEATURES]
+    parts += [("WiFi (own stack)", WIFI_OWN), ("Ableton Link (GPL-3.0-only)", LINK), ("WiFi access point (MODE AP)", WIFI_AP),
+              ("companion services", on("companion", "FM1B_COMPANION", False)), ("the SD card", on("sd", "FM1B_SD", False))]
     print("parts    " + ", ".join(n for n, x in parts if x) + "  (not built in: " +
           (", ".join(n for n, x in parts if not x) or "none") + ")")
     pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY, app_end() or APP_END), ota, PRODUCT)

@@ -437,6 +437,97 @@ int plat_sysex_end(void);              /* the last packet out, the ring free aga
 uint32_t plat_usb_session(void);       /* 0: no computer has set the FM-1 up; else a number that changes at every new
                                         * one (a bus reset, the cable out and in): what an app keeps for a connection
                                         * (a client's session) it drops when this changes */
+/* An SD card on the LCD's bus (fm1.toml sd = true: FM1B_SD 1; a hardware mod, felucca-bsp docs/SD.md): its clock and
+ * data in on the LCD's, its data out on the LCD's D/C line, its chip select the LCD's through an inverter, so it is
+ * selected whenever the screen is not. The screen then idles selected, and each call below takes the bus from it and
+ * gives it back. Main loop only (never the render: a call waits on the card, a write's busy up to 500 ms). Blocks of
+ * 512 bytes from 0, whatever the card's addressing. p: RAM; 4-byte aligned for the DMA (else through a bounce block). A
+ * card that fails a call is taken as gone (plat_sd_present 0) until plat_sd_init starts it again. Without FM1B_SD none
+ * of this is built; the screen is as before.
+ *   plat_sd_init()             the card's start-up: 0 = ready, PLAT_SD_NOCARD (nothing answers), PLAT_SD_ERR (it
+ *                              answers but does not start: the wrong voltage, an MMC)
+ *   plat_sd_present()          1 while a started card answers
+ *   plat_sd_blocks()           its size (its CSD), 0 when unknown
+ *   plat_sd_read(blk, p, n)    n blocks from blk into p (one multi-block read), each block's CRC16 checked (a failure
+ *                              read again, twice at most: then PLAT_SD_CRC); 0 = done. This and plat_sd_write
+ *                              feed the watchdog (8 s): a pass over the card's files inside one main loop pass
+ *                              takes as long as it takes, the card moving; a stuck card fails its call first
+ *   plat_sd_write(blk, p, n)   n blocks from p to blk (one multi-block write for n > 1), the card's busy waited for
+ * Runs, for streaming (one at a time; the other calls answer PLAT_SD_BUSY meanwhile):
+ *   plat_sd_read_open(blk)     a multi-block read from blk: the bus stays the card's (the screen waits) until
+ *   plat_sd_read_next(p, us)   the next block into p: 0, PLAT_SD_BUSY (not come within us: call again), PLAT_SD_CRC
+ *                              (its CRC16 failed: close and read again), PLAT_SD_ERR
+ *   plat_sd_write_open(blk)    a multi-block write from blk; the bus the screen's between its blocks
+ *   plat_sd_write_next(p)      the next block: 0 sent, PLAT_SD_BUSY (the card still writes the one before: nothing
+ *                              sent, call again), PLAT_SD_ERR (refused, or busy past 500 ms); p 0: nothing sent, 0
+ *                              when the card would take a block now
+ *   plat_sd_close()            the run ended (a write's last block waited for): 0 = done
+ * The clock (device/sd_clock.h's steps: 30 20 15 12 10 8.57 7.5 6.67 6 MHz, 6 the floor): the start-up always at
+ * 400 kHz, the first data at the floor; then plat_sd_init detects the fastest that reads right on this card and board
+ * (an SD v2 card, not on the plain pins): a reference pass at the floor (the CSD and the CID, each block's CRC16, 8
+ * blocks by CMD17 spread over the card, 16 from block 0 by one CMD18: their fingerprint), then from the floor up two
+ * passes a step, each with no CRC failure, no timeout and the floor's fingerprint (30 MHz only after CMD6's status says
+ * high speed is supported and it switched). The first step that fails ends the walk: back to the floor before the CMD12,
+ * the card checked there (started again when it must), then the step below the failure is kept and checked once more
+ * (that failing: the floor). No step failed (the top reached, or 1 s spent): the step below the fastest that passed, so a
+ * card that reads everything runs at 20 MHz. A card that no longer reads at the floor after a failed step: PLAT_SD_ERR.
+ * At run time a block whose CRC16 fails above the floor, or a timeout or a wrong answer above it (a read session, a read run: see
+ * device/sd.c sd_slip, bounded to 150 ms), drops the clock one step at once (counted) and plat_sd_read reads
+ * it again there; plat_sd_read_next steps down the same and answers PLAT_SD_CRC. Every wait is 20 ms: the detection takes
+ * ~7 s at the very worst, every wait at its limit, ~1.7 s at most between its watchdog feeds.
+ *   plat_sd_clock_khz()        the clock the card runs at now, kHz; 0: no card, the plain pins (no clock to pick), the host
+ * For a console (built with usb_console: FM1B_CDC, on the host always):
+ *   plat_sd_clock(c)           what the detection found (plat_sd_clock_t below)
+ *   plat_sd_clock_set(k)       0: detect at the next plat_sd_init (the default); k: step k - 1 from then on, unchecked
+ *   plat_sd_clock_try(k)       step k tried now (the reference at the floor, two passes at k): PLAT_SD_STEP_*, or
+ *                              PLAT_SD_NOCARD / PLAT_SD_BUSY / PLAT_SD_ERR; the clock kept as it was
+ * The host simulator: the card is an image file (FM1B_SD=FILE in the environment; the script's sd FILE | sd out); it
+ * has no clock (plat_sd_clock_khz 0, every step untried) */
+#define PLAT_SD_NOCARD (-1)
+#define PLAT_SD_ERR (-2)
+#define PLAT_SD_BUSY (-3)
+#define PLAT_SD_CRC (-4)
+int plat_sd_init(void);
+int plat_sd_present(void);
+uint32_t plat_sd_blocks(void);
+int plat_sd_read(uint32_t blk, void *p, uint32_t n);
+int plat_sd_write(uint32_t blk, const void *p, uint32_t n);
+int plat_sd_read_open(uint32_t blk);
+int plat_sd_read_next(void *p, uint32_t wait_us);
+int plat_sd_write_open(uint32_t blk);
+int plat_sd_write_next(const void *p);
+int plat_sd_close(void);
+#define PLAT_SD_NSTEP 9u               /* device/sd_clock.h FM1B_SD_NSTEP */
+enum { PLAT_SD_STEP_UNTRIED = 0, PLAT_SD_STEP_PASS, PLAT_SD_STEP_CRC, PLAT_SD_STEP_DIFF, PLAT_SD_STEP_ERR,
+       PLAT_SD_STEP_NOHS };            /* a step: not tried, read right, a CRC failed, the data not the floor's, a timeout
+                                        * or a refusal, skipped (30 MHz: the card refused high speed) */
+typedef struct {
+    uint32_t khz;                      /* plat_sd_clock_khz() */
+    uint32_t step_khz[PLAT_SD_NSTEP];  /* each step's clock, the fastest first, the floor last */
+    uint8_t res[PLAT_SD_NSTEP];        /* what the detection saw at each step (PLAT_SD_STEP_*) */
+    uint8_t step;                      /* the step kept (PLAT_SD_NSTEP - 1: the floor) */
+    uint8_t top;                       /* the fastest that passed (the floor: none above it) */
+    uint8_t forced;                    /* plat_sd_clock_set's k (0: detected) */
+    uint8_t hs;                        /* CMD6 switched the card to high speed */
+    uint32_t failed;                   /* the steps that failed */
+    uint32_t probe_ms;                 /* the detection's time */
+    uint32_t crc_fails;                /* blocks whose CRC16 failed since the power-on (the detection's not counted) */
+    uint32_t steps_down;               /* run-time steps down for them */
+} plat_sd_clock_t;
+uint32_t plat_sd_clock_khz(void);
+void plat_sd_errs(uint32_t *crc_fails, uint32_t *steps_down);   /* blocks whose CRC16 failed, run-time steps down for them (plat_sd_clock_t's two, in every build) */
+void plat_sd_clock(plat_sd_clock_t *c);
+void plat_sd_clock_set(uint32_t k);
+int plat_sd_clock_try(uint32_t k);
+/* The read run's blocks come in SPI1's interrupt (device/sd_irq.h, above the render), a whole run ahead of plat_sd_read_next, so
+ * the card streams on while the main loop is held up: measured on an FM-1 (2026-11-05) a dense kit's 195 dry voices in 28 s became
+ * 0. plat_sd_read_plan(n): the run just opened will take n blocks (the stream's run), so it reads no further and the CMD12 goes out
+ * between blocks. plat_sd_irq(v, c): v 0 reads by the main loop's polls from the next run on (a comparison), 1 the interrupt (the
+ * default), v < 0 no change; returns which, and in c[6] (c may be 0) the interrupts, the hunts, the longest hunt in bytes (the card's
+ * own wait before a block, in bytes at the clock), the blocks, the runs and the errors it saw. The host has no interrupt: 0 */
+void plat_sd_read_plan(uint32_t n);
+uint32_t plat_sd_irq(int v, uint32_t *c);
+
 /* the resource region (fm1.toml resources = FILE, FM1B_RES; app.h APP_RES_BASE, APP_RES_SECTORS: device/res.c):
  * the file's bytes read in place, *len their count; 0 (and *len 0) while the FM-1 does not hold this build's (not
  * yet written after an update, torn, another build's): the app does without. The host writes it

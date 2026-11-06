@@ -356,6 +356,10 @@ run sd-clock sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 
 run sd-app sh -c "$PY tools/build.py tests/sd_app --host && \
     head -c 4194304 /dev/zero > $OUT/sd_card.img && printf '\125\252' | dd of=$OUT/sd_card.img bs=1 seek=510 conv=notrunc 2>/dev/null && \
     FM1B_SD=$OUT/sd_card.img tests/sd_app/build/host/sdtest_host tests/sd_app/tests/sd.txt tests/sd_app/build/host"
+# the own Wi-Fi stack (wifi/, device/wifi_own.c: wifi_stack = "own", Optimist's) and Ableton Link (link/, GPL-3.0-only,
+# link = true): the station, the crypto, the IP layer, the simulator's access point, Link; the Link example on a simulated
+# network in the host simulator
+if sh tests/wifi/run.sh; then :; else FAIL=1; fi
 # the second core's stack room (plat_stack_left(PLAT_STK_C1)) on a host model of felucca-bsp's fm1_cpu1.h: -1 when CPU1 never started
 run stack-c1 sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -Itests/stack_c1 -o $OUT/stack_c1_test tests/stack_c1_test.c && \
     $OUT/stack_c1_test"

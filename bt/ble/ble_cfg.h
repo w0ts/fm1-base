@@ -73,6 +73,45 @@
 #ifndef BLE_SIG_AUDIO_RETRY_US
 #define BLE_SIG_AUDIO_RETRY_US 5000000u  /* the link still fast while the audio streams: asked again this long after */
 #endif
+/* Bulk (ble_host.c ble_sig_bulk): while the app streams (plat_ble_stream: the screen mirrored) and the link runs full, the
+ * slower BLE_CONN_BULK_MIN..MAX is tried, and kept only when it carries more. Measured from this Mac, 2026-10-28 / 31:
+ * at 30 ms bluetoothd agreed 251-octet packets and two notifications in one event; at the 7.5 ms CoreMIDI asks for
+ * itself, 50-octet packets, one a connection event (4.6-5.6 KB/s). The rate is measured both ways on the link itself
+ * (ble_ll_rate: octets acknowledged while data waited) for BLE_BULK_MEAS_US of full link each, and the faster kept; the
+ * slower is not tried again for BLE_BULK_RETRY_US on this link. Off: BLE_BULK 0 (as before) */
+#ifndef BLE_BULK
+#define BLE_BULK 0                       /* off by default (2026-11-01, the user's Mac: at 45 ms CoreMIDI still took 50-octet
+                                          * packets, so bulk measured slower every time and only cost the tries) */
+#endif
+#ifndef BLE_CONN_BULK_MIN
+#define BLE_CONN_BULK_MIN 24u            /* 30 ms .. 45 ms, 2 s: the audio's (Apple's rules hold; a Mac took them) */
+#endif
+#ifndef BLE_CONN_BULK_MAX
+#define BLE_CONN_BULK_MAX 36u
+#endif
+#ifndef BLE_CONN_BULK_TIMEOUT
+#define BLE_CONN_BULK_TIMEOUT 200u
+#endif
+#ifndef BLE_BULK_MEAS_US
+#define BLE_BULK_MEAS_US 1000000u        /* the link full this long (summed intervals) for one measurement */
+#endif
+#ifndef BLE_BULK_WAIT_US
+#define BLE_BULK_WAIT_US 4000000u        /* a measurement or a request given up after this long */
+#endif
+#ifndef BLE_BULK_IDLE_US
+#define BLE_BULK_IDLE_US 3000000u        /* the stream quiet this long: the fast interval asked for again */
+#endif
+#ifndef BLE_BULK_RETRY_US
+#define BLE_BULK_RETRY_US 60000000u      /* bulk lost (slower, refused): not tried again before this */
+#endif
+/* the link layer asks the host for more (ble_host_tx_low) while it loads a packet, so the central's "more data" goes on
+ * within the event instead of BLE_MIDI_PER_EVENT notifications an event; never while Bluetooth audio streams */
+#ifndef BLE_LL_REFILL
+#define BLE_LL_REFILL 1                  /* on again (2026-11-01, btaimd): 13-19 KB/s through CoreMIDI at 7.5 ms instead of 4.6-5.6
+                                          * (measured). Unpaced, the mirror's stream filled that and the Mac lost whole frames
+                                          * every second; a mirror app now paces itself to a budget it halves on each loss
+                                          * (ed_mirror.c MIR_AIMD), so the refill is the ceiling, not the rate */
+#endif
 
 /* ---- link layer */
 #ifndef BLE_LL_MAX_OCTETS

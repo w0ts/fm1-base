@@ -50,6 +50,9 @@ static struct {
     uint8_t lproc, rproc;
     uint32_t lproc_t, rproc_t;
     uint8_t term_rx, term_reason;
+    uint8_t alen[4];                               /* the data octets of the PDUs in flight (by handed & 3; 0 control) */
+    uint8_t refilling;                             /* ble_host_tx_low running (no second call inside it) */
+    uint32_t ev_oct, sat_oct, sat_us;              /* ble_ll_rate: acknowledged this event; in full events, their time */
     uint8_t handed, acked, term_seq, term_out;     /* PDUs given to the engine / acknowledged; LL_TERMINATE_IND's
                                                     * number, and that it went out */
     /* TX: control PDUs, then L2CAP frames in a byte ring */
@@ -124,6 +127,18 @@ BLE_API int ble_ll_encrypted(void) { return bll.state == LL_CONN && bll.enc_tx; 
 #else
 BLE_API int ble_ll_encrypted(void) { return 0; }
 #endif
+
+BLE_API void ble_ll_length_again(void)
+{
+    if (bll.state == LL_CONN && BLE_LL_MAX_OCTETS > 27u && bll.feat_known && (bll.peer_feat & BLE_FEAT_DLE))
+        bll.len_done = 0;                           /* (ll_start_procs sends LL_LENGTH_REQ at the next free moment) */
+}
+
+BLE_API void ble_ll_rate(uint32_t *octets, uint32_t *us)
+{
+    *octets = bll.sat_oct;
+    *us = bll.sat_us;
+}
 
 /* the LL's encryption PDUs in blell's protocol ring (ble_diag_pdu), both ways; LL_ENC_REQ as op, EDIV, Rand's low 5 */
 #if BLE_DIAG
@@ -420,8 +435,19 @@ BLE_API uint8_t ble_ll_hw_tx(uint8_t *pdu)
     uint32_t n, i, room = bll.max_tx;               /* (the data length counts the payload without the MIC) */
     if (bll.state != LL_CONN)
         return 0;
+#if BLE_LL_REFILL
+    if (!bll.refilling && !bll.ctrl_n && bll.lproc != P_TERM && bll.wr - bll.rd - bll.off < 2u * room) {
+        bll.refilling = 1;                          /* little left: the host queues more now, so MD stays on while the
+                                                     * app streams and the central goes on within the event */
+        ble_host_tx_low();
+        bll.refilling = 0;
+        if (bll.state != LL_CONN)
+            return 0;
+    }
+#endif
     if (bll.ctrl_n) {
         n = bll.ctrl_len[bll.ctrl_rd];
+        bll.alen[bll.handed & 3u] = 0;
         pdu[0] = 3u;
         ble_cpy(pdu + 2, bll.ctrl[bll.ctrl_rd], n);
         BLE_DG(ble_diag_last(ble_dg.ctl_tx, &ble_dg.ctl_tx_n, pdu[2]));
@@ -436,6 +462,7 @@ BLE_API uint8_t ble_ll_hw_tx(uint8_t *pdu)
     } else if (ll_data_ready()) {
         uint32_t total = ll_head_len();
         n = ble_min(total - bll.off, room);
+        bll.alen[bll.handed & 3u] = (uint8_t)n;
         pdu[0] = bll.off ? 1u : 2u;
         for (i = 0; i < n; i++)
             pdu[2 + i] = bll.ring[(bll.rd + bll.off + i) & LL_RING_MASK];
@@ -468,6 +495,7 @@ BLE_API void ble_ll_hw_tx_acked(void)
 {
     if (bll.state != LL_CONN || bll.acked == bll.handed)
         return;
+    bll.ev_oct += bll.alen[bll.acked & 3u];
     bll.acked++;
     if (bll.term_out && bll.acked == bll.term_seq)
         ll_close_by(BLE_ERR_LOCAL_HOST, BDC_LOCAL);
@@ -650,8 +678,8 @@ static void ll_rx_ctrl(const uint8_t *p, uint8_t n)
             ll_reject(op, BLE_ERR_INVALID_LL_PARAMS);
             return;
         }
-        if (ble_host_audio() && ble_rd16(p + 3) < BLE_CONN_AUDIO_MIN) {   /* (Bluetooth audio streams: a faster interval
-                                                                         * leaves it short of air, ble_host.c) */
+        if (ble_rd16(p + 3) < ble_host_min_interval()) {   /* (Bluetooth audio streams: a faster interval leaves it
+                                                         * short of air; a stream that measured faster slower: ble_host.c) */
             ll_reject(op, BLE_ERR_UNACCEPT_PARAMS);
             return;
         }
@@ -834,6 +862,11 @@ BLE_API void ble_ll_hw_event_end(uint16_t counter, uint8_t rx_ok)
         ll_close_by(BLE_ERR_LL_RSP_TIMEOUT, BDC_PROC_TIMEOUT);
         return;
     }
+    if (ble_ll_hw_tx_pending()) {                  /* the central ended the event with data waiting: the link full */
+        bll.sat_oct += bll.ev_oct;
+        bll.sat_us += (uint32_t)bll.interval * 1250u;
+    }
+    bll.ev_oct = 0;
     ll_start_procs(now);
     if (bll.lproc != P_TERM)
         ble_host_event();

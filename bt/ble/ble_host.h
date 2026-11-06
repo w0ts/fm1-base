@@ -22,6 +22,9 @@ BLE_API uint8_t ble_gap_name(const uint8_t **p);
 BLE_API void ble_att_rx(const uint8_t *p, uint16_t n);  /* an ATT PDU from the client */
 BLE_API void ble_att_reset(void);                       /* a new connection, or none */
 BLE_API void ble_att_event(void);                       /* each connection event: indications, MIDI out */
+#if BLE_LL_REFILL
+BLE_API void ble_att_refill(void);                      /* inside an event, the link layer short: one more notification */
+#endif
 
 BLE_API void ble_att_set_mtu(uint16_t client_mtu);     /* the other side's MTU (the smaller one is used) */
 BLE_API uint16_t ble_att_mtu(void);
@@ -51,6 +54,12 @@ BLE_API void ble_central_no_pairing(uint8_t code);
 BLE_API void ble_sig_want_fast(void);
 /* ble_host.c: Bluetooth audio streams (1) or not (0): the slower interval BLE_CONN_AUDIO_MIN..MAX asked for meanwhile */
 BLE_API void ble_sig_audio(int on);
+/* ble_host.c: the app streams (1: plat_ble_stream read in the last moments) or not: the bulk interval tried, kept when faster
+ * (ble_cfg.h BLE_BULK). Called from the main loop like ble_sig_audio; 0 always when BLE_BULK is 0 */
+BLE_API void ble_sig_bulk(int want);
+/* the tuner's state (the LINK report, tests): 0 off, 1 measuring the fast link, 2 bulk asked, 3 measuring bulk, 4 bulk on,
+ * 5 bulk lost (slower or refused: not before BLE_BULK_RETRY_US); rates in octets a second (0: not measured) */
+BLE_API uint8_t ble_bulk_state(uint32_t *rate_fast, uint32_t *rate_bulk);
 #if BLE_LL_ENC
 /* the key the link layer may use (LTK least significant octet first, for Rand and EDIV) */
 BLE_API void ble_host_set_key(const uint8_t rand[8], uint16_t ediv, const uint8_t ltk[16]);

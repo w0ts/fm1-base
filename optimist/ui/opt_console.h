@@ -208,6 +208,22 @@ static void con_cpu1(void)
     con_kv("cpu1_why", opt_core_dual_stat(1));
     con_kv("cpu1_jobs", opt_core_dual_stat(2));
     con_kv("cpu1_posts", opt_core_dual_stat(3));
+    {   /* each job's time, us a block of 32 frames (0.73 ms), smoothed: the parts, then the drums, then the kept jobs */
+        static const char *const D[7] = {"drums voices us", "drum bus us", "sampled loops us", "sampled inserts us",
+                                         "sampled sends us", "x0x us", "drums voices B us"};
+        uint32_t k;
+        int32_t v;
+        for (k = 4; k < 12u && (v = opt_core_dual_stat(k)) >= 0; k++) {
+            con_puts("job ");
+            con_dec((int32_t)(k - 4u));
+            con_puts(" us ");
+            con_dec(v);
+            con_puts("\r\n");
+        }
+        for (k = 0; k < 7u; k++)                   /* (stats 20..26: 26 the drums' half B, drum_halves.c) */
+            if ((v = opt_core_dual_stat(20u + k)) >= 0)
+                con_kv(D[k], v);
+    }
 #endif
 }
 static void con_keys(void)

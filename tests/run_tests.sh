@@ -54,6 +54,10 @@ run trs-stamp sh -c "$CC -O2 -w -DFELUCCA_MIDI_STAMP=1 -Ibsp/chip -Ibsp/boards/f
 # each stamp against its message's landing (within +-0.05 ms; the poll's and the read's stamps beside it)
 run midi-stamp sh -c "$CC -std=c11 -O2 -Wall -Wextra -Werror -Wno-unused-function -Ibsp/chip -Ibsp/boards/fm1 -Idevice -o $OUT/midi_stamp_test tests/midi_stamp_test.c && $OUT/midi_stamp_test"
 run storage sh -c "$CC -O2 -w -o $OUT/storage_test tests/storage_test.c && $OUT/storage_test"
+# the same with app.h APP_STORE_BOUNCE (one page of RAM for the store): the same results, the same flash byte for byte
+run storage-bounce sh -c "$CC -O2 -w -DAPP_STORE_BOUNCE=1 -o $OUT/storage_bounce_test tests/storage_test.c && \
+    $OUT/storage_bounce_test > $OUT/storage_bounce.txt && $OUT/storage_test > $OUT/storage_plain.txt && \
+    cmp $OUT/storage_plain.txt $OUT/storage_bounce.txt"
 run storage-pool sh -c "$CC -O2 -std=c99 -Wall -Wextra -Werror -Wno-unused-function -o $OUT/storage_pool_test \
     tests/storage_pool_test.c && $OUT/storage_pool_test"     # the pool (APP_STORE_POOL): the move, saves, cuts
 # plat_headphones' debounce (device/plat_hp.c) over a simulated jack: a plug's bounce gives one change, 100 ms on

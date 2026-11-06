@@ -93,6 +93,7 @@ static uint8_t live_save_off;
  * whole audio path from XIP instead (core.h's own ASM_CHECK way; the cache's misses, unmeasured on an FM-1) */
 #ifndef OPT_HOT_RAM
 #define OPT_HOT_RAM 1
+#define OPT_DRUMS_PROF 1                       /* drums.c's profiling counters (opt_core_dual_stat 22..25, the console's cpu1) */
 #endif
 #undef HOT
 #undef HOT2
@@ -470,6 +471,16 @@ int32_t opt_core_dual_stat(uint32_t k)
         return (int32_t)dual.jobs;
     if (k == 3u)
         return (int32_t)dual.posts;
+    if (k >= 4u && k < 4u + DUAL_JOBS)             /* a job's smoothed time, us a block (dual_cost: ticks x 8) */
+        return (int32_t)(dual_cost[k - 4u] / (8u * FM1_TICKS_PER_US));
+    if (k == 20u || k == 21u)                      /* the drums: the voices (slicer_drums; split: half A), the bus (dbus_run) */
+        return (int32_t)(dual_cost_drums[k - 20u] / (8u * FM1_TICKS_PER_US));
+    if (k == 26u)                                  /* the drums split: half B's voices (drums/drum_halves.c) */
+        return (int32_t)(dual_cost_drums[2] / (8u * FM1_TICKS_PER_US));
+#if FELUCCA_DRUMS
+    if (k >= 22u && k < 26u)                       /* drums_mix: the sampled loops, their inserts, their sends, the X0X voices */
+        return (int32_t)(drums_prof[k - 22u] / (8u * FM1_TICKS_PER_US));
+#endif
     return -1;
 }
 #else

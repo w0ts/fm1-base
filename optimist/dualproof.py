@@ -8,7 +8,7 @@ trial's profile copy (optimist/run.sh, the dev run):
 
 tests/dual.txt (a template: the reverb sends, the file of the render's samples, the second core's expects) is run with
 each split of the jobs (OPT_DUAL_PARTS: none, the split by load, which keeps every job on CPU0 on the host, T1, T2 + T3,
-the drums, the reverb's kept block, all five), with the reverb sends at 0 and at 100. The checks:
+the drums' half A, the reverb's kept block, the drums' half B, both halves, all six), with the reverb sends at 0 and at 100. The checks:
   1. every split renders the same samples, 24-bit, as the render made them (core/opt_dual.c: integer sums, the order
      of the jobs does not matter; the per-core state, FM6's scratch on fm1_cnum, the LFOs' draws before the fork);
   2. the second core did the jobs it was given (c1jobs), and stayed up (c1up);
@@ -29,8 +29,10 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent
 ROOT = APP.parent
 TEMPLATE = APP / "tests" / "dual.txt"
-SPLITS = [None, 0x1, 0x6, 0x8, 0x10, 0x1F]       # (bit p: part p, 3 the drums, 4 the reverb's kept block)
+SPLITS = [None, 0x1, 0x6, 0x8, 0x10, 0x20, 0x28, 0x3F]   # (bit p: part p, 3 the drums (their voices' half A), 4 the
+                                                 # reverb's kept block, 5 the drums' half B: core/opt_dual.c DUAL_IX_DR2)
 SENDS = [0, 100]                                 # (0 first: the sends' part of the output is a take less the 0 one)
+DR2_ONLY = 0x20                                  # (the drums' half B alone)
 CTL = 32                                         # (Optimist's mix block, frames: the reverb's lateness)
 LATE_DB = -50.0
 # the early SBC frame (core/opt_dual.c dual_longest): a kept frame always waiting (FM1B_HOST_BTA_JOBS, host/plat_host.c),
@@ -48,7 +50,9 @@ def fail(msg: str) -> None:
 
 def run(exe: Path, out: Path, name: str, rev: int, split: int | None, dual: bool, extra: dict | None = None) -> list[int]:
     pcm = out / f"{name}.pcm"
-    c1 = ["expect c1up 1"] + ([f"expect c1jobs >100"] if split else []) if dual else []
+    # (the drums' half B alone, DR2_ONLY: a job only while the drums sound, none in the template's first 600 ms: its
+    # samples compared all the same, its jobs not counted)
+    c1 = ["expect c1up 1"] + ([f"expect c1jobs >100"] if split and split != DR2_ONLY else []) if dual else []
     text = TEMPLATE.read_text().replace("{REV}", str(rev)).replace("{PCM}", str(pcm)).replace("{C1}", "\n".join(c1))
     script = out / f"{name}.txt"
     script.write_text(text)

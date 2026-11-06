@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The second core (core/opt_dual.c on fm1-base's simulated one): a template of dualproof.py's, which fills in the
+# tracks' reverb send (P_REV 36, set as is), the file of the render's samples and the expects on the second core,
+# runs it with the splits it compares (OPT_DUAL_PARTS) and compares the renders sample for sample. The three
+# synth parts and the drum track play at once (MIDI channels 1..4, and 10)
+wait 600
+expect blocks >100
+{C1}
+param 0 36 {REV}
+param 1 36 {REV}
+param 2 36 {REV}
+param 3 36 {REV}
+pcm {PCM}
+midi 90 3C 64
+midi 91 40 64
+midi 92 43 64
+midi 93 24 64
+midi 99 24 64
+wait 50
+midi 93 26 64
+midi 99 26 64
+wait 400
+expect voices >2
+midi 80 3C 00
+midi 81 40 00
+midi 82 43 00
+midi 83 24 00
+midi 89 24 00
+midi 83 26 00
+midi 89 26 00
+wait 1200
+pcm stop
+{C1}

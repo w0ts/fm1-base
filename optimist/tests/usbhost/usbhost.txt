@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Optimist's USB MIDI host in the trial (USB_HOST: profiles/dev-usbhost.config, optimist/run.sh's usbhost run;
+# ui/opt_usbh.h) on fm1-base's host simulator's USB-MIDI device (usbh plug ...). SYSTEM > USB: MODE DEVICE at boot,
+# HOST from the page; a keyboard plugged in: its name, its notes play a track, nothing from a computer meanwhile;
+# CLOCK OUT and the FM-1's notes go to it, not to a computer; its clock followed as the USB port's; unplugged: its held
+# notes end; NO MIDI for a stick; back to DEVICE: the computer again; a restart is DEVICE
+wait 1500
+master 2048
+wait 100
+# boot: a device, the computer's notes play
+expect usbh 0
+expect usbh_mode 0
+midi 90 3C 64
+wait 60
+expect voices >0
+midi 80 3C 00
+wait 600
+expect voices 0
+# SYSTEM > USB (GLO twice; INFO, BT MIDI, BT AUDIO, WI-FI, General, then USB: Bluetooth and Wi-Fi first since 2026-11-03):
+# MODE DEVICE, DEVICE NONE
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 5
+wait 100
+cells
+# MODE HOST (KNOB 1): the port a host, nothing plugged in
+spin K1 1
+wait 200
+cells
+expect usbh_mode 1
+expect usbh 1
+# the computer is not there: its notes are dropped
+midi 90 3C 64
+wait 60
+expect voices 0
+# a keyboard plugged in (behind a powered hub): connected, DEVICE its name
+usbh plug Test_Keys_25
+wait 400
+cells
+expect usbh 2
+# its notes play track 1 (channel 1, as any input), and end
+usbh midi 90 3C 64
+wait 60
+expect voices >0
+usbh midi 80 3C 00
+wait 600
+expect voices 0
+# CLOCK OUT and the transport go to it, nothing to a computer
+out
+clockout 1
+wait 1000
+expect usbh_clocks >30
+tap PLAY
+wait 300
+expect_out USBH FA
+expect_no_out USB FA
+tap PLAY
+wait 100
+expect_out USBH FC
+clockout 0
+expect playing 0
+# its clock followed (CLK IN AUTO: the USB port's, CLK USB): START and 100 BPM's clocks, the transport at its tempo
+usbh midi FA
+usbh clock 120 25
+expect playing 1
+expect bpm 100
+usbh midi FC
+wait 200
+expect playing 0
+# a note held when the keyboard is pulled out: let go (plat_usb_lost)
+usbh midi 90 3E 64
+wait 60
+expect voices >0
+usbh unplug
+wait 700
+expect voices 0
+expect usbh 1
+cells
+# a stick with no MIDI: NO MIDI, never connected
+usbh plug Stick nomidi
+wait 400
+cells
+expect usbh 1
+usbh unplug
+wait 100
+# back to DEVICE (YES on MODE: round): the computer's notes play again
+tap SAVE
+wait 200
+cells
+expect usbh_mode 0
+expect usbh 0
+midi 90 3C 64
+wait 60
+expect voices >0
+midi 80 3C 00
+wait 600
+# HOST again, then a restart: every boot is DEVICE (HOST never kept)
+spin K1 1
+wait 200
+expect usbh 1
+reboot
+wait 1500
+expect usbh 0
+expect usbh_mode 0

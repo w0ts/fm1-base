@@ -255,9 +255,12 @@ if sh tests/bt/run.sh; then :; else FAIL=1; fi
 # app drives it: the descriptor, the screen, a chord, the reader over SysEx, the flash image booted from again
 # the simulator's USB audio (usb_play, usb_rec): a computer's signal through the template's MASTER, recorded back
 run host-usb-audio "$PY" tests/host_usb_audio_test.py template/build/host/template_host template/build/tests/usb_audio
+# the companion services (device/companion.c) in the host simulator, through tools/fm1_companion.py: tests/companion_app
+run companion "$PY" tests/companion_test.py $OUT/companion
 if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
     rm -f template/build/rfm1/*.rfm1
     run rfm1 sh -c "$PY tools/build.py template --rfm1 && node tests/rfm1_test.mjs template/build/rfm1/*.rfm1"
+    run companion-web sh -c "$PY tools/build.py tests/companion_app --web && node tests/companion_web_test.mjs tests/companion_app/build/emu"
 else
     echo "  skip rfm1 (no emcc or node)"
 fi

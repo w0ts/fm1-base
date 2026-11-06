@@ -1163,6 +1163,10 @@ static void usb_cmd(uint32_t d)
         return;
     }
 #endif
+#if FM1B_COMPANION
+    if (comp_cmd(ota_dec, d))
+        return;                                     /* the companion services (companion.c) */
+#endif
 #ifdef APP_USB_CMD
     app_usb_cmd(ota_dec, d);
     ota_try_ms = 5000u;                             /* (the app's patience, plat_host_patience, back to the default) */
@@ -1564,7 +1568,10 @@ static void fm1_main(void)
 #if FM1B_MIRROR
         mirror_step();                              /* the screen mirrored: input reports, redraws, timeouts */
 #endif
-        if (usb.ota_req) {
+#if FM1B_COMPANION
+        comp_step();                                /* the companion: what a watched parameter did */
+#endif
+        if (usb.ota_req) {                          /* an update begins: nothing staged or erased before this */
             usb.ota_req = 0;
             update_begin();                         /* the app stops cleanly first (APP_UPDATE_BEGIN) */
             app_panic();                            /* silence: the update rewrites the flash */

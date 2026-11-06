@@ -63,9 +63,11 @@ The debug stats' frames (device/dbgstats.c, the record's layout there; parse_sta
   then "end N"; up in seconds, the times in us; flags 1 periodic, 2 a crash's, 4 written while playing, 8 the
   switch on
   F0 7D 4C 53 43 4C 52 F7         ("LSCLR") erases them; the answer "cleared" or "clear failed" (an update staged)."""
+import re
 import struct
 import sys
 import time
+
 
 import fm1ports
 

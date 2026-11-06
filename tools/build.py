@@ -19,6 +19,10 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   id_prefix = "FM-1_0"       package identity: dev builds are the prefix + "00", releases the prefix + XXYYZZ
   usb_manufacturer = "..."   the USB names (felucca-bsp FELUCCA_USB_MANUFACTURER / FELUCCA_USB_PRODUCT)
   usb_product = "..."
+  usb_name_fn = "fn"         the name of the app's function `const char *fn(void)` the USB product name is asked of each time a
+                             host reads it (FELUCCA_USB_NAME_FN; usb_product is the fallback, the audio devices' names follow it
+                             unless usb_audio_in_name / usb_audio_out_name are set): a name with something of this FM-1 in it
+                             (plat.h plat_dev_id, plat_dev_name: "FM1-XXXX"); the manufacturer stays usb_manufacturer's
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -68,6 +72,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              fm1-base's stand-in for plat_bta_* (the script's "bta add NAME"); off by default, so an
                              app keeps its own stand-in there (without FM1B_BT_AUDIO)
   usb_audio_in = true        the FM-1 recordable over USB (FM1B_UAC; the default: true)
+  usb_audio_mem = "app"      the USB audio rings (in and out, 16 KB) lent by the app only while the computer streams, not
+                             static RAM (FM1B_UAC_MEM; plat.h plat_usb_audio_mem); "static" (the default)
   usb_audio_out = true       a computer plays through the FM-1 over USB (FM1B_UAC_OUT; the default: true)
   usb_audio_channels = 10    the USB audio input's channels, 4, 6, 8 or 10 (the default 2: the master alone): the master on 1 and
                              2, the app's own on 3..N (FM1B_UAC_CH: plat_usb_ch in plat.h; felucca-bsp FELUCCA_UAC_CH).
@@ -77,13 +83,30 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              device beside its MIDI; bcdDevice +0.08 (a changed device to the computer). Not enough
                              for macOS 13-15 (fm1-loom#7, Felucca #67): usb_midi_last is; with it this changes nothing
   usb_midi_last = false      the USB MIDI interface after the audio streaming ones (felucca-bsp FELUCCA_UAC_MIDI_LAST;
-                             the default: true, with usb_audio_in): audio control, audio in, audio out, MIDI, and the
+                             the default: true with usb_audio_in, false with usb_audio_split, which has its own interface order): audio control, audio in, audio out, MIDI, and the
                              audio control collection in that order. macOS 13-15 show no USB audio device while MIDI is
                              interface 1, between audio control and audio streaming (bisected by darosh on macOS 15.8.1);
-                             bcdDevice +0.80. false: the order of fm1-base before 2026-10-31 (MIDI interface 1).
+                             bcdDevice +0.20 x 1 in its high byte (felucca-bsp's own +0.80 is usb_audio_out_feedback's here). false: the order of fm1-base before 2026-10-31 (MIDI interface 1).
                              2: MIDI left out of the collection too (a test build: no USB MIDI on Linux)
   usb_iad = true             without the USB console, an interface association descriptor over the audio function, the
-                             device then misc / IAD (felucca-bsp FELUCCA_UAC_IAD; the default: false); bcdDevice +2.00
+                             device then misc / IAD (felucca-bsp FELUCCA_UAC_IAD; the default: false; not with usb_audio_split); bcdDevice +0.60 in the high byte
+  usb_audio_in_channels = 4  the USB audio input's channels, 2, 4 or 8, the app filling every one (FM1B_UAC_CH, FM1B_UAC_CAPTURE:
+                             app.h APP_USB_CAPTURE, plat.h); 24-bit up to 4, 16-bit at 8. Not with usb_audio_channels
+  usb_audio_in_host_clock = true   the USB audio input on the computer's clock (FM1B_UAC_HOST_CLOCK: felucca-bsp's
+                             FELUCCA_UAC_HOST_CLOCK): resampled to exactly 44.1 kHz, the plain packet pattern, a
+                             synchronous endpoint, for a computer that monitors the input to its output (one clock)
+  usb_audio_out_feedback = true   the USB audio output asynchronous (FM1B_UAC_OUT_FEEDBACK: felucca-bsp's
+                             FELUCCA_UAC_OUT_FEEDBACK): the computer sends at the FM-1's own rate, which an explicit
+                             feedback endpoint (EP3 IN) tells it, and the FM-1 plays the samples as sent, none
+                             resampled (adaptive otherwise: resampled to the FM-1's clock); not with FM1B_CDC (EP3)
+  usb_audio_out_24bit = true the USB audio output in 24-bit too (FM1B_UAC_OUT_24: a second alt setting, 16-bit stays):
+                             the computer's 24 bits reach the app's render whole
+  usb_audio_split = true     the USB audio input and output as two audio functions of their own (FM1B_UAC_SPLIT:
+                             felucca-bsp's FELUCCA_UAC_SPLIT): a computer lists two devices, each on its own clock, and
+                             MIDI's audio control holds MIDI alone; not with FM1B_CDC. With it, their names:
+  usb_audio_in_name = "..."  (FELUCCA_UAC_IN_NAME, default the usb_product + " In"), usb_audio_out_name (" Out"), and
+  usb_audio_in_channel_names = ["CH1", ...]   the input's channels', one a channel (FELUCCA_UAC_CH_NAMES); ASCII, 31
+                             characters at most each
   usb_console = true         a USB serial console beside USB MIDI (FM1B_CDC: felucca-bsp's CDC-ACM function, device/
                              console.c): the app's text over plat_console_* (plat.h); FM1B_CDC=0 / 1 in the
                              environment over it
@@ -784,6 +807,62 @@ def radio_units():
     return units, objs, libs
 
 
+def usb_audio_flags():
+    """fm1.toml's USB audio settings -> flags (the device's build, and the host simulator's: its USB audio model)"""
+    flags = []
+    for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
+        if key in CONF and flag not in os.environ:
+            flags.append(f"-D{flag}={int(bool(CONF[key]))}")
+    if "usb_audio_in_channels" in CONF:
+        ch = CONF["usb_audio_in_channels"]
+        if "usb_audio_channels" in CONF:
+            raise SystemExit("build: usb_audio_in_channels (the app fills every channel) or usb_audio_channels (the master "
+                             "and the app's on 3..N): one way to fill the channels, not both")
+        if "usb_audio_in_24bit" in CONF:
+            raise SystemExit("build: usb_audio_in_24bit is gone: the depth follows usb_audio_in_channels")
+        if ch not in (2, 4, 8) or isinstance(ch, bool):
+            raise SystemExit(f"build: usb_audio_in_channels is 2, 4 or 8, not {ch!r}")
+        flags += [f"-DFM1B_UAC_CH={ch}", "-DFM1B_UAC_CAPTURE=1", f"-DFM1B_UAC_24={int(ch <= 4)}"]   # (24-bit up to 4 channels: 8 fills a packet at 16)
+    if "usb_audio_in_host_clock" in CONF:
+        flags.append(f"-DFM1B_UAC_HOST_CLOCK={int(bool(CONF['usb_audio_in_host_clock']))}")
+    if "usb_audio_out_feedback" in CONF:
+        flags.append(f"-DFM1B_UAC_OUT_FEEDBACK={int(bool(CONF['usb_audio_out_feedback']))}")
+    if "usb_audio_out_24bit" in CONF:
+        flags.append(f"-DFM1B_UAC_OUT_24={int(bool(CONF['usb_audio_out_24bit']))}")
+    v = CONF.get("usb_audio_mem", "static")
+    if v not in ("app", "static"):
+        raise SystemExit(f'build: fm1.toml usb_audio_mem = "{v}": "app" or "static"')
+    if v == "app":                                  # the rings lent by the app while the computer streams (plat_usb_audio_mem)
+        flags.append("-DFM1B_UAC_MEM=1")
+    flags += usb_audio_names()
+    return flags
+
+
+def usb_audio_names():
+    """fm1.toml usb_audio_split and the names it gives the two audio functions and the input's channels -> flags"""
+    keys = ("usb_audio_in_name", "usb_audio_out_name", "usb_audio_in_channel_names")
+    split = bool(CONF.get("usb_audio_split"))
+    if not split:
+        if any(k in CONF for k in keys):
+            raise SystemExit(f"build: {', '.join(k for k in keys if k in CONF)} need usb_audio_split = true")
+        return ["-DFM1B_UAC_SPLIT=0"] if "usb_audio_split" in CONF else []
+
+    def name(v, key):
+        if not isinstance(v, str) or not v or len(v) > 31 or not all(" " <= c <= "~" and c not in '"\\' for c in v):
+            raise SystemExit(f"build: {key} {v!r}: 1..31 ASCII characters, no quote or backslash")
+        return v
+    flags = ["-DFM1B_UAC_SPLIT=1"]
+    for key, macro in (("usb_audio_in_name", "FELUCCA_UAC_IN_NAME"), ("usb_audio_out_name", "FELUCCA_UAC_OUT_NAME")):
+        if key in CONF:
+            flags.append(f'-D{macro}="{name(CONF[key], key)}"')
+    if "usb_audio_in_channel_names" in CONF:
+        names, ch = CONF["usb_audio_in_channel_names"], CONF.get("usb_audio_in_channels", 2)
+        if not isinstance(names, list) or len(names) != ch:
+            raise SystemExit(f"build: usb_audio_in_channel_names: {ch} names, one a channel (usb_audio_in_channels)")
+        flags.append("-DFELUCCA_UAC_CH_NAMES=" + ",".join(f'"{name(n, "usb_audio_in_channel_names")}"' for n in names))
+    return flags
+
+
 def cache_ram_ways():
     """fm1.toml cache_ram_ways: the data cache's ways used as RAM, 0 (none: off), 2, 4 or 7 (FM1B_CACHE_RAM=N in the
     environment over it)"""
@@ -846,14 +925,19 @@ def build_app():
     if WIFI:
         flags += ["-DFM1B_WIFI=1", "-DSHIM_WIFI=1", *inc(SRC / "ble" / "shim")]
     flags += opt_flags()
-    for key, flag in (("usb_audio_in", "FM1B_UAC"), ("usb_audio_out", "FM1B_UAC_OUT")):
-        if key in CONF and flag not in os.environ:
-            flags.append(f"-D{flag}={int(bool(CONF[key]))}")
+    flags += usb_audio_flags()
     if CONF.get("usb_audio_first"):
         flags.append("-DFELUCCA_UAC_AS_FIRST=1")
-    midi_last = CONF.get("usb_midi_last", True)   # (the bsp leaves it out without the USB audio input)
+    if CONF.get("usb_console") and "FM1B_CDC" not in os.environ:
+        if CONF.get("usb_audio_out_feedback") or CONF.get("usb_audio_split"):
+            raise SystemExit("build: usb_console's endpoint (EP3) is usb_audio_out_feedback's and usb_audio_split's: "
+                             "not with them")
+        flags.append("-DFM1B_CDC=1")              # the USB serial console (device/console.c)
+    midi_last = CONF.get("usb_midi_last", not CONF.get("usb_audio_split"))   # (the bsp leaves it out without the USB audio input)
     if midi_last not in (True, False, 0, 1, 2):
         raise SystemExit(f"fm1.toml: usb_midi_last is true, false or 2, not {midi_last!r}")
+    if CONF.get("usb_audio_split") and (midi_last or CONF.get("usb_iad")):
+        raise SystemExit("build: usb_audio_split has its own interface order and IADs: not with usb_midi_last or usb_iad")
     flags.append(f"-DFELUCCA_UAC_MIDI_LAST={int(midi_last)}")
     if CONF.get("usb_iad"):
         flags.append("-DFELUCCA_UAC_IAD=1")
@@ -873,6 +957,11 @@ def build_app():
     for key, macro in (("usb_manufacturer", "FELUCCA_USB_MANUFACTURER"), ("usb_product", "FELUCCA_USB_PRODUCT")):
         if CONF.get(key):
             flags.append(f'-D{macro}="{CONF[key]}"')
+    if CONF.get("usb_name_fn"):                   # the product name asked of the app at run time (felucca-bsp chip/usb.c)
+        fn = CONF["usb_name_fn"]
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", fn):
+            raise SystemExit(f"build: usb_name_fn = {fn!r}: a C function name")
+        flags.append(f"-DFELUCCA_USB_NAME_FN={fn}")
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)
@@ -1438,8 +1527,10 @@ def build_host():
     inc_dirs = [f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))]
     o2_objs = o2_objects(os.environ.get("CC", "cc"), ["-O2", "-ffp-contract=off", "-std=c99", "-w", "-DPLAT_HOST", *opt_flags(), *inc_dirs],
                          out / "o2")
+    uac = [*usb_audio_flags(), *(f"-D{f}={os.environ[f]}" for f in ("FM1B_UAC", "FM1B_UAC_OUT") if os.environ.get(f) in ("0", "1"))]
     cmd = [os.environ.get("CC", "cc"), "-O2", "-ffp-contract=off", "-std=c99", "-Wall", "-Wextra",
            "-Wno-unused-function", "-Wno-unused-parameter", "-DPLAT_HOST", *opt_flags(), f"-DFM1B_BUILD={build_id():#010x}u", *["-DFM1B_BLE=1"] * BLE, *["-DFM1B_BLE_CENTRAL=1"] * (BLE and bool(CONF.get("ble_central"))), *["-DFM1B_BT_AUDIO=1"] * bta_sim(), *(bta_mem_flags() if bta_sim() else []), *["-DFM1B_WIFI=1"] * WIFI,
+           *uac,
            *(f"-I{d}" for d in (SRC / "device", SRC / "include", SRC / "lib", APP, GEN, *(APP / d for d in CONF.get("include", [])))),
            "-o", str(exe), str(SRC / "host" / "plat_host.c"), *o2_objs, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)

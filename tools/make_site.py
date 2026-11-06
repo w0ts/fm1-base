@@ -11,6 +11,7 @@
   manual/index.html, img/     the manual (APP_DIR/docs/MANUAL.md, its images from APP_DIR/docs/img), if there is one
   emu/                        the firmware in the browser (APP_DIR/build/emu: tools/build.py APP_DIR --web)
   words/                      the screen reader's words files (APP_DIR/web/words), every one ever made
+  fonts/                      Barlow (SIL OFL), which emu/, mirror/ and backup/ load as ../fonts/fonts.css
   mirror/index.html           the screen mirror (web/mirror/index.html, with fm1ports.js inlined), with mirror = true
   backup/index.html           backup and restore in the browser (web/backup/index.html, with fm1ports.js inlined), with
                               backup = true: its magic and version from APP_DIR/app.h (APP_BACKUP_MAGIC, APP_BACKUP_VERSION)
@@ -192,6 +193,7 @@ def main(app, pkg, version, out):
         if (app / "docs" / "img").is_dir():
             shutil.copytree(app / "docs" / "img", out / "manual" / "img")
     shutil.copytree(emu, out / "emu")
+    shutil.copytree(SRC / "web" / "fonts", out / "fonts", dirs_exist_ok=True)      # the pages' fonts (../fonts/fonts.css): no page asks an outside host
     if (app / "web" / "words").is_dir():
         shutil.copytree(app / "web" / "words", out / "words")
     tools = tool_pages(app, conf)

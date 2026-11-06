@@ -12,7 +12,7 @@ Link"; the calls: `include/plat.h`.
 | Where | What |
 | --- | --- |
 | `bsp/chip/fm1_wifi.h` | the MAC (JieLi's wl30 core, Ralink RT3070's register layout at 0x30000 + r): the frame DMA (RX, TX), the channel, the address and key tables, the station driver's settings, `fm1_wifi_up` (the STA settings, both RF paths on, the coexistence tables) |
-| `device/fm1_wifi_wlc.h` | the coexistence controller's 565 set-up words (JieLi's, Apache-2.0), which `device/wifi_own.c` hands to `fm1_wifi_up`: what made reception work on a radio Bluetooth had started |
+| `device/fm1_wifi_wlc.h` | the coexistence controller's 565 set-up words (JieLi's, Apache-2.0): what made reception work on a radio Bluetooth had started |
 | `wifi/wifi_crypto.c` | SHA-1, HMAC, PBKDF2 (the key from a password, in slices: 256 rounds a main-loop pass), the PRF, AES-128, key wrap / unwrap |
 | `wifi/wifi_sta.c` | the WPA2-PSK station: authentication, association, the 4-way handshake and group rekeys, the keys into the MAC (it encrypts and decrypts CCMP itself) |
 | `wifi/wifi_ip.c` | ARP, the DHCP client, IGMPv2 (one group), UDP (up to 4 ports), an early drop filter; as an access point (MODE AP's, the simulator's): FromDS frames, ping, the DHCP server's hook |
@@ -27,9 +27,9 @@ Link"; the calls: `include/plat.h`.
 
 ## The tuning (2026-10-30)
 
-Four switches after what JieLi's SDK does and the own stack did not (from a review of the own stack's reception;
+Four switches after what JieLi's SDK does and the own stack did not (the reception review on Optimist's fm1-next-wifirx;
 `wifi/wifi_tune.h` has each one's reference). All on by default (`FM1B_WIFI_TUNE`); each acts at once, on and off;
-`plat_wifi_quality`'s signal, retries and losses are what to compare. `fm1_remote.py wifi status` prints
+SYSTEM > WI-FI's signal, RETRY and LOST (`plat_wifi_quality`) are what to compare. `fm1_remote.py wifi status` prints
 their state on a third line, `wifi tune abcf` / `wifi tune none` sets them.
 
 | Switch | What it does | JieLi's |

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The dev profile's build's first power-on on an FM-1 that ran Optimist with the profile (optimist-flash.bin: Optimist's
+# own simulator's flash, optsim.py write): everything found where that firmware left it (the section log in format 2
+# at 0xA0000, project 3, U01, the work's autosave) and nothing migrated; hands off for 15 s (past the autosave's 10),
+# then the flash dumped (OPT_DUMP). Optimist's own firmware powered on with the same flash, hands off as long
+# (optsim.py idle), writes the work's autosave again (copy B 0xFE000, its log records); optsim.py same finds the trial
+# wrote that and nothing else (but the FX records' USB input track, which the trial does not build).
+#   OPT_FLASH=optimist/build/host/optimist-flash.bin OPT_DUMP=optimist/build/host/boot-flash.bin
+#   optimist/build/host/optimist_host optimist/tests/dev/storage_boot.txt optimist/build/host
+wait 1500
+expect bpm 116
+expect proj.3 1
+expect up.1 1
+expect w.0xA0000 0x32474C53
+expect w.0x97000 -1
+expect panel_hits 0
+wait 15000
+flash_dump $OPT_DUMP

@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# tests/dev/parity.txt: what Optimist's own main loop, audio interrupt and timer do that the trial does too
+# (worktrees/trial-parity.md): the battery's reading, the limited inserts' instances, following a MIDI clock, CLOCK
+# OUT, the CPU guard and DROPS. optimist/run.sh runs it with the dev profile:
+#   optimist/build/host/optimist_host optimist/tests/dev/parity.txt optimist/build/host
+wait 300
+# the battery: fm1-base's reading (plat_battery_raw: the host's full 620) is SYSTEM > BATTERY's (song.batt_raw)
+expect battery_raw 620
+expect batt 620
+# the limited inserts (fx/insfx/fxi.c): CHRS (FXT_CHRS 13) into track 1's S1 gets its instance at the next main loop
+# pass (fxi_poll: 1 OK; without it 2, WAIT, for ever: the insert unheard)
+ins 0 0 13
+wait 50
+expect fxi.0.0 1
+# JUNO (FXT_JUNO 17) into track 2's S2, ECHO (FXT_ECHO 14) into the drum track's S1
+ins 1 1 17
+ins 3 0 14
+wait 50
+expect fxi.1.1 1
+expect fxi.3.0 1
+# out of the slot: the instance given back once its wet share has faded (0: none)
+ins 0 0 0
+wait 100
+expect fxi.0.0 0
+# saving while playing (LIVE_SAVE, on in the profile: fm1-base's sliced erase): the sound to U02 with the transport
+# running (PROJECT's USER row, ACTION SAVE, key 2, SAVE, the NAME page's SAVE): saved, still playing, the transport
+# never stopped (without LIVE_SAVE the NAME page stops it, saves, starts it again from the top: beat 1); no erase held
+# the sound for the whole of it (plat_flash_held: the host's 0), so saves never wait for the stop
+tap PLAY
+wait 2000
+expect playing 1
+expect beat >2
+tap SAVE
+wait 200
+expect scr 3
+spin SELECT 1
+wait 100
+expect row 1
+turn K2 1
+wait 100
+key w1 down
+wait 50
+key w1 up
+wait 100
+tap SAVE
+wait 300
+tap SAVE
+wait 300
+msg SAVED U02
+expect up.2 1
+expect playing 1
+expect beat >4
+tap PLAY
+wait 100
+expect playing 0
+# CLOCK OUT on (the HOME menu's): stopped, F8 go out at the tempo all the same (clock_out.c: so the other side locks
+# first), sent from the timer's tick when due (opt_core_tick): 111 BPM, 44.4 a second; PLAY sends START, then F8 on
+clockout 1
+wait 1000
+expect clocks_out >40
+expect clocks_out <49
+out
+tap PLAY
+wait 500
+expect_out USB FA
+expect clocks_out >60
+tap PLAY
+wait 100
+expect_out USB FC
+expect playing 0
+clockout 0
+# following a MIDI clock (SYNC AUTO, the default; CLOCK OUT off again: nothing goes back to the port followed): START,
+# then 100 BPM's clocks (24 a beat, 25 ms apart). The transport runs at the clock's tempo (G_BPM follows it) and moves (the render's sync_out_t, clock_sync.c sync_follow): 96
+# clocks are 4 beats
+expect playing 0
+midi FA
+clock 96 25
+expect playing 1
+expect bpm 100
+expect beat >2
+expect beat <6
+# STOP
+midi FC
+wait 50
+expect playing 0
+# no late half in all this, and the CPU guard at rest or not built (-1: the trial's profile block turns it off for room;
+# built, the host has no clock, cpu_khz 0: it never steps)
+expect drops 0
+expect guard <1

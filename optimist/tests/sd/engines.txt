@@ -1,0 +1,170 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The SD card layout's engine switches (optimist/run.sh, the sd run: profiles/sd-console.config): each part takes several
+# engines in turn, a key plays each; none of the switches is refused (the arena's part_mem_reserve) and no half is late
+wait 800
+expect blocks >100
+engine 0 STRINGS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 PHYS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 5000
+expect voices 0
+engine 0 ACID
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 JUNO
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 PLAITS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 DIGITAL
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+turn ALGO 1
+engine 1 STRINGS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 1 PHYS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 5000
+expect voices 0
+engine 1 ACID
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 1 JUNO
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 1 PLAITS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 1 DIGITAL
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+turn ALGO 1
+engine 2 STRINGS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 2 PHYS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 5000
+expect voices 0
+engine 2 ACID
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 2 JUNO
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 2 PLAITS
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 2 DIGITAL
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+expect drops 0

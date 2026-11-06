@@ -1,0 +1,22 @@
+# The buttons' and keys' backlight (SLOOP 2.3's LIGHTS and KEYS) on fm1-base's dim layer, run.sh's lights run: gone in
+# Optimist's fm1-next b9a394bc (the KEYS page, lights_lvl and LIGHTS_NS removed: always off). The trial's hook reads -1
+# (app.c's 'not built') and a level set changes nothing: the dim pulse stays the glow's own (plat_lights' glow 2:
+# 3,200 ns), whatever level is asked, and LEDs as before
+wait 500
+expect lights -1
+expect dim_ns 3200
+lights 1
+wait 200
+expect lights -1
+expect dim_ns 3200
+lights 2
+wait 200
+expect dim_ns 3200
+lights 3
+wait 200
+expect dim_ns 3200
+leds
+lights 0
+wait 200
+expect lights -1
+expect dim_ns 3200

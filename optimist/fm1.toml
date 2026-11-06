@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Optimist on fm1-base, the trial (milestone 1: the audio core in the host simulator; milestone 2: its UI on fm1-base's
+# canvas and panel). Optimist's code: GPL-3.0-only,
+# never offered upstream as MPL. optimist/run.sh (tools/build.py optimist --host with Terminus, then the tests)
+name = "Optimist"             # (shown: the site, the installer, the emulator page; the build's files are lower case: optimist-X.Y.fwsc)
+id_prefix = "FM-1_79"          # a trial identity (dev FM-1_7900), not Optimist's FM-1_700
+usb_manufacturer = "Optimist"    # (the maker, fixed: not a device name)
+usb_product = "FM1-0000"         # (only if app_usb_name gives none)
+usb_name_fn = "app_usb_name"     # "FM1-XXXX": the MIDI device and its ports and "FM1-XXXX In" / "Out" (app.c: XXXX = Bluetooth's); tools find
+                                 # the port "FM1-" and still the old "Optimist" (a device on older firmware)
+o2 = ["core/opt_core.c", "core/opt_fpu_*.c", "core/opt_ff.c", "core/opt_ffuni.c", "core/opt_pff.c"]
+                               # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
+                               # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it); opt_fpu_*: ACID, ANALOG
+                               # 2's filter models, the X0X kits and PROPHET's voice, float units of their own on the FM-1
+                               # (as Optimist builds them: each only when the build has it), empty on the host (inside
+                               # opt_core.c there); opt_ff / opt_ffuni: ChaN's FatFs for the SD card, its own two units as
+                               # Optimist builds them (empty without the card); opt_pff: its Petit FatFs (the card
+                               # without the SD card mode's layout)
+o2_include = ["build/optgen/felucca_config.h"]   # the build's switches (gen_optimist.py: the profile copy through Optimist's builder)
+include = ["build/optimist/firmware/src", "build/optgen"]   # Optimist's tree (gen_optimist.py links it), its headers
+ir_pass = "ir_pass.py"        # Optimist's tools/size_fns.py on its unit (the UI at minsize, the rest -Os: as Optimist builds felucca.c)
+gen = ["gen_optimist.py"]      # the link to Optimist's tree and its generated headers (build/optgen)
+words = "words.tsv"
+font_full = ["L"]              # the large face with lower case (Optimist's questions in sentence case: op_graph.c font_big)
+font_trim = true               # each glyph its lit box only (feat/font-trim): the same pixels, the fonts 26 KB smaller
+font_pack = true               # and its alphas Huffman-coded (feat/slim-font-pack): the same pixels, S, B and L 7.6 KB smaller
+# USB audio as Optimist's own presents it (io/usb, from Melodee): two devices, "FM1-XXXX Out" (the computer plays,
+# the USB input track: APP_USB_PLAY) and "FM1-XXXX In" (it records four channels, CH1..CH4, by SYSTEM > USB AUDIO's
+# routing: APP_USB_CAPTURE), 16- and 24-bit both ways; the input on the computer's clock, the output on the FM-1's
+# (its feedback): fm1-base's USB audio (felucca-bsp's UAC). The two devices, their names and the output's feedback come
+# from conf_gen (gen_optimist.py --conf: usb_audio_split, usb_audio_in_channel_names; their names follow usb_name_fn,
+# usb_audio_out_feedback), as Optimist's own: a configuration with the serial console (USB_CONSOLE: usb_console) has no
+# USB audio instead (the console's endpoint is the feedback's)
+usb_audio_in_channels = 4
+usb_audio_in_host_clock = true
+usb_audio_out_24bit = true
+# The second core: Optimist's DUAL (the profile's: its split of the render, core/opt_dual.c) on fm1-base's (plat_cpu2_*,
+# felucca-bsp's chip/fm1_cpu1.h). Optimist's rule on a failure: one core from then on, never a restart (cpu2_fallback)
+xdata2 = true                  # Optimist's globals 0xFC000..0xFEFFF (its settings A/B, its autosave's copy B): plat.h's fourth
+                               # plat_data window, PLAT_XDATA2 (its store objects are elsewhere: APP_STORE_MAP 0xD8000)
+cpu2 = true
+cpu2_fallback = true
+cpu2_stack = 4096              # (felucca-bsp's 2,816 B less its 256 B guard: under the 2.5 KB an engine's job reaches; 4096
+                               # leaves Optimist's own room, 3,840 B: tools/build.py CPU1_STACK_ROOM there)
+main_stack = 6656               # CPU0's stacks, from the static check (stack_check: tools/stack_depth.py, the deepest path's
+irq_stack = 6400                # frames, the interrupts nested at their worst, the fault path on top) and its margin (25 %
+                               # or 1 KiB, the larger); were 24,320 and 7,936 (measured high-water 3 KB and 2.3 KB)
+stack_check = true
+stack_bounds = ["f6_width=7", "f6_place=7", "ph_put=7", "sdm_rmdir=2"]   # Optimist's recursions: op_fm6draw.c (depth
+                               # < 6, from 0), ph_blob.c (PH_PAIR's nesting: tools/gen_param_help.py PH_DEPTH_MAX checks
+                               # it), sd_mode.c sdm_rmdir (a project's folder and one level in it: its depth argument,
+                               # 1 from its one caller, sdm_do; a deeper folder is refused, FR_DENIED)
+app_end = 0x93000              # the normal slot, said: the update loader compares slots before an install (fm1-base's
+                               # LDR_SLOT_SWITCH). A profile with another MEMORY step (its LAYOUT) builds with
+                               # FM1B_APP_END = that step's end (gen_optimist.py checks it against Optimist's
+                               # tools/flash_layout.py STEPS release_end): the SD card mode's L1 0xCE000 (OBJ_PANEL at
+                               # 0xCE000, app.h), the other steps' at their FM6 voices (OBJ_PANEL at 0xD8000)
+app_steps = [[0x93000, 0, 0x93000], [0xA5000, 2, 0xC8000], [0xA6000, 6, 0xB4000], [0xAA000, 7, 0xB4000], [0xB5000, 3, 0xD8000], [0xBA000, 4, 0xC8000], [0xBE000, 5, 0xC8000], [0xCA000, 8, 0xD8000], [0xCE000, 1, 0xDA000], [0xD0000, 1, 0xDA000]]
+                               # every app end an FM-1 may have of Optimist's (its MEMORY steps, the release's and the
+                               # classic build's: Optimist's tools/flash_layout.py known_ends, gen_optimist.py refuses a
+                               # build when the two differ), each [end, step (its LAYOUT), R (the top of what that step
+                               # keeps elsewhere than normal)]. The update loader erases [app_end, max(R_old, R)) after
+                               # another step's app (the project log, autosave A and the FM6 voices move), only the
+                               # longer code's tail after another build of its own step (the classic L1's 0xD0000 under
+                               # the release's 0xCE000), [app_end, app_clear_top) after an end not listed (Optimist's
+                               # docs/SD-MODE-DESIGN.md 9.3; felucca-bsp ldr_core.c LDR_STEPS)
+app_clear_top = 0xDA000        # no switch clears at or past it: the kits (0xDA000), the presets and up are kept
+sd = true                      # the SD card on the LCD's bus (fm1-base's plat_sd_*: a hardware mod), Optimist's SD card
+                               # mode on it (ui/opt_sd.h, core/opt_sd_mmc.c; the profile copy's SD items); without a
+                               # card it finds none
+# Bluetooth: fm1-base's own stack, which is Optimist's (bt/: the same files), for Optimist's BT MIDI, BT AUDIO and the
+# mirror over Bluetooth (ui/opt_bt.h: its screens, settings record and mirror on plat_ble_* / plat_bta_*)
+conf_gen = "gen_optimist.py --conf"   # ble and bt_audio below: the configuration's BLE and BT_AUDIO (tools/build.py); the
+                               # USB audio's devices or the serial console (above), ble_central
+ble = true
+ble_stack = "own"
+ble_pairing = false            # no pairing, as Optimist's dev profile has it (BLE_BOND 0): a Mac or phone connects unbonded (3,420 B)
+bt_audio = true                # Bluetooth audio to headphones and speakers (A2DP), as Optimist's BT_AUDIO; with an arena
+                               # (ARENA) its queue and ring (17.7 KB) lent by it only while an AUDIO mode is on (conf_gen:
+                               # bt_audio_mem = "app"; core/arena_bufs.c ARB_BTA, core/feat_mem.c; plat.h plat_bta_mem)
+ble_midi_time = true           # BLE MIDI in by the sender's time (plat_midi_in_t24): Optimist's clock follower times F8s
+                               # itself (clock_sync.c, BT OFS), as its own midi_ble.c ble_in_time gave them
+ble_diag = false               # the link layer's diagnostics left out (feat/ble-diag-option), as Optimist builds its stack
+                               # (its BLE_DIAG off): ~2.4 KB of RAM and their code
+companion = true               # fm1-base's companion services (docs/COMPANION.md): what this FM-1 runs, Optimist's backup
+                               # objects and sample slots as its files (in place of its editor's own cmds 43..48, 11..15:
+                               # Optimist's io/editor/ed_comp.c), a few of its parameters (app.h APP_FILES, APP_PARAMS; app.c)
+emu = ["port"]                 # the browser emulator as a MIDI port for this site's other pages (web/emu/parts/port.js):
+                               # Optimist's web editor's "fm1-base emulator" device, the companion page
+# The audio path's calls out of RAM code through a pointer (tools/ramcode.py), every one of them Optimist's own: its
+# firmware runs the same functions from RAM (its .ram_hot / .ram_hot2: core.h HOT, HOT2, an engine's FAST as HOT
+# when its code is in RAM) and makes the same calls into XIP (FAR, the engines' and effects' function tables), with its rule that HOT
+# code reaches XIP only that way. Safe here for the same reason as there: the XIP flash is on whenever audio renders.
+# The render runs in the audio interrupt, and fm1-base turns the flash off only inside its flash driver with the
+# interrupts off (each 256-byte page write, each ~1 ms window of a sliced erase: plat.h plat_data_erase); between the
+# windows the erase is suspended and the XIP reads again, so saving while playing (LIVE_SAVE, on in its profile copy)
+# renders with the flash on, as Optimist's own. The names are checked to be RAM functions at every build, and every
+# build prints them.
+ram_code_allow = [
+    # the render's block (fx.c): the engines' and drums' hooks, the envelopes' and LFOs' cold parts, the sequencer's
+    # events, the resampler's block, the meters' and scope's taps (all XIP on Optimist, called through FAR or a table)
+    "mix_block",
+    # ANALOG / ANALOG 2 (eng_analog*.c): the float filter models (a2_models.c a2m_block, a float unit in XIP as on
+    # Optimist); a2_filter's table of SVF kernels (A2_FLT, A2_FLT_I) holds RAM code (FAST), here and on Optimist;
+    # a2_naive (the sync's jump) calls through A2_OSC, whose four oscillators are FAST(analog) RAM code too ("?": inlined
+    # into a2_sync in some builds)
+    "analog_render", "a2_fltb", "a2_filter", "a2_naive?",
+    # DIGITAL in RAM (ENG_DIGITAL=3: FAST(digital)): its TONE algorithms (DIG_TONE, eng_digital.c dig_tone_render) run
+    # from XIP through FAR, as on Optimist ("?": DIGITAL from XIP or DIG_TONE off builds no such call)
+    "digital_render?",
+    # the effect buses (fx.c): the reverb's rare clear and parameters, the delay's block, the returns' zeroing, the
+    # distortion's gains, the drum inserts' rest; rev_run: rev_bus's per-block worker (the reverb type's parameters through
+    # its table, as rev_bus), a function of its own when not inlined ("?": some builds inline it); dins_one: dins_of's
+    # per-insert worker, the same calls (JieLi's compiler inlines it, pi32v2-llvm keeps it a function: "?"); rev_bus: "?",
+    # with ROOM the only reverb built it is fx.c's FX_STEP, inlined into mix_block (REV_BUS_FN); rev_post "?": no reverb
+    # (FX_REVERB 0) builds none; dist_run "?": nor the distortion (FX_DIST 0); dins_of "?": nor the drums (DRUMS 0)
+    "rev_post?", "rev_bus?", "rev_run?", "dly_run", "fx_ret_block", "dist_run?", "dins_of?", "dins_one?",
+    # the insert effects (insfx/*.c): their marks and widths, the gater's block, the limiter's chorus, the drive's gains,
+    # TAPE / SPIT's block coefficients (tapespit.c ifx_ts_block through FAR, once a block: tsvf_coef_k divides; "?":
+    # a profile with TAPE / SPIT off builds no ifx_ts_run); ifx_run: ifx_part's and ifx_bus's per-slot worker, the
+    # same calls (inlined by JieLi's compiler, a function of its own with pi32v2-llvm: "?"); ifx_gater and ifx_drive: "?",
+    # a profile without GATER (INS_GATER) or without the shapers (IFX_DRV: FOLD, FUZZ, ...) builds neither; ifx_bus "?":
+    # the drum bus's inserts' (fx.c dbus_ins), none without the drums (DRUMS 0)
+    "ifx_st", "ifx_part", "ifx_quiet_part", "ifx_bus?", "ifx_gater?", "ifx_lim_run", "ifx_drive?", "ifx_ts_run?", "ifx_run?",
+    # the USB input track (fx.c ut_mix): the computer's audio through FAR(ua_take), RAM code here (core/opt_core.c, HOT;
+    # usb_audio_stream.c's, XIP, on Optimist), so the call stays in RAM; the checker cannot see a pointer's target
+    "ut_mix",
+    # the second core's split (core/opt_dual.c, system/dual.c's): dual_run renders a block's jobs on either core, the
+    # parts (mix_part inlined: the same calls as mix_block's) and the drums (their hooks, the SCOPE's taps), and times
+    # each through plat_ticks24 (FAR: the clock is flash code); dual_job, the second core's job, the same clock
+    "dual_run", "dual_job",
+    # drums_mix: the drums' block (their engines, sends and inserts through FAR / a table), inlined into its caller by
+    # JieLi's compiler, a function of its own with pi32v2-llvm ("?"; seen 2026-10-29 on the user's builder.config)
+    "drums_mix?",
+]
+# what the start copies into RAM (.data, the RAM code: 56 KB) stored LZMA-packed in the image and unpacked at the start
+# (fm1-base's boot_pack, tools/boot_pack.py, device/boot_lzma.h; Optimist's own LZB coder used before the merge of 2026-11-02)
+# what fm1-base made opt-in (2026-11-05): Optimist keeps them, as it built before
+ram_layout = "packed"          # one SRAM budget (device/app_packed.ld): the stacks' sizes above need it
+audio_aside = true             # each half rendered aside, copied in while the DMA's half is free
+midi_stamp = true              # MIDI in stamped where it lands (plat_midi_in_t24): the clock follower
+headphones = true              # the jack read every pass (plat_headphones)
+crash_history = true           # the crash records in flash, the stacks' room at a crash
+debug_stats = true             # the debug stats in flash
+bt_audio_sim = true            # the host simulator on fm1-base's stand-in for plat_bta_*
+boot_pack = true
+# the unity build (fm1-base's platform, its Bluetooth stack, USB) at -Oz instead of -Os (tools/build.py unity_opt): a TEST
+# build (branch oz), smaller and a little slower in what runs in the radio, timer and USB interrupts; Optimist's own unit
+# (core/opt_core.c, its o2 units) unchanged
+unity_opt = "z"
+# the site (tools/make_site.py: site/landing.md, the manual built from Optimist's docs/guide at the site's build: tools/fm1base.py site)
+tagline = "a modular firmware for the M-VAVE FM-1"
+repo = "https://github.com/w0ts/optimist"
+licence = "GPL-3.0-only"
+credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"
+# crk_diag = true             the crackle hunt's counters (FM1B_CRK_DIAG=1 in the environment too): crk lines in the log; off in the release

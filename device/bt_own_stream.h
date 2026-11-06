@@ -12,6 +12,7 @@
  * bt_own.c; tests/bt/ble_stack_test.c -DBLE_STREAM_TEST builds it on the stack with a fake queue. */
 static const struct plat_ble_stream *volatile own_stream;
 static uint8_t own_from_stream;                   /* the packet peeked is the stream's (the interrupts' alone) */
+static volatile uint32_t own_stream_seen;         /* own_stream_ms of the last packet the stream gave (bulk: ble_sig_bulk) */
 
 int plat_ble_stream(const struct plat_ble_stream *s)
 {
@@ -27,7 +28,8 @@ BLE_API int ble_app_midi_peek(uint32_t *pkt, uint32_t *t_ms)
     own_from_stream = 0;
     if (s && own_stream_on() && (!queued || s->mid()) && s->peek(pkt)) {
         own_from_stream = 1;
-        *t_ms = own_stream_ms() & 0x1FFFu;
+        own_stream_seen = own_stream_ms();
+        *t_ms = own_stream_seen & 0x1FFFu;
         return 1;
     }
     if (!queued)

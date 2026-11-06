@@ -37,6 +37,10 @@ t ble_time ble_time_test.c
 t ble_stack ble_stack_test.c
 # the app's stream (plat_ble_stream, device/bt_own_stream.h: a screen mirrored) merged with the MIDI queue
 t ble_stack_stream ble_stack_test.c -DBLE_STREAM_TEST=1
+# the bulk tuner and the refill within an event (off by default: ble_cfg.h)
+t ble_stack_bulk ble_stack_test.c -DBLE_BULK=1 -DBLE_LL_REFILL=1
+t ble_stack_bulk_stream ble_stack_test.c -DBLE_BULK=1 -DBLE_LL_REFILL=1 -DBLE_STREAM_TEST=1
+t ble_driver_refill ble_driver_test.c -I$T/ble_fake -DBLE_BULK=1 -DBLE_LL_REFILL=1
 t ble_stack_enc ble_stack_test.c -DBLE_LL_ENC=1
 t ble_stack_smp ble_stack_test.c -DBLE_LL_ENC=1 -DBLE_SMP_LEGACY=1
 t ble_driver ble_driver_test.c -I$T/ble_fake

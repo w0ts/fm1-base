@@ -426,8 +426,9 @@ BLE_API void ble_att_rx(const uint8_t *p, uint16_t n)
     att_error(op, 0, ATT_ERR_PDU);
 }
 
-/* the queued MIDI events as notifications, at most BLE_MIDI_PER_EVENT a connection event */
-static void att_midi_out(void)
+/* the queued MIDI events as notifications, at most `most` (BLE_MIDI_PER_EVENT a connection event; ble_att_refill's
+ * one inside an event) */
+static void att_midi_out(uint32_t most)
 {
     uint32_t pkt, t, k;
     uint16_t h = H_MIDI_IO;
@@ -444,7 +445,7 @@ static void att_midi_out(void)
             ble_app_midi_pop();
         return;
     }
-    for (k = 0; k < BLE_MIDI_PER_EVENT; k++) {
+    for (k = 0; k < most; k++) {
         uint16_t len;
         if (!ble_app_midi_peek(&pkt, &t) || ble_ll_tx_room() < batt.mtu + BLE_ATT_RESERVE)
             return;
@@ -477,5 +478,13 @@ BLE_API void ble_att_event(void)
         batt.sc_due = 0;
         batt.ind_wait = 1;
     }
-    att_midi_out();
+    att_midi_out(BLE_MIDI_PER_EVENT);
 }
+
+#if BLE_LL_REFILL
+BLE_API void ble_att_refill(void)
+{
+    if (!batt.sc_due)
+        att_midi_out(1);
+}
+#endif

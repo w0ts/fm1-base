@@ -43,6 +43,7 @@ parts it has.
 | The app's own commands over USB, in the update's framing, data pulled from the host | `#define APP_USB_CMD` in app.h | `app_usb_cmd`; `plat_host_read`, `plat_host_patience` |
 | The USB host's device by name (its product string), for the app's own page | `#define APP_USB_HOST_NAME` in app.h, with `usb_host` | `plat_usb_host_name` |
 | Lower case in the big fonts | `font_full = ["L"]` | the fonts as ever |
+| The browser emulator's own parts (`tools/build.py --web`): web/emu/parts, each file saying what it does; without any, the page and app.wasm are as before | `emu = ["name", ...]` (or `FM1B_EMU="name ..."` for one build) | nothing, unless a part says so |
 | The firmware as an `.rfm1` for host apps (RemoteFM1 for iOS), below | `tools/build.py APP_DIR --rfm1` | nothing |
 | The browser emulator's own parts (`tools/build.py --web`): web/emu/parts, each file saying what it does; without any, the page and app.wasm are as before. One is on without asking: `resample`, the FM-1's 44.1 kHz played at the browser's rate (many computers run audio at 48 kHz), where the page takes parts (fm1-base's page and worklet) | `emu = ["name", ...]`, `"-resample"` to leave it out (or `FM1B_EMU="name ..."` for one build: those parts only) | nothing, unless a part says so |
 

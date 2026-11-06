@@ -168,6 +168,10 @@ static void audio_silence(void)                     /* IRQs off (flash erase): t
 }
 
 /* ------------------------------------------------------------ timer --- */
+#if FM1B_CRK_DIAG
+static uint32_t crk_pass_max, crk_pass_stage;            /* (crk-I: the longest main-loop pass, log_frame) */
+static uint32_t crk_boot_clear_ms;                       /* (crk-J: when the boot's maxima were cleared, fm1_main) */
+#endif
 static uint8_t usb_due;
 static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 300 us:
                                                      * the key and light scan held up (the log reads and clears) */
@@ -476,8 +480,8 @@ static char *log_dec(char *b, uint32_t v)            /* v in decimal at b; the e
  * F0 7D 4C 47 <ASCII> F7: the last crash (count, vector, pc, rets, sp, uptime), the crash history kept in flash (its
  * records, the oldest first, in crashlog.c's form: it survives a power-off), the supplies' registers (rails), the
  * power setup's and the clock's as the boot loader left them, then
- * Bluetooth's log, the oldest first (it survives a reset), the cache RAM's test (FM1B_CACHE_RAM) and the app's own
- * lines (APP_LOG); "end" last.
+ * Bluetooth's log, the oldest first (it survives a reset), the platform's counters, the cache RAM's test (FM1B_CACHE_RAM)
+ * and the app's own lines (APP_LOG); "end" last.
  * The crash history alone, for a program: F0 7D 4C 48 F7 ("LH") asks; one frame a record, F0 7D 4C 48 <ASCII> F7,
  *   crash I/N n COUNT vec HEX pc HEX rets HEX sp HEX ms DEC emu HEX dbg HEX psr HEX build HEX seq DEC
  *   regs I/N r0 HEX .. r15 HEX usp HEX ssp HEX (when the record has the registers)
@@ -693,6 +697,92 @@ static int log_frame(const uint8_t *p, uint32_t n)
         log_line_send(b);
         t5_gap_max = t5_late = t5_run_max = lock_max = 0;
     }
+#if FM1B_CRK_DIAG
+    {   /* crk-I (crackle hunt, a measurement build): the audio's late halves, the longest render (us), TIMER5 ticks nested
+         * in a render, halves; the longest main-loop pass (us, interrupts in it) and the stage it ended in (5 a frame, 6
+         * input only); the app's LCD writes with the interrupts off and the last one's caller. Maxima cleared here */
+        extern uint32_t crk_lcd_off, crk_lcd_from;
+        static const char *const L[8] = {"crk late ", " max ", "crk nest ", " halves ", "crk pass ", " stage ",
+                                         "crk lcdoff ", " from "};
+        const uint32_t v[8] = {fm1b_dbg.late, fm1b_dbg.max_us, fm1b_dbg.nested, fm1b_dbg.halves, crk_pass_max,
+                               crk_pass_stage, crk_lcd_off, crk_lcd_from};
+        uint32_t i;
+        for (i = 0; i < 8u; i += 2u) {
+            const char *l;
+            q = b;
+            for (l = L[i]; *l;)
+                *q++ = *l++;
+            hexs(q, v[i]);
+            q += 8;
+            for (l = L[i + 1u]; *l;)
+                *q++ = *l++;
+            hexs(q, v[i + 1u]);
+            q += 8;
+            *q = 0;
+            log_line_send(b);
+        }
+        fm1b_dbg.max_us = 0;
+        crk_pass_max = 0;
+    }
+    {   /* crk-J: the boot's LCD writes (the splash, before the interrupts are first on: crk lcdoff counts only those
+         * after), and when the boot's maxima were cleared (ms; 0 not yet) */
+        extern uint32_t crk_lcd_boot;
+        q = b;
+        for (const char *l = "crk lcdboot "; *l;)
+            *q++ = *l++;
+        hexs(q, crk_lcd_boot);
+        q += 8;
+        for (const char *l = " clear "; *l;)
+            *q++ = *l++;
+        hexs(q, crk_boot_clear_ms);
+        log_line_send(b);
+    }
+#if FM1B_CPU2
+    {   /* crk-J: the second core. state: bit 0 it takes jobs (fm1-base), 1 barred until power-off, 2 the app's up,
+         * 3 a job was in hand at its stop, bits 4..7 the failed boots before this one (bootguard: fm1-base starts no
+         * CPU1 after one); why: fm1-base's reason (FM1_CPU1_*) low byte, the app's high byte;
+         * jobs: what CPU1 ran (its own count). Then the app's jobs posted, joined, and the wait at its stop (us) */
+        extern void crk_cpu1_read(uint32_t v[4]);
+        static const char H[] = "0123456789ABCDEF";
+        uint32_t a[4], st, why, j;
+        crk_cpu1_read(a);
+        st = (uint32_t)(plat_cpu2_on() != 0) | (uint32_t)(plat_cpu2_barred() != 0) << 1 | (a[0] & 1u) << 2 |
+             ((a[0] >> 16) & 1u) << 3 | (bootguard.failed > 15u ? 15u : bootguard.failed) << 4;
+        why = ((uint32_t)plat_cpu2_gave_up() & 0xFFu) | (a[0] & 0xFF00u);
+        q = b;
+        for (const char *l = "crk cpu1 state "; *l;)
+            *q++ = *l++;
+        *q++ = H[st >> 4 & 15u];
+        *q++ = H[st & 15u];
+        for (const char *l = " why "; *l;)
+            *q++ = *l++;
+        for (j = 4u; j--;)
+            *q++ = H[why >> (4u * j) & 15u];
+        for (const char *l = " jobs "; *l;)
+            *q++ = *l++;
+        hexs(q, fm1_cpu1_mb.jobs);
+        log_line_send(b);
+        q = b;
+        for (const char *l = "crk cpu1 posts "; *l;)
+            *q++ = *l++;
+        hexs(q, a[1]);
+        q += 8;
+        for (const char *l = " joined "; *l;)
+            *q++ = *l++;
+        hexs(q, a[2]);
+        log_line_send(b);
+        q = b;
+        for (const char *l = "crk cpu1 wait "; *l;)
+            *q++ = *l++;
+        hexs(q, a[3]);
+        q += 8;
+        for (const char *l = " bad "; *l;)
+            *q++ = *l++;
+        hexs(q, plat_cpu2_bad());
+        log_line_send(b);
+    }
+#endif
+#endif
 #if FM1B_BLE
     {
         extern uint32_t shim_off_max, shim_off_from;
@@ -1335,6 +1425,29 @@ static void fm1_main(void)
     app_ui_init();
 
     for (;;) {
+#if FM1B_CRK_DIAG
+        {   /* crk-I: this pass's length (the last one's end to now) */
+            static uint32_t t_pass;
+            uint32_t now = fm1_ticks(), us = (now - t_pass) / FM1_TICKS_PER_US;
+            if (t_pass && us > crk_pass_max) {
+                crk_pass_max = us;
+                crk_pass_stage = fm1b_dbg.stage;
+            }
+            t_pass = now;
+        }
+        if (!crk_boot_clear_ms && fm1_ms >= 10000u) {   /* crk-J: the boot's maxima (the radio's start, the first
+                                                     * frames) out of what the log reads, once, 10 s in */
+            extern uint32_t crk_lcd_off, crk_lcd_boot;
+            extern uint32_t lock_max;
+            crk_boot_clear_ms = fm1_ms;
+            t5_gap_max = t5_late = t5_run_max = lock_max = 0;
+            crk_pass_max = 0;
+            fm1b_dbg.max_us = 0;
+            fm1b_dbg.late = fm1b_dbg.nested = fm1b_dbg.halves = 0;   /* (.noinit: also what earlier runs counted) */
+            crk_lcd_boot += crk_lcd_off;
+            crk_lcd_off = 0;
+        }
+#endif
 #if FM1B_HEADPHONES
         plat_hp_read();                             /* the headphone jack, every pass (plat_headphones) */
 #endif

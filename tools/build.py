@@ -108,6 +108,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              "packed"; 2048 B of the pool with WiFi; a demo build may spend it)
   pool_spare = 2048          the spare this app's builds insist on (8192 B, of the SRAM with ram_layout = "packed": the
                              margin for what comes next; an app that spent it on purpose says how much it keeps)
+  crk_diag = true            the crackle hunt's counters (FM1B_CRK_DIAG; default off, none of their code or RAM in a build
+                             without): "crk ..." lines in the log (late halves, longest render, TIMER5 nesting, longest
+                             main-loop pass, LCD writes with the interrupts off, the second core's state)
   msc = true                 disk mode: the FM-1 as a USB drive of the app's blocks (FM1B_MSC: device/msc.c, plat_disk_* in
                              plat.h; felucca-bsp usb.c FELUCCA_MSC), no USB MIDI or audio meanwhile
   lcd_panel = true           the M-VAVE panel's own ST7789V setup after the reset (FM1B_LCD_PANEL: porch, gate voltages, VCOM
@@ -1286,6 +1289,7 @@ def opt_flags():
                                            ("resources", "FM1B_RES"), ("lcd_panel", "FM1B_LCD_PANEL"), ("xdata2", "FM1B_XDATA2"),
                                            ("headphones", "FM1B_HEADPHONES"))
             if (CONF.get(key) and os.environ.get(flag) != "0") or os.environ.get(flag) == "1"]   # (FM1B_MIRROR=1: a build with it, fm1.toml as it is; FM1B_BACKUP=0: without)
+    flags += ["-DFM1B_CRK_DIAG=1"] if (CONF.get("crk_diag") and os.environ.get("FM1B_CRK_DIAG") != "0") or os.environ.get("FM1B_CRK_DIAG") == "1" else []
     if cache_ram_ways():
         flags.append(f"-DFM1B_CACHE_RAM={cache_ram_ways()}")   # (the host and the web: plat_cache_ram's stand-in)
     if usb_audio_channels() > 2:

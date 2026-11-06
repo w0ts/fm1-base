@@ -131,6 +131,10 @@ if command -v node >/dev/null 2>&1; then
 else
     echo "  skip backup-page (no node)"
 fi
+# an update or the soft key's UBOOT begins: the app stops cleanly first (APP_UPDATE_BEGIN), before the first erase or
+# write and before the restart (bsp/chip/ota.c on a simulated NOR; main_fm1.c's order)
+run update-begin sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -o $OUT/update_begin_test \
+    tests/update_begin_test.c && $OUT/update_begin_test"
 PKG=template/build/template.fwsc
 if [ -f "$PKG" ]; then
     run ota-entry sh -c "$CC -w -o $OUT/ota_test tests/ota_test.c && $OUT/ota_test $PKG web/m-bootloader/fm1-uboot-1.2.fwsc"

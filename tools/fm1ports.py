@@ -54,8 +54,10 @@ def pair_output(name, outs):
 
 
 def pairs(ins, outs):
-    """every input that has an output: [(input, output)]"""
-    ins, outs = list(dict.fromkeys(ins)), list(dict.fromkeys(outs))
+    """every input that has an output: [(input, output)]. Never a Bluetooth MIDI port (an FM-1 paired over Bluetooth shows
+    one beside its USB port: an install or a backup over it is not offered, and it answers nothing asked of it)"""
+    ins = list(dict.fromkeys(n for n in ins if "bluetooth" not in (n or "").lower()))
+    outs = list(dict.fromkeys(n for n in outs if "bluetooth" not in (n or "").lower()))
     return [(i, o) for i in ins if (o := pair_output(i, outs))]
 
 

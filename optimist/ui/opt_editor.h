@@ -136,7 +136,10 @@ static int fl_erase4k_quiet(uint32_t off, uint32_t *took)
 static int fl_write(uint32_t off, const void *src, uint32_t n) { return opt_smp_ok(off, n) ? st_prog(off, src, n) : -8; }
 
 /* ---- the restarts (system/main.c fm1_reboot) and the test session's mark (felucca.c, ED_MIRROR) */
+#ifndef OPT_FM1_REBOOT                          /* (ui/opt_sd.h defines it too: the SD pages' restore restart, editor or not) */
+#define OPT_FM1_REBOOT 1
 static void fm1_reboot(void) { plat_restart(); }
+#endif
 #if FELUCCA_ED_MIRROR
 static volatile uint32_t mir_test_boot __attribute__((section(".noinit")));   /* MIR_TEST_MAGIC: the next start is a
                                                  * test session (opt_core_init reads and clears it at once) */

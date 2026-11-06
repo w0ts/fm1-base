@@ -18,7 +18,13 @@
 #include "storage/sd/sdcard.c"
 #endif
 #if FELUCCA_SD_UI
-static void fm1_reboot(void);                   /* (ui/opt_editor.h: plat_restart; a card restore's restart, sd_mode.c) */
+#ifndef OPT_FM1_REBOOT                          /* a card restore's restart (sd_mode.c SDM_REBOOT): plat_restart. Also defined by
+                                                 * ui/opt_editor.h for the editor's restarts; one of the two, whichever comes
+                                                 * first (a build with the SD pages and the editor off: 2026-11-06, the
+                                                 * user's profile, linked no fm1_reboot) */
+#define OPT_FM1_REBOOT 1
+static void fm1_reboot(void) { plat_restart(); }
+#endif
 #include "storage/sd/sd_mode.c"
 #endif
 

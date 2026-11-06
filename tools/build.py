@@ -238,6 +238,7 @@ macOS (or with JIELI_DOCKER=1) each tool runs in a linux/amd64 container.
 import argparse
 import functools
 import hashlib
+import json
 import os
 import platform
 import re
@@ -346,12 +347,20 @@ def builder():
         return _builder_start()
 
 
+def builder_name(root, toolchain_dir, image):
+    """the toolchain container's name: one per source tree, toolchain and image. A container mounts one toolchain
+    and runs one image for the hour it lives, so a build with another JIELI_TOOLCHAIN (another compiler, an app's
+    measurement toolchain) or JIELI_DOCKER_IMAGE gets a container of its own, never one that has the other mounted"""
+    key = "\n".join((str(root), str(toolchain_dir), image))
+    return "jieli-" + hashlib.sha1(key.encode()).hexdigest()[:10]
+
+
 def _builder_start():
     global _BUILDER
     if _BUILDER:
         return _BUILDER
-    name = "jieli-" + hashlib.sha1(str(ROOT).encode()).hexdigest()[:10]
-    st = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
+    name = builder_name(ROOT, toolchain(), DOCKER_IMAGE)
+    st =subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
     if st.stdout.strip() != "true":
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         r = subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "--platform", "linux/amd64",
@@ -756,7 +765,6 @@ def cache_ram_ways():
     return n
 
 
-BOOT_PACKED = None                                # (raw, packed) bytes of the boot-packed load images, or None
 def cpu2_stack_flags():
     """fm1.toml cpu2_stack: the second core's job stack, for its entry's unit and the platform's (none: felucca-bsp's
     2816 B, the build as before)"""
@@ -766,6 +774,17 @@ def cpu2_stack_flags():
     if not isinstance(n, int) or isinstance(n, bool) or n % 8 or not 1024 <= n <= 16384:
         raise SystemExit(f"fm1.toml cpu2_stack {n!r}: bytes, a multiple of 8, 1024..16384")
     return [f"-DFM1_CPU1_USTACK_BYTES={n}"]
+
+
+def write_sizes(img, syms):
+    """OUT/sizes.json: this build's budgets, whether or not it fits (a caller that sizes configurations reads it, as
+    a configuration builder does): flash = the app image against the app slot, ram = .data+.bss, pool, ramtext = the RAM code"""
+    def sym(name):
+        mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
+        return int(mm.group(1), 16) if mm else 0
+    sizes = {"flash": len(img), "ram": sym("_bss_end") - sym("_data_start"), "pool": sym("_pool_end") - sym("_pool_start"),
+             "ramtext": sym("_rt_end") - sym("_rt_start"), "app_slot": app_slot()}
+    (OUT / "sizes.json").write_text(json.dumps(sizes, indent=1) + "\n")
 
 
 def build_app():
@@ -839,11 +858,11 @@ def build_app():
         raise SystemExit(f"fm1.toml: unity_opt is \"s\" or \"z\", not {unity_opt!r}")
     flags = [f"-O{unity_opt}" if f == "-Os" else f for f in flags]
     ir = CONF.get("ir_pass")                      # the app's pass over the IR (see the top)
-    ir_out = ["-S", "-emit-llvm", "-Xclang", "-disable-llvm-optzns"] if ir else []
+    ir_out = ["-S", "-emit-llvm", "-Xclang", "-disable-llvm-optzns"] if ir else ["-c"]   # (IR: -S, so no -c: clang warns "-c unused")
     units = [("cc", "-c", BSP / "chip" / "crt0.S", "-o", OUT / "crt0.o"),
              ("cc", "-c", BSP / "chip" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
              ("cc", "-c", BSP / "chip" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
-             ("cc", *flags, *ir_out, "-c", SRC / "device" / "unity.c", "-o", OUT / ("unity.ll" if ir else "unity.o"))]
+             ("cc", *flags, *ir_out, SRC / "device" / "unity.c", "-o", OUT / ("unity.ll" if ir else "unity.o"))]
     objs = [OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o", OUT / "unity.o"]
     if CPU2:                                      # the second core's entry and stacks
         units.append(("cc", *cpu2_stack_flags(), "-c", BSP / "chip" / "fm1_cpu1.S", "-o", OUT / "fm1_cpu1.o"))
@@ -859,7 +878,7 @@ def build_app():
     for u in CONF.get("o2", []):
         for f in (sorted(APP.glob(u)) if any(ch in u for ch in "*?[") else [APP / u]):
             o = OUT / "o2" / ("_".join(f.relative_to(APP).with_suffix("").parts) + ".o")
-            units.append(("cc", *o2, *o2_more, *inc(f.parent), *ir_out, "-c", f, "-o", o.with_suffix(".ll") if ir else o))
+            units.append(("cc", *o2, *o2_more, *inc(f.parent), *ir_out, f, "-o", o.with_suffix(".ll") if ir else o))
             objs.append(o)
             o2_units.append((f, o))
     jieli = (BLE and not OWN) or WIFI             # JieLi's libraries linked (the shim, LTO)
@@ -1648,6 +1667,7 @@ def main():
         gen.result()
         ota = ldr.result()
     img, syms, dis, rt = build_app()
+    write_sizes(img, syms)
     errors, notes = check(img, syms, dis, rt)
     hal_err = mmio_check()
     errors += hal_err

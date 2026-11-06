@@ -6,10 +6,13 @@
  * fm1_dual.h: its mailbox, its start, its RAM loop). Part of core/opt_core.c, after fx.c (fx.c leaves mix_block to
  * this file with DUAL_RENDER, as it leaves it to dual.c in Optimist's own firmware).
  *
- * The same split as Optimist's: per 32-frame mix block, the jobs (the three synth parts, the drum track, the reverb's
- * kept block, REV_LATE) go each block to the core with less measured load, longest first (dual_split); CPU1 renders
- * its parts into its own accumulators (dual_acc[1]) and the drums onto the buses CPU0 leaves alone; CPU0 renders the
- * rest, waits, adds CPU1's sums (integer: the samples of one core), runs the buses and the master. What runs before the
+ * The same split as Optimist's: per 32-frame mix block, the jobs (the three synth parts, the drum track's voices in
+ * two halves by lane, the reverb's kept block, REV_LATE) go each block to the core with less measured load, longest
+ * first (dual_split); CPU1 renders its parts into its own accumulators (dual_acc[1]), the drums' half A onto the buses
+ * CPU0 leaves alone, their half B into its own buffers; CPU0 renders the rest, waits, adds half B, the drums' declick
+ * tail and runs the drum bus (dbus_run: on the drums summed), then adds CPU1's sums (integer: the samples of one core),
+ * runs the buses and the master. The drums' halves (2026-11-05, drums/drum_halves.c): the user's FM-1 with only drums
+ * playing had CPU0 at 60-75 % and CPU1 at 0 %; with the SLICER on the drums they stay one job (slicer_drums, dbus_run). What runs before the
  * fork on CPU0 alone, as there: the events, the macros, the duck, the busy voices, the LFOs' random draws, the old
  * sounds' fade (pold_in).
  *
@@ -29,19 +32,23 @@
 #include "system/dual_mode.h"
 #include "../hal/fm1_dual_guard.h"                 /* (the boot canary's table and scan: pure, Optimist's) */
 #include "../app.h"                                /* (FM1_CPU1_TIMEOUT_US: the join bound, as Optimist's DUAL_JOIN_US) */
+#include "drums/drum_halves.c"                   /* the drum voices in two halves, a job each (dh_pre, dh_job, dh_join) */
 
 #define DUAL_JOIN_US ((2u * CTL * 1000000u) / FS)  /* (dual.c: two mix blocks, 1.45 ms) */
 _Static_assert(FM1_CPU1_TIMEOUT_US == DUAL_JOIN_US, "app.h FM1_CPU1_TIMEOUT_US: two mix blocks, as dual.c's DUAL_JOIN_US");
 #define DUAL_STARVE_MS 1500u                       /* (dual.c: the main loop this long without a pass: CPU1 down) */
 #define DUAL_SLEEPS_NOW 0                          /* (CPU1 spins: fm1-base's loop; op_project.c's INTERNALS) */
-#define DUAL_JOB_DRUMS (1u << NPART)               /* a job's bit: the drum track (slicer_drums, dbus_run) */
+#define DUAL_JOB_DRUMS (1u << NPART)               /* a job's bit: the drum track's voices, half A (drums/drum_halves.c);
+                                                    * with the SLICER on the drums, the whole track (slicer_drums, dbus_run) */
 #if REV_LATE
 #define DUAL_JOB_REV (1u << (NPART + 1u))          /* the reverb's kept block (fx.c rev_job) */
-#define DUAL_JOBS_R (NPART + 2u)
+#define DUAL_IX_DR2 (NPART + 2u)
 #else
 #define DUAL_JOB_REV 0u
-#define DUAL_JOBS_R (NPART + 1u)
+#define DUAL_IX_DR2 (NPART + 1u)
 #endif
+#define DUAL_JOB_DR2 (1u << DUAL_IX_DR2)           /* the drum track's voices, half B (2026-11-05: the drums spread) */
+#define DUAL_JOBS_R (DUAL_IX_DR2 + 1u)
 /* the Bluetooth stream's SBC frames (2026-11-01, the user: "cpu0 hit 100% while cpu1 never exceeded 45%"): the platform
  * encoded each half's two frames on CPU0 after the render (main_fm1.c render_block, bt_acl.c bt_audio_feed); kept now
  * (plat.h plat_bta_job_keep while CPU1 is up), each is a job of the next half's render, one a block, on either core
@@ -85,6 +92,8 @@ static struct {
 static mixacc_t dual_acc[2];                       /* [0] CPU0's parts, [1] CPU1's */
 static volatile uint32_t dual_c1_ticks;            /* CPU1: ticks inside its jobs, a running total (dual_load.h) */
 static uint32_t dual_cost[DUAL_JOBS];              /* each job's render time (ticks x 8, smoothed; dual.c) */
+static uint32_t dual_cost_drums[3];                /* the drums' parts, the same units: the voices (slicer_drums; split: half A),
+                                                    * dbus_run (the bus), half B's voices (split) */
 static uint32_t dual_fixed;                        /* the host's fixed set of jobs for CPU1 (OPT_DUAL_PARTS), 0: the split */
 static volatile uint32_t dual_loop_ms;             /* plat_ms at the main loop's last pass (opt_dual_loop) */
 static volatile uint32_t dual_canary_bad;          /* CPU1: the canary words it read wrong, + 1 (0: not run) */
@@ -108,10 +117,28 @@ static HOT void dual_run(uint32_t mask, uint32_t n, mixacc_t *A)
                 mix_part(&trk[p], n, A);
             } else if (p == NPART) {
 #if FELUCCA_DRUMS
-                SCOPE_DRUMS(scope_drums_mark);     /* (the SCOPE on the drums: their part of the mix, as mix_block does) */
-                slicer_drums(mix_l, mix_r, send_r, n);
-                dbus_run(n);                       /* the drum bus's inserts and sends (fx.c; the drums alone) */
-                SCOPE_DRUMS(scope_drums_take);
+                if (dh_on == DH_ONE) {             /* (the SLICER on the drums: the track as one job, as before) */
+                    SCOPE_DRUMS(scope_drums_mark); /* (the SCOPE on the drums: their part of the mix, as mix_block does) */
+                    slicer_drums(mix_l, mix_r, send_r, n);
+                    t1 = dual_ticks();
+                    dual_cost_drums[0] += (t1 - t0) - (dual_cost_drums[0] >> 3);
+                    dbus_run(n);                   /* the drum bus's inserts and sends (fx.c; the drums alone) */
+                    dual_cost_drums[1] += (dual_ticks() - t1) - (dual_cost_drums[1] >> 3);
+                    SCOPE_DRUMS(scope_drums_take);
+                } else if (dh_on == DH_IDLE) {     /* (split, nothing sounds: the drum bus alone, either core) */
+                    SCOPE_DRUMS(scope_drums_mark);
+                    dbus_run(n);
+                    dual_cost_drums[1] += (dual_ticks() - t0) - (dual_cost_drums[1] >> 3);
+                    SCOPE_DRUMS(scope_drums_take);
+                } else {
+                    dh_job(0u, n);                 /* half A's voices, onto the buses (drum_halves.c) */
+                    dual_cost_drums[0] += (dual_ticks() - t0) - (dual_cost_drums[0] >> 3);
+                }
+#endif
+            } else if (p == DUAL_IX_DR2) {
+#if FELUCCA_DRUMS
+                dh_job(1u, n);                     /* half B's voices, into its own buffers (added at the join) */
+                dual_cost_drums[2] += (dual_ticks() - t0) - (dual_cost_drums[2] >> 3);
 #endif
             } else if (DUAL_JOB_SBC && p == DUAL_JOBS - 1u) {
                 FAR(plat_bta_job)();               /* the next kept SBC frame (fm1-base's bt_acl.c; flash code) */
@@ -175,6 +202,10 @@ static HOT uint32_t dual_split(uint32_t jobs)
     uint32_t ord[DUAL_JOBS], i, j, k, c0 = 0, c1 = DUAL_WAKE_COST, mask = 0;
     if (dual_fixed)
         return dual_fixed & jobs;
+#if FELUCCA_DRUMS
+    if (jobs & DUAL_JOB_DR2)
+        c0 = dual_cost_drums[1];                   /* (the drums split: CPU0 runs their bus after the join) */
+#endif
     for (i = 0; i < DUAL_JOBS; i++) {              /* (insertion sort, longest first: 4 or 5 jobs) */
         for (j = i; j && dual_cost[ord[j - 1u]] < dual_cost[i]; j--)
             ord[j] = ord[j - 1u];
@@ -193,6 +224,16 @@ static HOT uint32_t dual_split(uint32_t jobs)
     }
     return mask;
 }
+
+#if FELUCCA_DRUMS
+/* the drums split: how much more of their voices' load half B takes (Q8; drum_halves.c dh_split), the drum bus's time
+ * over the voices' (so the core with half A and the bus after the join ends about when the other ends half B) */
+static HOT uint32_t dual_dh_bias(void)
+{
+    uint32_t v = dual_cost_drums[0] + dual_cost_drums[2];
+    return v ? (dual_cost_drums[1] < (1u << 23) ? dual_cost_drums[1] << 8 : 0xFFFFFFFFu) / v : 0u;   /* (32 bits: no divide call) */
+}
+#endif
 
 /* CPU0, before the fork: the rng() draws of the parts' LFOs that wrap in this block, in part order (dual.c) */
 static HOT void dual_lfo_draw(void)
@@ -380,7 +421,12 @@ static HOT void mix_block(int32_t *out, uint32_t n)
 #if FELUCCA_DRUMS
     drums.a0 = TDRUM->att;                         /* the drum track's mute / solo fade (before the fork: either */
     drums.a1 = 32767 - gain_next(TDRUM);           /* core may render the drums) */
-    jobs = (1u << (NPART + 1u)) - 1u;              /* the parts and the drums */
+    jobs = (1u << NPART) - 1u;                     /* the parts, and the drums: */
+    i = dh_pre(n, dual.up ? dual_dh_bias() : 0u);  /* (drum_halves.c: the SLICER's clock, the voices' shared values) */
+    jobs |= DUAL_JOB_DRUMS | (i == DH_TWO ? DUAL_JOB_DR2 : 0u);   /* (the SLICER on them: one job; nothing sounds:
+                                                    * the drum bus alone; else their voices in two halves) */
+    if (i == DH_TWO)
+        SCOPE_DRUMS(scope_drums_mark);             /* (split: the drums' part of the mix, taken at the join) */
 #else
     jobs = (1u << NPART) - 1u;
 #endif
@@ -468,6 +514,15 @@ static HOT void mix_block(int32_t *out, uint32_t n)
         tmj1 = dual_ticks();
 #endif
     }
+#if FELUCCA_DRUMS
+    if (dh_on == DH_TWO) {                         /* the drums split: half B on the buses, the tail, then */
+        dh_join(n);                                /* the drum bus on the drums summed, before the parts' sums */
+        t0 = dual_ticks();
+        dbus_run(n);
+        dual_cost_drums[1] += (dual_ticks() - t0) - (dual_cost_drums[1] >> 3);
+        SCOPE_DRUMS(scope_drums_take);
+    }
+#endif
     for (i = 0; i < n; i++) {
         send_c[i] += A->send_c[i];
         send_d[i] += A->send_d[i];

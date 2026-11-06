@@ -30,6 +30,11 @@
  *   FM1B_BACKUP 0           backup and restore of the app's objects over USB (fm1.toml backup = true: backup.c)
  *   FM1B_RES 0              the resource region (fm1.toml resources = FILE: res.c; with backup)
  *   FM1B_CPU2 0             the second core (fm1.toml cpu2 = true: cpu2.c, felucca-bsp's fm1_cpu1.h)
+ *   FM1B_COMPANION 0        the companion services over USB (fm1.toml companion = true: companion.c)
+ *   FM1B_ERASE_SLICED 1     the store's and plat_data's erases in windows of about 1 ms, the sound on (felucca-bsp's
+ *                           FL_ERASE_SLICED); 0: in one window, the sound silenced (the fm1-emulator: it has no
+ *                           erase suspend)
+ *   FM1B_SD 0               an SD card on the LCD's bus (fm1.toml sd = true: sd.c, felucca-bsp's fm1_sd_hw.h)
  *   FM1B_CACHE_RAM 0        data-cache ways as RAM, 2, 4 or 7 (fm1.toml cache_ram_ways: plat_cache_ram, felucca-bsp's
  *                           fm1_cache_ram.h; set and tested in fm1_cstart, main_fm1.c) */
 #include <stdint.h>
@@ -57,7 +62,11 @@
 #include "fm1_adc.h"
 #include "fm1_jack.h"               /* the headphone jack's switch (PB5): plat_headphones */
 #include "fm1_lcd_hw.h"
-#if FM1B_WIFI || FM1B_BLE
+#if FM1B_SD
+#include "fm1_sd_hw.h"
+#include "fm1_crc.h"
+#endif
+#if FM1B_WIFI || FM1B_BLE || defined(FELUCCA_USB_NAME_FN)
 #define FL_UID 1                          /* the flash's unique ID: the WiFi MAC, the Bluetooth name (plat_chip_uid) */
 #endif
 #include "fm1_flash.h"
@@ -73,6 +82,9 @@
 
 #include "libc.c"
 #include "lcd.c"
+#if FM1B_SD
+#include "sd.c"                 /* the SD card on the LCD's bus: plat_sd_* */
+#endif
 #include "gfx.c"
 
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR) */

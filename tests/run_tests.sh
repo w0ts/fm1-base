@@ -280,6 +280,17 @@ run host-crashlog sh -c "mkdir -p $OUT/crashlog && $H/template_host tests/crashl
 # update, a power-on with the dumped flash) read through tools/fm1_remote.py's parser
 run dbgstats sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -o $OUT/dbgstats_test tests/dbgstats_test.c && \
     $OUT/dbgstats_test"
+# the SD card on the LCD's bus (device/sd.c) against a card in SPI mode byte by byte (start-ups, reads, writes, runs,
+# CRC failures, the read modes, the bus back with the LCD after every call); then an app on plat_sd_* in the host
+# simulator with a card image (tests/sd_app)
+run sd sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -Idevice -o $OUT/sd_test tests/sd_test.c && $OUT/sd_test"
+# its clock detected at plat_sd_init (device/sd_clock.h's steps, 30 .. 6 MHz) on the same card with the clock faults
+# (wrong above each step, timeouts, zeros with a right CRC, now and then, one step alone, the card gone, no high speed),
+# and the step down at run time by bytes and by DMA
+run sd-clock sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -DFM1B_CDC=1 -Idevice -o $OUT/sd_clock_test tests/sd_clock_test.c && $OUT/sd_clock_test"
+run sd-app sh -c "$PY tools/build.py tests/sd_app --host && \
+    head -c 4194304 /dev/zero > $OUT/sd_card.img && printf '\125\252' | dd of=$OUT/sd_card.img bs=1 seek=510 conv=notrunc 2>/dev/null && \
+    FM1B_SD=$OUT/sd_card.img tests/sd_app/build/host/sdtest_host tests/sd_app/tests/sd.txt tests/sd_app/build/host"
 # the second core's stack room (plat_stack_left(PLAT_STK_C1)) on a host model of felucca-bsp's fm1_cpu1.h: -1 when CPU1 never started
 run stack-c1 sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -Itests/stack_c1 -o $OUT/stack_c1_test tests/stack_c1_test.c && \
     $OUT/stack_c1_test"

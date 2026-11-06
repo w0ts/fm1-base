@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Optimist's Wi-Fi in the trial on fm1-base's own Wi-Fi stack, in the host simulator over its simulated network
+# (host/wifi_air.c: an access point, DHCP, a Link peer at 133 BPM; OPT_HOST_BT=1 OPT_HOST_WIFI=1 with
+# profiles/dev-wifi.config: optimist/run.sh's wifi run; ui/opt_wifi.h). SYSTEM > WI-FI: MODE AUTO, the network heard and
+# joined with its password, the address, the Link peer on the page; Link's session followed as the clock (its tempo,
+# its start at the bar), the FM-1's tempo never pushed back while Link drives it; the network kept in Optimist's
+# settings record: after a restart AUTO joins it again
+wait 1500
+master 2048
+wait 100
+wifi_net HOSTNET password1 6
+link_peer 133
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 3                                           # (BT MIDI, BT AUDIO, then WI-FI: Bluetooth and Wi-Fi first since 2026-11-03, General after)
+wait 100
+cells
+# MODE AUTO (OFF, MAN, AUTO ...): the radio starts on Bluetooth's, the page lists what it hears
+spin K1 1
+wait 100
+spin K1 1
+wait 3500
+cells
+expect wifi_mode 1
+expect wifi_found 1
+# the password (as the web editor's join or the page's entry gives it): joined, the address, Link's peer
+wifi join HOSTNET password1
+wait 9000
+cells
+expect wifi_state 5
+expect wifi_ip_last 2
+expect wifi_saved 1
+expect link_peers 1
+expect link_bpm_x10 1330
+# reception in numbers on the page (fm1-base's plat_wifi_quality, measured only while the page asks): the STATE line takes
+# turns with the signal and rate, RETRY and LOST over the last 10 s (the air: -63 dBm, a fifth of the frames retried)
+wifi_air rssi -63
+wifi_air retry 20
+wait 11000
+expect wifi_q_on 1
+expect wifi_q_secs 10
+expect wifi_q_rssi -63
+expect wifi_q_retry_pct >14
+expect wifi_q_retry_pct <26
+expect wifi_q_lost_pct 0
+cells
+wifi_air retry 0
+wifi_air rssi -45
+# the session plays: Optimist starts with it at the bar
+link_peer play 1
+wait 4000
+expect playing 1
+expect bpm 133
+expect peer_bpm_x10 1330
+link_peer play 0
+wait 2000
+expect playing 0
+# a restart: the network kept in the settings record, AUTO joins it again
+wait 3000
+reboot
+wait 15000
+expect wifi_q_on 0
+expect wifi_mode 1
+expect wifi_saved 1
+expect wifi_state 5
+expect link_peers 1

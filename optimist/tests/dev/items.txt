@@ -1,0 +1,584 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The items run (optimist/run.sh: profiles/dev-items.config, tests/dev/items.txt): the builder items and options that the
+# release builds and no other run switches on. Each is exercised once, so that a regression shows: an engine on track 1
+# plays a note, an insert is loaded into a slot with its amount and the track is heard through it, a page answers and a
+# value moves. An item that is no longer built fails its line ("not built"),
+# one whose code crashes or goes silent fails the next check. The script's expectations are measured on this build
+# (the peak floors are loose: a key held 0.5 s)
+wait 600
+expect blocks >100
+# ---- engines (ENG_*): each one a key plays
+engine 0 CS80
+# CS80: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 SQUARE
+# SQUARE: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 DRONE
+# DRONE: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 4000
+expect voices 0
+engine 0 VPS
+# VPS: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 TERRAIN
+# TERRAIN: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 4000
+expect voices 0
+engine 0 WSEQ
+# WSEQ: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 VECTOR
+# VECTOR: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 4000
+expect voices 0
+engine 0 WAVE
+# WAVE: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 SID
+# SID: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 NOISE
+# NOISE: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 CZ
+# CZ: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 DIGITAL
+# DIGITAL: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+# STRETCH stretches SAMPLE's material (none in this run: a voice, no sound); SAMPLE plays user samples
+engine 0 SAMPLE
+engine 0 STRETCH
+peakreset
+key 7 down
+wait 500
+expect voices >0
+key 7 up
+wait 4000
+# SLICE: the break slicer's slices sound, no voice of its own
+engine 0 SLICE
+peakreset
+key 7 down
+wait 500
+expect peak_db_min -40
+key 7 up
+wait 800
+# DIG_TONE: DIGITAL's ALG past 8 is T1..T8 (the TONE routings), a note plays on the last
+engine 0 DIGITAL
+tap EDIT
+wait 100
+turn SELECT 1
+wait 50
+expect gv1 4
+turn K1 4
+wait 50
+expect gv1 8
+turn K1 7
+wait 50
+expect gv1 15
+# DIGITAL on TONE T8: a key plays
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+engine 0 STRINGS
+# ---- inserts: the type loaded into track 1's slot 1 with its amount, a key played through it
+insert 0 0 9 64
+# the PHSR insert (type 9)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 11 64
+# the FRMT insert (type 11)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 19 64
+# the SFLD insert (type 19)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 21 64
+# the RECT insert (type 21)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 23 64
+# the RING insert (type 23)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 25 64
+# the SLEW insert (type 25)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 26 64
+# the TAPE insert (type 26)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 27 64
+# the SPIT insert (type 27)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 29 64
+# the EXGN insert (type 29)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+# WIDE_FINE (the WIDE insert at full resolution), JUNO_FINE (JUNO CHORUS's 32-bit line: a limited insert with an instance)
+insert 0 0 12 64
+# the WIDE insert (type 12)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 17 64
+wait 200
+expect fxi.0.0 1
+# the JUNO CHORUS insert (type 17)
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+insert 0 0 1 0
+# ---- the track and master FX pages
+# MIX_FINE: the mixer's VOLUME in finer steps; TFLT_FINE: the track FILTER insert (FX, S2) at full resolution
+tap HOME
+wait 100
+expect scr 0
+turn K1 -3
+wait 100
+expect gv1 101
+tap FX
+wait 100
+expect scr 1
+expect row 0
+cells
+turn K4 20
+wait 100
+cells
+expect gv4 20
+# TFLT_FINE: a key through the FILTER insert at full resolution
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+turn K4 -20
+wait 100
+expect gv4 0
+# SENDS: REV and CHO on track 1
+turn SELECT 1
+wait 50
+cells
+turn K1 40
+turn K3 40
+wait 100
+cells
+# the reverb: RET C's TYPE (its EDIT pages: MIX, RET REV, RET TYPE; the returns as tracks since fm1-next-rett-int) through every
+# algorithm built, a note's tail heard each time (REV send 90 on track 1); RET C above MASTER, left of T1 (ALGO -2; 2 back to T1)
+turn ALGO -2
+wait 100
+tap EDIT
+wait 100
+turn SELECT -12
+wait 50
+turn SELECT 2
+wait 50
+cells
+turn K1 0
+wait 100
+expect gv1 0
+turn ALGO 2
+wait 100
+peakreset
+key 7 down
+wait 300
+key 7 up
+wait 1000
+peakreset
+wait 300
+expect peak_db_min -75
+turn ALGO -2
+wait 100
+tap EDIT
+wait 100
+turn SELECT -12
+wait 50
+turn SELECT 2
+wait 50
+turn K1 1
+wait 100
+expect gv1 1
+turn ALGO 2
+wait 100
+peakreset
+key 7 down
+wait 300
+key 7 up
+wait 1000
+peakreset
+wait 300
+expect peak_db_min -75
+turn ALGO -2
+wait 100
+tap EDIT
+wait 100
+turn SELECT -12
+wait 50
+turn SELECT 2
+wait 50
+turn K1 1
+wait 100
+expect gv1 2
+turn ALGO 2
+wait 100
+peakreset
+key 7 down
+wait 300
+key 7 up
+wait 1000
+peakreset
+wait 300
+expect peak_db_min -75
+turn ALGO -2
+wait 100
+tap EDIT
+wait 100
+turn SELECT -12
+wait 50
+turn SELECT 2
+wait 50
+turn K1 1
+wait 100
+expect gv1 3
+turn ALGO 2
+wait 100
+peakreset
+key 7 down
+wait 300
+key 7 up
+wait 1000
+peakreset
+wait 300
+expect peak_db_min -75
+# MACROS: MASTER > FX > MACRO, the COLOR macro moved (it moves the voices' LFO depths and the filter), a key played;
+# MASTER's pages INSERTS, INS DYN 1 2, DUCK, MACRO since the returns' pages left it
+turn ALGO -1
+wait 100
+tap FX
+wait 100
+turn SELECT -12
+wait 50
+turn SELECT 4
+wait 50
+cells
+expect gv1 0
+turn K1 40
+wait 100
+expect gv1 40
+turn ALGO 1
+wait 100
+# a key under the COLOR macro
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+# the output's correction (fx/outcorr.c): nothing in the jack the speaker's low cut, always on since 2026-11-01
+# (803deeab: SPK LOWCUT's row gone, BASS+ with it); headphones in: HPHN BASS (OFF / +3 dB / +6 dB, General's
+# second card), each only on its side
+tap GLO
+wait 100
+tap GLO
+wait 100
+turn SELECT -30
+wait 50
+turn SELECT 3                                           # (General after BT MIDI and BT AUDIO since 2026-11-03)
+wait 50
+cells
+expect gv2 0
+expect hp 0
+expect oc 1
+tap HOME
+wait 100
+expect scr 0
+# a key through the low cut
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+# headphones in: no low cut on them, HPHN BASS OFF: no correction; +6 dB: HP BASS; out again: the low cut back
+jack in
+wait 300
+expect hp 1
+expect oc 0
+# (GLO opens the one of GLOBAL / SYSTEM open last, SYSTEM since HOME left it: 2026-10-29)
+tap GLO
+wait 100
+turn SELECT -30
+wait 50
+turn SELECT 3                                           # (General after BT MIDI and BT AUDIO since 2026-11-03)
+wait 50
+turn K2 2
+wait 100
+expect gv2 2
+expect oc 4
+cells
+tap HOME
+wait 100
+expect scr 0
+peakreset
+key 7 down
+wait 500
+expect voices >0
+expect peak_db_min -60
+key 7 up
+wait 1500
+expect voices 0
+jack out
+wait 300
+expect hp 0
+expect oc 1
+# (GLO opens the one of GLOBAL / SYSTEM open last, SYSTEM since HOME left it: 2026-10-29)
+tap GLO
+wait 100
+turn SELECT -30
+wait 50
+turn SELECT 3                                           # (General after BT MIDI and BT AUDIO since 2026-11-03)
+wait 50
+turn K2 -2
+wait 50
+expect gv2 0
+expect oc 1
+tap HOME
+wait 100
+# LANE_FX: DR selected, a lane's black key held: the page of ROLL, CHANCE, FILL, NUDGE; ROLL and FILL moved, the next row's VRAND
+turn ALGO 3
+wait 100
+key 1 down
+wait 700
+expect scr 10
+expect gv1 0
+turn K1 2
+wait 50
+expect gv1 2
+turn K3 1
+wait 50
+expect gv3 1
+turn SELECT 1
+wait 50
+turn K1 20
+wait 50
+expect gv1 40
+key 1 up
+wait 300
+expect scr 0
+# EX_NOTEGEN: STEP > GEN's TYPE reaches WALK and UPDN; GEN OUT on: the generator plays the track with the transport
+turn ALGO -3
+wait 100
+tap SEQ
+wait 100
+turn SELECT 3
+wait 100
+cells
+expect row 2
+expect gv1 0
+turn K1 4
+wait 100
+expect gv1 4
+cells
+turn K1 1
+wait 100
+expect gv1 5
+turn K1 -1
+wait 100
+turn SELECT 1
+wait 100
+turn K1 1
+wait 100
+expect gv1 1
+cells
+tap PLAY
+wait 1500
+expect playing 1
+expect voices >0
+tap PLAY
+wait 1500
+expect playing 0
+# ---- BT_PROJ: the projects' commands over Bluetooth MIDI (on the host's stand-ins, as the bt run): BK_LIST (43) and PJ_OP (110) answered to the
+# computer's link (without BT_PROJ only the mirror's 106, INFO, 108, 109 and 111 are)
+tap HOME
+wait 100
+# (GLO opens the one of GLOBAL / SYSTEM open last: SYSTEM, which the first block left by HOME; 2026-10-29)
+tap GLO
+wait 100
+spin SELECT -30
+wait 100
+spin SELECT 1                                           # (BT MIDI right after INFO since 2026-11-03: Bluetooth and Wi-Fi first)
+wait 100
+spin K1 1
+wait 1500
+expect ble 2
+ble connect
+wait 100
+out
+blesx F07D464C2B0400F7
+wait 400
+expect_out BLE F0 7D 46
+out
+blesx F07D464C6E00F7
+wait 400
+expect_out BLE F0 7D 46

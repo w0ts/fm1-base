@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The USB serial console (optimist/run.sh: profiles/dev-console.config with the host's Bluetooth stand-ins, USB_CONSOLE on fm1-base's plat_console_*; ui/
+# opt_console.h): the console presented from the first start (USB_CONSOLE; no device switch since 2026-11-05), then Optimist's command
+# line: run control, status, params, and the commands that read the hardware, on what fm1-base's platform gives (dbg, cpu1,
+# keys, keylog, flr, tabbench). The host types the line ("console LINE") and keeps the reply for expect_console
+wait 800
+# the console comes with the build (USB_CONSOLE), presented from the first start (no device switch since 2026-11-05)
+console help
+expect_console dbg
+expect_console keylog
+expect_console tabbench
+console ?
+expect_console flr OFFSET
+# status and params (the command line's own): the clock, the load, the voices; the selected track's values
+console status
+expect_console optimist
+expect_console uptime_ms
+expect_console cpu_pct
+expect_console voices
+console params
+expect_console 0=
+console nonsense
+expect_console ? (help)
+# run control: the transport starts and stops from the line
+console play
+expect_console play requested
+wait 300
+expect playing 1
+console stop
+wait 300
+expect playing 0
+# dbg: the platform's counters. A note in over USB counts, the TRS and Bluetooth ports have none
+midi 90 3C 64
+wait 100
+midi 80 3C 00
+wait 100
+console dbg
+expect_console late_renders 0
+expect_console midi_usb in 2
+expect_console midi_trs in 0
+expect_console usb_session
+expect_console battery_raw
+# cpu1: the second core's state through plat_cpu2_*
+console cpu1
+expect_console cpu1_on 1
+expect_console cpu1_barred 0
+expect_console core 0
+# keys and keylog: a key held shows in the held masks (key 7 = bit 7), its edges in the log (id 14 + 7)
+key 7 down
+wait 100
+console keys
+expect_console keys 0x00000080
+expect_console master 2048
+key 7 up
+wait 100
+console keys
+expect_console keys 0x00000000
+console keylog
+expect_console P 21
+expect_console R 21
+# flr reads the flash as plat_data has it: the data window's first sector (its header "SLG2"); outside the windows is refused
+console flr 0xA0000 16
+expect_console 0A0000: 53 4C 47 32
+console flr 0x7FFFFF 16
+expect_console outside the data windows
+console flr
+expect_console usage
+# tabbench: the three tables' read speeds and the checksum that keeps every read
+console tabbench
+expect_console SINE
+expect_console main RAM
+expect_console checksum
+# btlog: fm1-base's Bluetooth log (the host's Bluetooth stand-ins: OPT_HOST_BT=1; none has run: no lines yet)
+console btlog 4
+expect_console lines
+# reboot: a restart through plat_restart
+console reboot
+expect_console rebooting

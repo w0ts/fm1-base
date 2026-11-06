@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial's SD card mode with no card (run.sh's sd run, the same build as tests/sd/card.txt, FM1B_SD unset): the card
+# looked for and not found (said once), the factory presets there (the trial keeps their tables: core/opt_core.c
+# PRESETS_CARD 0), a key plays, PROJECT's PROJECT row the flash's one project (LAYOUT 1: the others live on a card),
+# saved there; the card recorder's gesture says there is no card.
+#   optimist/build/host/optimist_host optimist/tests/sd/nocard.txt OUT
+wait 600
+expect sd_present 0
+msg NO SD CARD
+shot nocard-boot.png
+peakreset
+key 7 down
+wait 400
+expect voices >0
+expect peak_db_min -40
+key 7 up
+wait 300
+# the flash's project: PROJECT, ACTION SAVE, key 1, SAVE (yes), the NAME page's SAVE
+tap SAVE
+wait 300
+expect scr 3
+expect row 0
+turn K2 1
+wait 100
+key w0 down
+wait 50
+key w0 up
+wait 300
+tap SAVE
+wait 300
+tap SAVE
+wait 600
+msg SAVED
+shot nocard-saved.png
+tap HOME
+wait 300
+press REC
+wait 100
+release REC
+wait 100
+press REC
+wait 700
+release REC
+wait 200
+msg NO SD CARD
+expect sd_writes 0

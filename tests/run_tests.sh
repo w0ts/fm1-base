@@ -193,9 +193,12 @@ run headphones template/build/host/template_host tests/hp.txt template/build/hos
 if sh tests/bt/run.sh; then :; else FAIL=1; fi
 # the template as an .rfm1 (tools/build.py --rfm1: the host simulator in WebAssembly for host apps), driven as a host
 # app drives it: the descriptor, the screen, a chord, the reader over SysEx, the flash image booted from again
+# the companion services (device/companion.c) in the host simulator, through tools/fm1_companion.py: tests/companion_app
+run companion "$PY" tests/companion_test.py $OUT/companion
 if command -v emcc >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
     rm -f template/build/rfm1/*.rfm1
     run rfm1 sh -c "$PY tools/build.py template --rfm1 && node tests/rfm1_test.mjs template/build/rfm1/*.rfm1"
+    run companion-web sh -c "$PY tools/build.py tests/companion_app --web && node tests/companion_web_test.mjs tests/companion_app/build/emu"
 else
     echo "  skip rfm1 (no emcc or node)"
 fi

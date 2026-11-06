@@ -487,7 +487,54 @@ int plat_store_room(void);
  * The objects are the app's (app.h): an enum that includes OBJ_PANEL (the panel calibration, the platform's) and
  * ends with OBJ_NOBJ, and APP_STORE_MAP, each object's flash offset: two 4 KiB sectors (A/B) from there, inside the
  * data area (0x97000..0xDFFFF) or Felucca's settings sector pair at 0xFC000. An object's number is written in its
- * record, so an app keeps its numbering from one release to the next. */
+ * record, so an app keeps its numbering from one release to the next. app.h `#define APP_STORE_BOUNCE 1`: the store
+ * takes 256 bytes of RAM instead of PLAT_STORE_MAX (a load and a save go page by page; the same flash, the same
+ * results, a load reads its object twice: the CRC first). Not with fm1.toml backup = true. */
+
+/* The companion's files (fm1.toml companion = true, app.h APP_FILES: docs/COMPANION.md): what app_file says of file i.
+ * kind PLAT_FK_*, flags PLAT_FF_* (PLAYING: written and deleted while the app is busy too); size its bytes now (0:
+ * empty), room the most it takes; name unique among the app's files (31 characters at most) */
+enum { PLAT_FK_OTHER, PLAT_FK_PROJECT, PLAT_FK_PRESET, PLAT_FK_SAMPLE, PLAT_FK_BANK, PLAT_FK_PATTERN, PLAT_FK_SETTINGS,
+       PLAT_FK_TEXT, PLAT_FK_LOG };
+#define PLAT_FF_READ 1u
+#define PLAT_FF_WRITE 2u
+#define PLAT_FF_DELETE 4u
+#define PLAT_FF_PLAYING 8u
+typedef struct {
+    const char *name;
+    uint8_t kind, flags;
+    uint32_t size, room;
+} plat_file_info_t;
+/* A file kept in the data area (plat_data's windows) as two copies, A at a and B at b, n bytes each (whole 4 KiB
+ * sectors): the current one is the newer whose head (its first PLAT_FILE_HEAD bytes: the size, the data's CRC-32, a
+ * sequence number) is whole; a write goes to the other, its sectors erased as the data reaches them, its head written
+ * last after the data was read back and checked: a power cut leaves the old one current. room n - PLAT_FILE_HEAD. One
+ * write at a time (begin .. commit); main loop only (plat_data_*'s rules: the sound stops for each erase) */
+#define PLAT_FILE_HEAD 32u
+typedef struct {
+    uint32_t a, b, n;
+} plat_file_t;
+int plat_file_size(const plat_file_t *f);                      /* the current one's bytes; -1 none */
+const uint8_t *plat_file_data(const plat_file_t *f);           /* read in place; 0 none */
+int plat_file_read(const plat_file_t *f, uint32_t off, void *dst, uint32_t n);   /* 0 = read */
+int plat_file_begin(const plat_file_t *f, uint32_t size);     /* a new one of size bytes: 0 = ready */
+int plat_file_write(const plat_file_t *f, uint32_t off, const void *src, uint32_t n);   /* in order, src in RAM */
+int plat_file_commit(const plat_file_t *f, uint32_t size, uint32_t crc);   /* checked, current: 0 */
+int plat_file_delete(const plat_file_t *f);                    /* 0 = none now */
+
+/* The companion's parameters (fm1.toml companion = true, app.h APP_PARAMS: docs/COMPANION.md): what app_param says of
+ * parameter i. id the app's own (kept from one release to the next); type PLAT_PT_*: a number min .. max, or one of
+ * labels (max - min + 1 of them, for min .. max); unit (0: none) and group (an index into app_param_group's) for a page;
+ * flags PLAT_PA_READONLY: shown, never set */
+enum { PLAT_PT_NUMBER, PLAT_PT_ENUM };
+#define PLAT_PA_READONLY 1u
+typedef struct {
+    uint16_t id;
+    uint8_t type, group, flags;
+    int32_t min, max, def;
+    const char *name, *unit;
+    const char *const *labels;
+} plat_param_t;
 
 /* audio load in % of the render budget, and xruns since boot (device: from the ISR) */
 uint32_t plat_cpu_pct(void);
@@ -661,4 +708,18 @@ int app_stats_quiet(void);
  *                                     app_backup_restored then: the app's frame starts again from app_ui_init)
  * and these: int app_backup_playing(void) (1: no restore now, STOP FIRST), void app_backup_flush(void) (what is not
  * saved yet, saved: a backup starts), void app_backup_hold(int on) (no saving while a backup streams),
- * void app_backup_restored(void) (everything from the flash again) */
+ * void app_backup_restored(void) (everything from the flash again)
+ *
+ * Companion services over USB (fm1.toml companion = true: FM1B_COMPANION 1, device/companion.c; docs/COMPANION.md,
+ * tools/fm1_companion.py): a computer asks what the firmware is and has (the platform services built, APP_NAME,
+ * APP_VERSION, the backup's magic, version and file extension). The app may add its own tags for its own pages: APP_COMPANION_EXTRAS "key=value;...".
+ * Its files (APP_FILES): int app_file(i, plat_file_info_t *f) (file i: 0 = there, -1 past the last), app_file_read(i,
+ * off, dst, n), app_file_begin(i, size), app_file_write(i, off, src, n) (in order), app_file_commit(i, size, crc) (all
+ * of it came, its CRC-32 checked: make it current), app_file_delete(i) (0 = done each), app_file_busy() (1: no write or
+ * delete now, playing). The name app_file gives stays valid until its next call. APP_FILE_COUNT (optional): uint32_t
+ * app_file_count(void), how many files there are, for an app whose app_file is costly (each request asks it once
+ * then, not once a file). plat_file_* (above) keeps a file in the data area for an app that has nowhere else.
+ * Its parameters (APP_PARAMS; APP_PARAM_MAX the most, 64 by default): int app_param(i, plat_param_t *p) (parameter i: 0
+ * = there, -1 past the last), const char *app_param_group(g) (0 past the last), int32_t app_param_get(i),
+ * int32_t app_param_set(i, v) (v within min .. max; -> the value now). Main loop: a value the render reads is shared
+ * as the app's own UI shares it */

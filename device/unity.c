@@ -133,6 +133,9 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #ifndef FM1B_CPU2
 #define FM1B_CPU2 0
 #endif
+#ifndef FM1B_COMPANION
+#define FM1B_COMPANION 0
+#endif
 #define FELUCCA_MIRROR FM1B_MIRROR /* usb.c's ring for mirror.c's frames */
 #ifndef FM1B_USB_HOST
 #define FM1B_USB_HOST 0
@@ -414,6 +417,15 @@ static int bu_room(void)                            /* the SysEx ring empty: a f
 static int bu_send(const uint8_t *p, uint32_t n) { return ota_wire_send(p, n); }
 static void bu_flush(void) { app_backup_flush(); }
 static void bu_hold(int on) { app_backup_hold(on); }
+#endif
+#if FM1B_COMPANION
+#include "companion.c"            /* the companion services over USB (docs/COMPANION.md: web/companion, tools/fm1_companion.py) */
+static int cp_send(const uint8_t *p, uint32_t n) { return usb.config ? ota_wire_send(p, n) : -1; }
+static int cp_room(uint32_t n)                      /* the SysEx ring takes it now: nobody else holds it, no backup */
+{
+    return usb.config && !usb.suspended && !sx_busy && !backup_streaming() && SXQ - (so_w - so_r) >= (n + 2u) / 3u;
+}
+static uint32_t cp_link(void) { return usb.config ? usb.resets + 1u : 0u; }
 #endif
 #ifdef APP_TOUCH
 #include "touch.c"

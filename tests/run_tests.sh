@@ -148,9 +148,29 @@ if [ -f "$PKG" ]; then
     run update-loader sh -c "head -c 60000 template/build/template.bin > $OUT/old_app.bin && \
         $PY tools/fm1pkg_make.py $OUT/old_app.bin template/build/loader/ota.bin $OUT/old.fwsc >/dev/null && \
         $CC -w -o $OUT/ldr_test tests/ldr_test.c && $OUT/ldr_test $OUT/old.fwsc $PKG"
+    # the fast install (bsp/loader/ldr_core.c ldr_fast: the host's table, the changed sectors only, 4 KiB reads, the erase
+    # while one comes in, resume)
+    run update-loader-fast sh -c "$CC -w -DLDR_FAST_CHUNK=4096u -DOTA_FRAME_MAX=4200u -o $OUT/ldr_test_fast tests/ldr_test.c && \
+        $OUT/ldr_test_fast $OUT/old.fwsc $PKG"
+    # a bigger app slot (tools/build.py app_end): the template's app in a package with the slot to 0xCE000, installed
+    # over the normal one (the loader built with that slot clears [0xCE000, 0xDA000) first) and back (the old code above
+    # 0x93000 erased)
+    run update-loader-slot sh -c "$PY tools/fm1pkg_make.py template/build/template.bin template/build/loader/ota.bin \
+        $OUT/big.fwsc --app-end 0xCE000 >/dev/null && \
+        $CC -w -DFL_APP_END=0xCE000u -DLDR_SLOT_SWITCH=1 -DLDR_CLEAR_END=0xDA000u -o $OUT/ldr_slot_up tests/ldr_slot_test.c && \
+        $CC -w -DLDR_SLOT_SWITCH=1 -o $OUT/ldr_slot_down tests/ldr_slot_test.c && \
+        $OUT/ldr_slot_up $PKG $OUT/big.fwsc 0x93000 && $OUT/ldr_slot_down $OUT/big.fwsc $PKG 0xCE000"
 else
     echo "  skip update path (no $PKG: tools/build.py template)"
 fi
+# an app with steps (fm1.toml app_steps, tools/build.py ldr_step_flags; an app's steps here: N, S0, the release's
+# L1 and the classic L1 an FM-1 may have had): each step's loader against the switch matrix, every installed end
+STEPS='-DLDR_STEPS(X)=X(0x93000u,0,0x93000u) X(0xB5000u,3,0xD8000u) X(0xCE000u,1,0xDA000u) X(0xD0000u,1,0xDA000u)'
+for S in 0x93000:0:0x93000 0xB5000:3:0xD8000 0xCE000:1:0xDA000; do
+    E=${S%%:*}; R=${S##*:}; L=${S#*:}; L=${L%%:*}
+    run update-loader-steps-$E sh -c "$CC -DFL_APP_END=${E}u -DLDR_SLOT_SWITCH=1 '$STEPS' -DLDR_STEP=$L -DLDR_RELOC_HI=${R}u \
+        -DLDR_CLEAR_TOP=0xDA000u -o $OUT/ldr_steps_$E tests/ldr_slot_test.c && $OUT/ldr_steps_$E --steps"
+done
 run host-build "$PY" tools/build.py template --host
 # the screen mirrored over USB (device/mirror.c; the fonts: the template's build/gen): its pixel code on drawn bands,
 # rows not sent twice, drops and redraws, the input reports, off, the remote; then the viewer's own decoder

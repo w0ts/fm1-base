@@ -15,15 +15,17 @@
 The SDK files come from the JieLi AC79 SDK (AC79_SDK, or --sdk).
 All integrity checks in the format are CRC16 (poly 0x1021, init 0).
 
-  fm1pkg_make.py APP.bin OTA.bin OUT.fwsc [--product FM-1_9XY] [--sdk DIR]
+  fm1pkg_make.py APP.bin OTA.bin OUT.fwsc [--product FM-1_9XY] [--sdk DIR] [--app-end 0xCE000]
 """
 import argparse
 import os
 import struct
 from pathlib import Path
 
-APP_SLOT = 0x8DFBC
+APP_SLOT = 0x8DFBC                  # app.bin's room in the normal app area [0x4000, FLASH_SIZE): app_slot(FLASH_SIZE)
 FLASH_SIZE = 0x93000
+APP_HEAD = 0x120                    # the app area's directory before app.bin
+APP_TAIL = 0xF24                    # after it: the SDK's cfg_tool.bin and the cfg directory
 KEY = 0x980F
 # flash header: JieLi SDK defaults (burner_size 544, VID "0.01", flash_size 0xFF000,
 # fs_ver 0x10, PID "AC791N_STORY"), plain, without its CRC
@@ -99,12 +101,22 @@ def sdk_file(rel):
         raise SystemExit(f"fm1pkg_make: {path}: {e.strerror}. Set AC79_SDK to a JieLi AC79 SDK checkout.")
 
 
-def flash_image(app, key):
+def app_slot(app_hi):
+    """app.bin's room in the app area [0x4000, app_hi) (tools/build.py app_end: a bigger slot)"""
+    return app_hi - 0x4000 - APP_HEAD - APP_TAIL
+
+
+assert app_slot(FLASH_SIZE) == APP_SLOT
+
+
+def flash_image(app, key, app_hi=FLASH_SIZE):
+    """flash.bin [0, app_hi): the head and the app area (app_hi: 0x93000, or a bigger slot's end)"""
+    slot = app_slot(app_hi)
     spl = sdk_file("uboot.boot")                         # SDK SPL, BANKCB-encoded as in the SDK
     cfg_tool = sdk_file("cfg_tool.bin")
     eq = sdk_file("cfg/eq_cfg_hw.bin")
     isd = key_blob(key) + b"[FELUCCA]\r\n"
-    f = bytearray(b"\xFF" * FLASH_SIZE)
+    f = bytearray(b"\xFF" * app_hi)
     # ---- head
     spl_off = 0xA0
     isd_off = spl_off + len(spl)
@@ -121,18 +133,19 @@ def flash_image(app, key):
         enc(head, o, 32)
     f[0:len(head)] = head
     # ---- app area (plain first, then SFC)
-    if len(app) > APP_SLOT:
-        raise SystemExit(f"app is {len(app)} B, the slot is {APP_SLOT} B")
-    app = app + b"\xFF" * (APP_SLOT - len(app))
-    blk = 0x120 + APP_SLOT + len(cfg_tool)              # app_area_head block size
+    if len(app) > slot:
+        raise SystemExit(f"app is {len(app)} B, the slot is {slot} B")
+    app = app + b"\xFF" * (slot - len(app))
+    blk = 0x120 + slot + len(cfg_tool)                  # app_area_head block size
     area = bytearray(b"\xFF" * blk)
-    area[0x120:0x120 + APP_SLOT] = app
-    area[0x120 + APP_SLOT:blk] = cfg_tool
-    ents = [entry(crc16(app), 0x120, APP_SLOT, 0x82, 0xFF, 0, "app.bin"),
-            entry(crc16(cfg_tool), 0x120 + APP_SLOT, len(cfg_tool), 0x82, 0xFF, 0, "cfg_tool.bin"),
-            # region descriptors; the bytes after the names are SDK packer fields (VM size, "CODE", "AUTO")
-            entry(0xFFFF, 0x93000, 352256, 0x12, 0x80, 0, bytes.fromhex("564d00ffffffffffffffffff00800000")),
-            entry(0xFFFF, 0, FLASH_SIZE, 0x92, 0x82, 0, bytes.fromhex("5052435400ffffffffffffff434f4445")),
+    area[0x120:0x120 + slot] = app
+    area[0x120 + slot:blk] = cfg_tool
+    ents = [entry(crc16(app), 0x120, slot, 0x82, 0xFF, 0, "app.bin"),
+            entry(crc16(cfg_tool), 0x120 + slot, len(cfg_tool), 0x82, 0xFF, 0, "cfg_tool.bin"),
+            # region descriptors; the bytes after the names are SDK packer fields (VM size, "CODE", "AUTO"): the VM
+            # region from the app area's end to the SDK's BTIF (352,256 B after the normal 0x93000), the code up to it
+            entry(0xFFFF, app_hi, 0xE9000 - app_hi, 0x12, 0x80, 0, bytes.fromhex("564d00ffffffffffffffffff00800000")),
+            entry(0xFFFF, 0, app_hi, 0x92, 0x82, 0, bytes.fromhex("5052435400ffffffffffffff434f4445")),
             entry(0xFFFF, 0xE9000, 0x1000, 0x92, 0x80, 0, bytes.fromhex("4254494600ffffffffffffff4155544f")),
             entry(0xFFFF, 0xEA000, 0x12000, 0x92, 0x81, 1, "USR")]
     area[32:32 + len(b"".join(ents))] = b"".join(ents)
@@ -142,6 +155,8 @@ def flash_image(app, key):
     cfg_body = eq_e + eq
     cfg = entry(crc16(cfg_body), 0x20, 0x20 + len(cfg_body), 0x83, 0xFF, 1, "cfg") + cfg_body
     region = bytearray(area + cfg)
+    if 0x4000 + len(region) > app_hi:                  # (the update loader writes the app area only)
+        raise SystemExit(f"app area ends at {0x4000 + len(region):#x}, past {app_hi:#x}")
     sfc(region, 0, len(region), 0, key)
     f[0x4000:0x4000 + len(region)] = region
     return bytes(f)
@@ -195,10 +210,12 @@ def main():
     ap.add_argument("--product", default="FM-1_900")
     ap.add_argument("--key", type=lambda s: int(s, 0), default=KEY)
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
+    ap.add_argument("--app-end", type=lambda s: int(s, 0), default=FLASH_SIZE,
+                    help="the app area's end (a bigger slot: tools/build.py app_end; default 0x93000)")
     a = ap.parse_args()
     global SDK
     SDK = a.sdk
-    pkg = ufw(flash_image(a.app.read_bytes(), a.key), a.ota.read_bytes(), a.product)
+    pkg = ufw(flash_image(a.app.read_bytes(), a.key, a.app_end), a.ota.read_bytes(), a.product)
     a.out.write_bytes(pkg)
     print(f"package {a.out}: {len(pkg)} B, identity {a.product}, chip key {a.key:#06x}")
 

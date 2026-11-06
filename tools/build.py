@@ -103,6 +103,21 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              synth, directly or behind one powered hub (the FM-1 gives no power). Boot is a device
   conf_gen = "x.py args"     a script of the app (cwd APP_DIR) whose output, fm1.toml lines (ble = false), replaces the
                              file's own before the build: a setting the app's configuration chooses
+  app_end = 0xCE000          a bigger app slot (FM1B_APP_END; FM1B_APP_END=0x... in the environment for one build): the
+                             app area [0x4000, app_end) instead of [0x4000, 0x93000), on a 4 KiB boundary up to 0xE0000;
+                             the code may then reach past the old end, plat.h's data window starts at app_end
+                             (PLAT_DATA_LO; XDATA0 goes) and the update loader (felucca-bsp's, FL_APP_END) writes the
+                             bigger area. Any app_end (0x93000 too) builds the loader that compares slots before an
+                             install (LDR_SLOT_SWITCH): after a bigger app, the old code above app_end is erased
+  app_clear_end = 0xDA000    with app_end: what an install over an app with a smaller slot erases first, [app_end,
+                             app_clear_end) (the data the other app kept where this one keeps its own)
+  app_steps = [[0x93000, 0, 0x93000], [0xB5000, 3, 0xD8000], [0xCE000, 1, 0xDA000]]
+                             with app_end: every end the app may have been installed with, each [end, step, R] (R: the
+                             top of what that step keeps elsewhere than the first, normal one); the loader then uses one
+                             rule for every pair instead of app_clear_end: another step's app before, [app_end, max(R_old,
+                             R)) erased; another build of its own step, only its longer code's tail; an end not listed,
+                             [app_end, app_clear_top) (felucca-bsp ldr_core.c LDR_STEPS)
+  app_clear_top = 0xDA000    with app_steps: no switch clears at or past it
   mirror = true              the screen and panel mirrored over USB (FM1B_MIRROR: device/mirror.c; web/mirror/,
                              tools/fm1_mirror.py), the panel played from the host; FM1B_MIRROR=1 in the environment
                              builds it in whatever fm1.toml says (an app's demo build), FM1B_POOL_SPARE=N the
@@ -316,7 +331,10 @@ def parse_conf(text, path):
         if not m:
             raise SystemExit(f"{path}:{no}: not key = value")
         v = m.group(2)
-        if v.startswith("["):
+        if v.startswith("[["):                       # a list of number lists (app_steps)
+            conf[m.group(1)] = [[int(x, 0) for x in row.split(",") if x.strip()]
+                                for row in re.findall(r"\[([^\[\]]*)\]", v[1:-1])]
+        elif v.startswith("["):
             conf[m.group(1)] = re.findall(r'"([^"]*)"', v)
         elif v.startswith('"'):
             conf[m.group(1)] = v.strip('"')
@@ -501,6 +519,10 @@ def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = BSP / "loader"
     flags = [*CFLAGS, *inc(BSP / "chip", BSP / "boards" / "fm1")]
+    if app_end():                 # the app's slot: the loader writes it, and compares it with the installed app's
+        flags += [f"-DFL_APP_END={app_end():#x}u", "-DLDR_SLOT_SWITCH=1",
+                  *([f"-DLDR_CLEAR_END={CONF['app_clear_end']:#x}u"] if CONF.get("app_clear_end") else []),
+                  *ldr_step_flags()]
     tc_all(("cc", "-c", src / "crt0_ldr.S", "-o", LDR / "crt0_ldr.o"),
            ("cc", *flags, "-c", src / "loader.c", "-o", LDR / "loader.o"))
     elf = LDR / "loader.elf"
@@ -918,6 +940,16 @@ def build_app():
            f"--plugin-opt=mcpu={CPU}", "--plugin-opt=-pi32v2-large-program=true"] if jieli else []
     global LAYOUT
     ld = SRC / "device" / ("app_wifi.ld" if WIFI else "app_packed.ld" if ram_packed() else "app.ld")
+    if app_slot() != APP_SLOT:    # a bigger slot (app_end): the script with XIP that long
+        text = ld.read_text()
+        room = 0x10000 if "_app_xip_end" in text else 0   # (app.ld: the slot and 64 KB, the image before boot_pack packs it)
+        text, n = re.subn(r"(XIP\s*\(rx\)\s*:\s*ORIGIN = 0x02000120, LENGTH = )0x[0-9A-Fa-f]+",
+                          rf"\g<1>{app_slot() + room:#X}".replace("0X", "0x"), text)
+        if n != 1:
+            raise SystemExit(f"build: {ld.name}: no XIP line to give the slot")
+        text = text.replace("ORIGIN(XIP) + 0x8DFBC;", f"ORIGIN(XIP) + {app_slot():#x};")
+        ld = OUT / ld.name
+        ld.write_text(text)
     if not WIFI and stacks() != STACKS:          # (other stack sizes: the SRAM's end and the bands moved)
         ld = stack_script(ld)
     LAYOUT = memory_regions(ld.read_text())
@@ -1146,8 +1178,8 @@ def check(img, syms, dis, rt):
             errors.append(f"--no-ble build links Bluetooth code: {bt}")
         else:
             notes.append("--no-ble: no Bluetooth code linked")
-    if len(img) > APP_SLOT:
-        errors.append(f"image {len(img)} B exceeds the app slot")
+    if len(img) > app_slot():
+        errors.append(f"image {len(img)} B exceeds the app slot ({app_slot()} B)")
     # the FPU is single precision; a soft-double routine in the image means a double crept in
     soft = sorted(set(re.findall(r"\s(__(?:add|sub|mul|div|neg|cmp|eq|ne|lt|le|gt|ge|un|extendsf|truncdf|fixdf|fixunsdf|floatsidf|floatunsidf|floatdidf)\w*df\w*)$", syms, re.M)))
     if soft and jieli:
@@ -1181,14 +1213,14 @@ def check(img, syms, dis, rt):
         if size - used < spare:                   # keep some of the SRAM spare
             errors.append(f"SRAM headroom {size - used} B < {spare} B")
         if BOOT_PACKED:                           # the boot decoder runs from the flash alone (tools/boot_pack.py)
-            errors += boot_pack.check_decoder(syms, dis, APP_XIP, APP_XIP + APP_SLOT)
+            errors += boot_pack.check_decoder(syms, dis, APP_XIP, APP_XIP + app_slot())
             notes.append(f"boot_pack: .ram_text + .data {BOOT_PACKED[0]} B stored as {BOOT_PACKED[1]} B (LZMA, unpacked at boot)")
         return errors, notes
     (_, rt_max), (_, ram), (_, pool_max) = LAYOUT["RAMTEXT"], LAYOUT["RAM"], LAYOUT["POOL"]   # (app.ld, app_wifi.ld)
     notes.append(f"image {len(img)} B; RAM code .ram_text {rt} B of {rt_max}; RAM .data+.bss {bss} B of {ram}; "
                  f"pool {pool} B of {pool_max}")
     if BOOT_PACKED:                               # the boot decoder runs from the flash alone (tools/boot_pack.py)
-        errors += boot_pack.check_decoder(syms, dis, APP_XIP, APP_XIP + APP_SLOT)
+        errors += boot_pack.check_decoder(syms, dis, APP_XIP, APP_XIP + app_slot())
         notes.append(f"boot_pack: .ram_text + .data {BOOT_PACKED[0]} B stored as {BOOT_PACKED[1]} B (LZMA, unpacked at boot)")
     if bss > ram:
         errors.append("RAM region overflow")
@@ -1256,7 +1288,8 @@ def o2_files():
 def o2_objects(cc, base_flags, out):
     """the o2 units compiled apart (each with its own flags: o2_cflags, o2_include, its directory) for the host or the
     browser; their objects"""
-    extra = [*CONF.get("o2_cflags", []), *[a for h in CONF.get("o2_include", []) for a in ("-include", str(APP / h))]]
+    extra = [*CONF.get("o2_cflags", []), *[a for h in CONF.get("o2_include", []) for a in ("-include", str(APP / h))],
+             *slot_flags()]
     out.mkdir(parents=True, exist_ok=True)
     jobs = [(f, out / ("_".join(f.relative_to(APP).with_suffix("").parts) + ".o")) for f in o2_files()]
 
@@ -1306,6 +1339,72 @@ def build_id():
     return int.from_bytes(h.digest()[:4], "little")
 
 
+APP_END = 0x93000                   # the normal app area's end (felucca-bsp's FL_APP_END)
+
+
+def app_end():
+    """the app area's end: fm1.toml app_end, or FM1B_APP_END in the environment; None when neither sets it (0x93000)"""
+    v = os.environ.get("FM1B_APP_END") or CONF.get("app_end")
+    if v in (None, ""):
+        return None
+    end = int(v, 0) if isinstance(v, str) else int(v)
+    if end % 0x1000 or not APP_END <= end <= 0xE0000:
+        raise SystemExit(f"app_end {end:#x}: a 4 KiB boundary from {APP_END:#x} up to 0xe0000")
+    clear = CONF.get("app_clear_end")
+    if clear is not None and (clear % 0x1000 or not end < clear <= 0xE0000):
+        raise SystemExit(f"app_clear_end {clear:#x}: a 4 KiB boundary above app_end ({end:#x}), up to 0xe0000")
+    return end
+
+
+def app_steps():
+    """fm1.toml app_steps: [[end, step, R], ...] every app end the app may have been installed with (its own builds and
+    others' of the same app), each its step (a number the app chooses) and R (the top of what that step keeps elsewhere
+    than the first, normal, step); [] without. app_end must be one of the ends; app_clear_top (no switch clears past
+    it) goes with it"""
+    steps = CONF.get("app_steps") or []
+    if not steps:
+        return []
+    out = []
+    for row in steps:
+        if len(row) != 3:
+            raise SystemExit(f"app_steps: {row}: [end, step, R]")
+        end, step, reloc = (int(v, 0) if isinstance(v, str) else int(v) for v in row)
+        if end % 0x1000 or reloc % 0x1000 or not APP_END <= end <= reloc <= 0xE0000:
+            raise SystemExit(f"app_steps: [{end:#x}, {step}, {reloc:#x}]: 4 KiB boundaries, {APP_END:#x} <= end <= R <= 0xe0000")
+        out.append((end, step, reloc))
+    if len({e for e, _, _ in out}) != len(out):
+        raise SystemExit("app_steps: one end twice")
+    top = CONF.get("app_clear_top")
+    if top is None or top % 0x1000 or not max(r for _, _, r in out) <= top <= 0xE0000:
+        raise SystemExit("app_steps needs app_clear_top: a 4 KiB boundary at or above every step's R, up to 0xe0000")
+    if (app_end() or APP_END) not in {e for e, _, _ in out}:
+        raise SystemExit(f"app_end {app_end() or APP_END:#x} is none of app_steps' ends")
+    return out
+
+
+def ldr_step_flags():
+    """the update loader's steps (felucca-bsp ldr_core.c LDR_STEPS): the app's one switch rule for every pair"""
+    steps = app_steps()
+    if not steps:
+        return []
+    end = app_end() or APP_END
+    step, reloc = next((s, r) for e, s, r in steps if e == end)
+    lst = " ".join(f"X({e:#x}u,{s},{r:#x}u)" for e, s, r in steps)
+    return [f"-DLDR_STEPS(X)={lst}", f"-DLDR_STEP={step}", f"-DLDR_RELOC_HI={reloc:#x}u",
+            f"-DLDR_CLEAR_TOP={CONF['app_clear_top']:#x}u"]
+
+
+def app_slot():
+    """app.bin's room: the app area less its head and tail (fm1pkg_make.py)"""
+    return fm1pkg_make.app_slot(app_end() or APP_END)
+
+
+def slot_flags():
+    """the app area's end for every unit (plat.h PLAT_DATA_LO, felucca-bsp's FL_APP_END): only when an app sets it"""
+    end = app_end()
+    return [f"-DFM1B_APP_END={end:#x}u", f"-DFL_APP_END={end:#x}u"] if end and end != APP_END else []
+
+
 def opt_flags():
     """the optional parts an fm1.toml turns on that need no SDK: the same on the device, the host and the web"""
     flags = [f"-D{flag}=1" for key, flag in (("mirror", "FM1B_MIRROR"), ("backup", "FM1B_BACKUP"), ("cpu2", "FM1B_CPU2"), ("usb_host", "FM1B_USB_HOST"), ("msc", "FM1B_MSC"),
@@ -1316,7 +1415,7 @@ def opt_flags():
         flags.append(f"-DFM1B_CACHE_RAM={cache_ram_ways()}")   # (the host and the web: plat_cache_ram's stand-in)
     if usb_audio_channels() > 2:
         flags.append(f"-DFM1B_UAC_CH={usb_audio_channels()}")  # (the host and the web: plat_usb_ch's stand-in)
-    return flags
+    return flags + slot_flags()
 
 
 def usb_audio_channels():
@@ -1697,7 +1796,7 @@ def main():
     parts = [(label, have[f]) for f, label in firmware_json.FEATURES]
     print("parts    " + ", ".join(n for n, x in parts if x) + "  (not built in: " +
           (", ".join(n for n, x in parts if not x) or "none") + ")")
-    pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
+    pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY, app_end() or APP_END), ota, PRODUCT)
     (OUT / name).write_bytes(pkg)
     print(f"app      {OUT / (NAME + '.bin')}  {len(img)} B")
     if CONF.get("resources"):                 # the resource region beside the package: the installer writes it after

@@ -27,7 +27,10 @@ export function usualName(name, names = PORT_NAMES) {
   return names.some((p) => n.includes(p));
 }
 
-export const livePorts = (map) => [...map.values()].filter((p) => p.state !== "disconnected");
+// never a Bluetooth MIDI port: an FM-1 paired over Bluetooth shows one beside its USB port, an install or a backup over
+// it is not offered, and it answers nothing asked of it
+export const IS_BLUETOOTH = (name) => /bluetooth/i.test(name || "");
+export const livePorts = (map) => [...map.values()].filter((p) => p.state !== "disconnected" && !IS_BLUETOOTH(p.name));
 
 // an input's output: the one with its name; else the only one with its name but for a number at the end (Windows
 // numbers each port); else the only output there is. null: none

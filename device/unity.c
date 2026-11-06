@@ -176,7 +176,7 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #endif
 
 static uint8_t flash_ok;          /* JEDEC id matched at boot */
-#if FM1B_WIFI || FM1B_BLE
+#if FM1B_WIFI || FM1B_BLE || defined(FELUCCA_USB_NAME_FN)   /* (as its users: plat_fm1.c plat_chip_uid, main_fm1.c's read; 7df7874) */
 static uint8_t flash_uid[16];     /* the flash's factory unique ID (plat_chip_uid), read at boot */
 #endif
 static void audio_silence(void);
@@ -280,7 +280,9 @@ static int ann_wire_send(const uint8_t *p, uint32_t n)   /* never waits: no room
 #else
 #include "radio_none.c"           /* the build with no radio: nothing of JieLi's linked */
 #endif
-#if FM1B_WIFI
+#if FM1B_WIFI_OWN
+#include "wifi_own.c"             /* WiFi on the own stack (wifi/, felucca-bsp's chip/fm1_wifi.h; link/ with FM1B_LINK) */
+#elif FM1B_WIFI
 #include "wifi.c"                 /* WiFi (ble/wifi/, the SDK's lwIP) */
 #endif
 #if FM1B_MIRROR

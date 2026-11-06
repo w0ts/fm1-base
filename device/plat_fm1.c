@@ -450,7 +450,7 @@ uint32_t plat_analog_mask(void)
     return m;
 }
 
-#if FM1B_WIFI || FM1B_BLE
+#if FM1B_WIFI || FM1B_BLE || defined(FELUCCA_USB_NAME_FN)
 const uint8_t *plat_chip_uid(void) { return flash_ok ? flash_uid : 0; }
 #else
 const uint8_t *plat_chip_uid(void) { return 0; }

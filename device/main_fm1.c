@@ -1112,6 +1112,19 @@ void plat_restart(void)
 }
 #endif
 
+/* an update (the upgrade command, F0 22 24 35 7F F7) or the soft key's UBOOT from the host begins, in the app's main
+ * loop: the app stops cleanly first (APP_UPDATE_BEGIN: its transport stopped, its notes and MIDI let go), before
+ * anything is staged or erased and before the restart. Not in safe mode (no app running there). The watchdog fed on
+ * both sides of the app's wait (its 8 s: a stop takes at most a few hundred ms) */
+static void update_begin(void)
+{
+#ifdef APP_UPDATE_BEGIN
+    fm1_wdt_feed();
+    app_update_begin();
+    fm1_wdt_feed();
+#endif
+}
+
 static void enter_uboot(const char *why)
 {
     fm1_audio_stop();
@@ -1421,13 +1434,16 @@ static void fm1_main(void)
 #endif
         if (usb.ota_req) {
             usb.ota_req = 0;
+            update_begin();                         /* the app stops cleanly first (APP_UPDATE_BEGIN) */
             app_panic();                            /* silence: the update rewrites the flash */
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
             app_ui_init();
         }
-        if (usb.uboot_req)
+        if (usb.uboot_req) {                        /* the soft key (F0 22 24 35 7D F7): the chip's update mode */
+            update_begin();
             enter_uboot("UBOOT (USB)");
+        }
         if (fm1_ms - last_frame >= 16u) {           /* ~60 frames/s at most; input in between */
             last_frame = fm1_ms;
             fm1b_dbg.ui_frames++;

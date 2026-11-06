@@ -534,6 +534,7 @@ static char ble_log[8][40];
 static uint32_t ble_log_n;
 static void ble_say(const char *s) { snprintf(ble_log[ble_log_n++ % 8], 40, "%s", s); }
 int plat_ble_state(void) { return ble_state; }
+int plat_ble_radio(void) { return ble_state; }   /* (the stand-in: switched off is stopped, so the same) */
 static int ble_link;                            /* "ble link": a computer linked, not listening yet */
 int plat_ble_connected(void) { return ble_conn; }
 int plat_ble_linked(void) { return ble_conn || ble_link; }

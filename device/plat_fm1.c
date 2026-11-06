@@ -253,8 +253,9 @@ int plat_sysex_send(const uint8_t *frame, uint32_t n) { return ota_wire_send(fra
 #endif
 
 /* the data area and its two more windows (plat.h): read through the unencrypted XIP window (main_fm1.c
- * fl_plain_window_init, from 0x93000 up); erased and written by felucca-bsp's RAM driver (FL_RANGE_OK: the store, its
- * FL_XDATA windows) */
+ * fl_plain_window_init, from the app area's end up: 0x93000, or a bigger slot's); erased and written by felucca-bsp's
+ * RAM driver (FL_RANGE_OK: the store, its FL_XDATA windows) */
+_Static_assert(FL_APP_END == FM1B_APP_END && FL_DATA_LO == PLAT_DATA_LO, "plat.h's app area end is felucca-bsp's");
 _Static_assert(FL_XDATA0_LO == PLAT_XDATA0_LO && FL_XDATA0_HI == PLAT_XDATA0_HI && FL_XDATA1_HI == PLAT_XDATA1_HI &&
                FL_AUTO_LO == PLAT_XDATA1_LO && FL_AUTO_HI == FL_XDATA1_LO, "plat.h's windows are felucca-bsp's");
 #if FM1B_XDATA2                                   /* the fourth window: felucca-bsp's FL_GLOB (in its FL_STORE_OK), the

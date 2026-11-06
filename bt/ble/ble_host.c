@@ -23,6 +23,14 @@ static struct {
     uint8_t slow;                              /* audio streamed on this link: the fast interval to ask for again after */
     uint8_t asked;                             /* the slower interval asked for, at ask_us (asked again after a while) */
     uint32_t ask_us;
+#if BLE_BULK
+    struct {
+        uint8_t st;                            /* BK_* */
+        uint32_t t, last_want;                 /* the state's start; the last call that wanted it (us) */
+        uint32_t oct0, us0;                    /* ble_ll_rate at the measurement's start */
+        uint32_t fast, bulk;                   /* the rates measured (octets a second) */
+    } bk;
+#endif
 } bhs;
 
 /* the advertised name and the GAP Device Name: BLE_DEVICE_NAME, then " XXXX" = the last four hex digits of the device
@@ -87,6 +95,9 @@ BLE_API void ble_host_connected(void)
 {
     bhs.have = bhs.need = bhs.skip = 0;
     bhs.fast = bhs.slow = bhs.asked = 0;
+#if BLE_BULK
+    ble_zero((uint8_t *)&bhs.bk, sizeof bhs.bk);
+#endif
     ble_att_reset();
     ble_smp_connected();
 #if BLE_CENTRAL
@@ -197,6 +208,151 @@ BLE_API void ble_sig_audio(int on)
         bhs.slow = 0;
 }
 
+/* ---- bulk: the app's stream (a screen mirrored) at the link's best rate (ble_cfg.h BLE_BULK). A Mac's CoreMIDI asks for 7.5 ms
+ * itself and then lets 50-octet packets through, one an event (4.6-5.6 KB/s, 2026-10-31); at 30 ms its bluetoothd took
+ * 251-octet packets, several an event. Which is faster is the central's (its controller, Wi-Fi beside it), so it is measured
+ * on the link, never assumed: while the stream runs and fills the link, the fast interval's rate (BK_FAST), then
+ * BLE_CONN_BULK_MIN..MAX asked for (BK_ASKED) and its rate (BK_BULK); bulk is kept (BK_ON) only when it carried a quarter more,
+ * else the fast interval asked for again and bulk not tried before BLE_BULK_RETRY_US (BK_LOST). The stream quiet
+ * BLE_BULK_IDLE_US: the fast interval again (MIDI's latency). Bluetooth audio's interval (ble_sig_audio) always wins: while it
+ * streams the tuner stays off. As master the interval is ours: nothing. */
+#if BLE_BULK
+enum { BK_OFF, BK_FAST, BK_ASKED, BK_BULK, BK_ON, BK_LOST };
+static void bk_go(uint8_t st, uint32_t now)
+{
+    bhs.bk.st = st;
+    bhs.bk.t = now;
+    ble_ll_rate(&bhs.bk.oct0, &bhs.bk.us0);
+}
+/* the rate since bk_go (octets a second) once the link was full for BLE_BULK_MEAS_US -> 1 measured; *r 0: the link was
+ * never full (the stream fits as it is) */
+static int bk_rate(uint32_t now, uint32_t *r)
+{
+    uint32_t oct, us;
+    ble_ll_rate(&oct, &us);
+    oct -= bhs.bk.oct0, us -= bhs.bk.us0;
+    if (us >= BLE_BULK_MEAS_US) {
+        *r = (uint32_t)((uint64_t)oct * 1000000u / us);
+        return 1;
+    }
+    if (now - bhs.bk.t < BLE_BULK_WAIT_US)
+        return 0;
+    *r = us >= BLE_BULK_MEAS_US / 4u ? (uint32_t)((uint64_t)oct * 1000000u / us) : 0u;
+    return 1;
+}
+static int bk_fast_again(void)                 /* -> 0: the link's queue full, asked at the next call */
+{
+    return ble_ll_interval() >= BLE_CONN_MIN && ble_ll_interval() <= BLE_CONN_MAX ? 1 :
+           sig_conn_params(BLE_CONN_MIN, BLE_CONN_MAX, BLE_CONN_TIMEOUT);
+}
+BLE_API void ble_sig_bulk(int want)
+{
+    uint32_t now = ble_hw_time_us(), r;
+    uint16_t iv = ble_ll_interval();
+#if BLE_CENTRAL
+    if (ble_ll_central())
+        return;
+#endif
+    if (!iv || bhs.audio || bhs.fast == 1u || bhs.fast == 2u) {
+        if (bhs.audio && bhs.bk.st != BK_LOST)
+            bhs.bk.st = BK_OFF;                /* (the audio's interval; tried again after it) */
+        return;
+    }
+    if (want)
+        bhs.bk.last_want = now;
+    switch (bhs.bk.st) {
+    case BK_OFF:
+        if (want)
+            bk_go(BK_FAST, now);
+        return;
+    case BK_FAST:
+        if (!want && now - bhs.bk.last_want > BLE_BULK_IDLE_US) {
+            bhs.bk.st = BK_OFF;
+            return;
+        }
+        if (!bk_rate(now, &r))
+            return;
+        if (!r) {                              /* never full: the stream fits; measured again later */
+            bk_go(BK_FAST, now);
+            return;
+        }
+        bhs.bk.fast = r;
+        if (iv >= BLE_CONN_BULK_MIN) {         /* (slow already: measured as bulk) */
+            bhs.bk.bulk = r;
+            bk_go(BK_ON, now);
+            return;
+        }
+        if (sig_conn_params(BLE_CONN_BULK_MIN, BLE_CONN_BULK_MAX, BLE_CONN_BULK_TIMEOUT))
+            bk_go(BK_ASKED, now);
+        return;
+    case BK_ASKED:
+        if (iv >= BLE_CONN_BULK_MIN) {
+            ble_ll_length_again();             /* (the Mac's 50 octets at 7.5 ms: its packet time may follow the interval) */
+            bk_go(BK_BULK, now);
+        }
+        else if (now - bhs.bk.t > BLE_BULK_WAIT_US)
+            bk_go(BK_LOST, now);               /* (refused, or never moved) */
+        return;
+    case BK_BULK:
+        if (!bk_rate(now, &r))
+            return;
+        bhs.bk.bulk = r;
+        if (!r || r * 4u >= bhs.bk.fast * 5u) {   /* (never full at bulk: it carries the stream) */
+            bk_go(BK_ON, now);
+            return;
+        }
+        if (bk_fast_again())
+            bk_go(BK_LOST, now);
+        else
+            bhs.bk.st = BK_BULK, bhs.bk.t = now - BLE_BULK_WAIT_US;   /* (the request when the queue has room) */
+        return;
+    case BK_ON:
+        if (iv < BLE_CONN_BULK_MIN) {          /* the central moved it back itself: measured again from there */
+            bk_go(BK_FAST, now);
+            return;
+        }
+        if (!want && now - bhs.bk.last_want > BLE_BULK_IDLE_US && bk_fast_again())
+            bk_go(BK_OFF, now);
+        return;
+    default:                                   /* BK_LOST */
+        if (now - bhs.bk.t > BLE_BULK_RETRY_US)
+            bhs.bk.st = BK_OFF;
+        return;
+    }
+}
+BLE_API uint8_t ble_bulk_state(uint32_t *rate_fast, uint32_t *rate_bulk)
+{
+    *rate_fast = bhs.bk.fast;
+    *rate_bulk = bhs.bk.bulk;
+    return bhs.bk.st;
+}
+#else
+BLE_API void ble_sig_bulk(int want) { (void)want; }
+BLE_API uint8_t ble_bulk_state(uint32_t *rate_fast, uint32_t *rate_bulk)
+{
+    *rate_fast = *rate_bulk = 0;
+    return 0;
+}
+#endif
+/* the shortest interval a central's CONNECTION_PARAM_REQ may ask for now (ble_ll.c) */
+BLE_API uint16_t ble_host_min_interval(void)
+{
+    if (bhs.audio)
+        return BLE_CONN_AUDIO_MIN;
+#if BLE_BULK
+    if (bhs.bk.st == BK_ASKED || bhs.bk.st == BK_BULK || bhs.bk.st == BK_ON)
+        return BLE_CONN_BULK_MIN;
+#endif
+    return 0;
+}
+#if BLE_LL_REFILL
+BLE_API void ble_host_tx_low(void)
+{
+    if (!bhs.audio)                            /* (while audio streams: as before, the events kept short) */
+        ble_att_refill();
+}
+#endif
+
 static void sig_rx(const uint8_t *p, uint16_t n)
 {
     uint8_t code, id, d[2] = {0, 0};
@@ -208,6 +364,12 @@ static void sig_rx(const uint8_t *p, uint16_t n)
     case 0x13:                                 /* Connection Parameter Update Response */
         if (id != bhs.sig_id || n < 6u)
             return;
+#if BLE_BULK
+        if (ble_rd16(p + 4) && bhs.bk.st == BK_ASKED) {
+            bk_go(BK_LOST, ble_hw_time_us());   /* bulk refused: the fast link stays, not asked again for a while */
+            return;
+        }
+#endif
         if (ble_rd16(p + 4) && bhs.fast == 1 && BLE_CONN_RETRY_MIN > 0u) {
             bhs.fast = 2;                       /* rejected: ask once more, slower */
             sig_conn_params(BLE_CONN_RETRY_MIN, BLE_CONN_RETRY_MAX, BLE_CONN_TIMEOUT);

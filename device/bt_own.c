@@ -365,6 +365,13 @@ static void ble_poll(void)
         own_held(0);
     }
 #endif
+    {                                             /* the app streams (the screen mirrored): the link's bulk interval tried,
+                                                   * kept when it carries more (ble_host.c ble_sig_bulk; the audio's wins) */
+        int want = own_stream && own_stream_on() && fm1_ms - own_stream_seen < 1000u;
+        own_held(1);
+        ble_sig_bulk(want);
+        own_held(0);
+    }
     while (oi_r != oi_w) {                        /* MIDI in, to radio.c's rings (and its clock smoothing) */
 #if FM1B_BLE_MIDI_TIME
         ble_midi_receive_at(own_in[oi_r % IQ].pkt, own_in[oi_r % IQ].t24);

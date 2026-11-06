@@ -225,6 +225,7 @@ static struct {
     uint8_t last_pdu[2 + 255];
     int last_pdu_len;
     int pdus;
+    int cap;                                   /* PDUs the central takes an event at most (0: 32) */
 } C;
 
 static void c_reset(void)
@@ -306,7 +307,7 @@ static int c_event(void)
         for (i = 0; i < C.qn; i++)
             ble_ll_hw_rx(C.q[i], (uint8_t)(2 + C.q[i][1]));
     C.qn = 0;
-    while (C.alive && hw.conn_on && sent < 32) {
+    while (C.alive && hw.conn_on && sent < (C.cap ? C.cap : 32)) {
         uint8_t n = ble_ll_hw_tx(pdu);
         if (!n)
             break;
@@ -706,11 +707,18 @@ static void test_midi(void)
     }
     for (i = 0; i < 300; i++)                  /* a flood: packed up to MTU - 3, two notifications an event */
         app_out(0x0B | 0xB0 << 8 | (uint32_t)(i & 0x7F) << 16 | 5u << 24, 2000 + i / 50);
+#if BLE_LL_REFILL
+    n = C.fr_n;
+    c_event();                                 /* (the link layer asks for more while it loads: the event goes on) */
+    check("a flood of 300 CCs: more than two notifications in one event (refilled within it), each <= 244 octets of MIDI",
+          C.fr_n > n + 2 && C.fr_len[n % C_FRAMES] <= 4 + 247 && C.fr_len[n % C_FRAMES] > 200);
+#else
     c_event();                                 /* (queued at the end of an event, sent in the next) */
     n = C.fr_n;
     c_event();
     check("a flood of 300 CCs: two notifications in one event, each <= 244 octets of MIDI",
           C.fr_n == n + 2 && C.fr_len[n % C_FRAMES] <= 4 + 247 && C.fr_len[n % C_FRAMES] > 200);
+#endif
     c_events(6);
     check("... all sent within a few events", out_r == out_w);
     c_frames_done();
@@ -782,6 +790,7 @@ static void sq_sink(void *ctx, uint32_t pkt, uint16_t ts)
     for (i = 0; i < k && sent_n < sizeof sent_b; i++)
         sent_b[sent_n++] = (uint8_t)(pkt >> (8u + 8u * i));
 }
+#define SQ_NF (BLE_LL_REFILL ? 1500u : 250u)    /* the note test's frames */
 static void sq_frame(uint32_t len, uint32_t seed)   /* F0 7D 46 4C 6A 02, data, F7: len bytes in all */
 {
     uint32_t i;
@@ -859,18 +868,20 @@ static void test_stream(void)
     sent_n = 0;
     r0 = sq_r;
     app_out(0x09 | 0x90 << 8 | 60 << 16 | 100 << 24, now_us / 1000u);
-    sq_frame(250, 1);
-    sq_frame(250, 2);
+    sq_frame(250, 1);                          /* (the second frame longer than the link's queue: under way after the event) */
+    sq_frame(SQ_NF, 2);
     memcpy(want, "\x90\x3C\x64", 3);
-    memcpy(want + 3, sq + (r0 % sizeof sq), 500);
-    memcpy(want + 503, "\x90\x3E\x64", 3);
+    memcpy(want + 3, sq + (r0 % sizeof sq), 250u + SQ_NF);
+    memcpy(want + 253u + SQ_NF, "\x90\x3E\x64", 3);
     from = C.fr_n;
+    C.cap = 2;                                 /* (a central that ends its events early) */
     c_event();                                 /* (the end of the event: the notifications queued for the next) */
+    C.cap = 0;
     ok = sq_mid && sq_r != sq_w && out_r == out_w;
     app_out(0x09 | 0x90 << 8 | 62 << 16 | 100 << 24, now_us / 1000u);
-    c_events(4);
+    c_events(8);
     sq_notes(from, 0);
-    ok = ok && sent_n == 506u && !memcmp(sent_b, want, 506) && out_r == out_w && sq_r == sq_w;
+    ok = ok && sent_n == 256u + SQ_NF && !memcmp(sent_b, want, 256u + SQ_NF) && out_r == out_w && sq_r == sq_w;
     check("stream: a note between frames goes first, one queued inside a frame after its F7", ok);
     /* nobody listening: the stream is not read (the app's ring keeps its frames for the app to drop) */
     c_att((const uint8_t[]){0x12, 15, 0, 0, 0}, 5, &n);
@@ -986,6 +997,147 @@ static void test_audio_interval(void)
         bll.interval = 12;
     }
 }
+
+
+#if BLE_BULK
+/* the bulk tuner (ble_host.c ble_sig_bulk) against a model central: at each interval its data length and its packets an event
+ * (the Mac measured 2026-10-31: 7.5 ms, 50 octets, one a packet an event; 30 ms, 251 octets, several) */
+static struct {
+    int fast_len, fast_cap, slow_len, slow_cap;   /* the model: below 24 / from 24 */
+    int accept;                                   /* 1: accept our L2CAP request (and move there), 0: reject it */
+    int asks, last_min, last_max, last_to;        /* the requests seen */
+    unsigned seen;                                /* frames looked at */
+    int lreq;                                     /* LL_LENGTH_REQs answered */
+} bkm;
+static void bk_model_apply(void)
+{
+    int slow = bll.interval >= 24;
+    bll.max_tx = (uint8_t)(slow ? bkm.slow_len : bkm.fast_len);
+    C.cap = slow ? bkm.slow_cap : bkm.fast_cap;
+    C.interval = bll.interval;
+}
+/* n events with the queue kept full (want: the stream running), the main loop's ble_sig_bulk after each */
+static void bk_run(int n, int want)
+{
+    if (!want)
+        out_r = out_w;
+    while (n-- > 0) {
+        while (want && out_w - out_r < 400u)
+            app_out(0x0B | 0xB0 << 8 | 7u << 16 | 5u << 24, now_us / 1000u);
+        c_event();
+        ble_sig_bulk(want);
+        if (c_ctrl_count(LL_LENGTH_REQ) > bkm.lreq) {   /* (our data length asked again: the model's, by its interval) */
+            int o = bll.interval >= 24 ? bkm.slow_len : bkm.fast_len, t = (o + 14) * 8;
+            uint8_t d[9] = {LL_LENGTH_RSP, (uint8_t)o, 0, (uint8_t)t, (uint8_t)(t >> 8), (uint8_t)o, 0, (uint8_t)t, (uint8_t)(t >> 8)};
+            bkm.lreq = c_ctrl_count(LL_LENGTH_REQ);
+            c_ctrl(d, 9);
+        }
+        for (; (int)bkm.seen < C.fr_n; bkm.seen++) {
+            uint8_t *f = C.fr[bkm.seen % C_FRAMES];
+            if ((f[2] | f[3] << 8) != 5 || f[4] != 0x12)
+                continue;
+            bkm.asks++;
+            bkm.last_min = f[8] | f[9] << 8, bkm.last_max = f[10] | f[11] << 8, bkm.last_to = f[14] | f[15] << 8;
+            c_l2cap(5, (const uint8_t[]){0x13, f[5], 2, 0, bkm.accept ? 0 : 1, 0}, 6);
+            if (bkm.accept)
+                bll.interval = (uint16_t)bkm.last_min;
+            bk_model_apply();
+        }
+    }
+}
+static void test_bulk(void)
+{
+    uint32_t rf, rb, o0, u0, o1, u1;
+    uint8_t d[24];
+    int asks;
+    c_frames_done();
+    memset(&bkm, 0, sizeof bkm);
+    bkm.seen = (unsigned)C.fr_n;
+    bkm.lreq = c_ctrl_count(LL_LENGTH_REQ);
+    bkm.fast_len = 50, bkm.fast_cap = 1, bkm.slow_len = 251, bkm.slow_cap = 4, bkm.accept = 1;
+    bll.interval = 6;
+    bk_model_apply();
+    /* the rate meter */
+    ble_ll_rate(&o0, &u0);
+    bk_run(40, 1);
+    ble_ll_rate(&o1, &u1);
+    check("bulk: the rate meter counts full events: 50 octets an event of 7.5 ms (6.7 KB/s)",
+          u1 - u0 == 40u * 7500u && o1 - o0 >= 39u * 50u && o1 - o0 <= 41u * 50u);
+    bk_run(20, 0);                             /* (the link's queue drained) */
+    ble_ll_rate(&o0, &u0);
+    bk_run(10, 0);
+    ble_ll_rate(&o1, &u1);
+    check("... an idle link adds nothing", u1 == u0 && o1 == o0);
+    /* the Mac's case: bulk faster */
+    bhs.bk.st = 0;
+    asks = c_ctrl_count(LL_LENGTH_REQ);
+    bk_run(200, 1);                            /* 1.5 s */
+    check("bulk: the fast link measured full, then {24, 36, 0, 200} asked",
+          bkm.asks == 1 && bkm.last_min == 24 && bkm.last_max == 36 && bkm.last_to == 200 && bll.interval == 24);
+    check("... at 30 ms the data length asked for again (LL_LENGTH_REQ)",
+          !(bll.feat_known && (bll.peer_feat & BLE_FEAT_DLE)) || c_ctrl_count(LL_LENGTH_REQ) > asks);
+    bk_run(60, 1);                             /* 1.8 s at 30 ms */
+    rb = 0;
+    check("bulk: 30 ms with 251-octet packets, 4 an event measured faster: kept", ble_bulk_state(&rf, &rb) == 4 &&
+          rf > 6000u && rf < 7000u && rb > 4u * rf && bll.interval == 24);
+    printf("bulk: fast %u B/s, bulk %u B/s\n", (unsigned)rf, (unsigned)rb);
+    memset(d, 0, sizeof d);
+    d[0] = LL_CONNECTION_PARAM_REQ, d[1] = 6, d[3] = 6, d[7] = 200;   /* the Mac's own 7.5 ms request */
+    c_ctrl(d, 24);
+    bk_run(1, 1);
+    check("... the central's CONNECTION_PARAM_REQ for 7.5 ms refused while bulk holds", c_ctrl_last(LL_REJECT_EXT_IND) &&
+          c_ctrl_last(LL_REJECT_EXT_IND)[1] == 0x0F && bll.rproc == P_NONE);
+    asks = bkm.asks;
+    bk_run(60, 0);                             /* 1.8 s quiet */
+    check("... the stream quiet 1.8 s: still bulk", ble_bulk_state(&rf, &rb) == 4 && bkm.asks == asks);
+    bk_run(60, 0);                             /* > 3 s quiet */
+    check("... quiet 3 s: {6, 9, 0, 100} asked again, the tuner off", bkm.asks == asks + 1 && bkm.last_min == 6 &&
+          bkm.last_max == 9 && bll.interval == 6 && ble_bulk_state(&rf, &rb) == 0);
+    c_ctrl(d, 24);
+    bk_run(1, 0);
+    check("... and the central's 7.5 ms request accepted again", c_ctrl_last(LL_CONNECTION_PARAM_RSP) != 0);
+    bll.rproc = P_NONE;
+    /* a central that gives nothing more at 30 ms: back to the fast link, not tried again for a minute */
+    bkm.slow_len = 50, bkm.slow_cap = 1;
+    asks = bkm.asks;
+    bk_run(400, 1);
+    check("bulk: slower at 30 ms (50 octets, one a event): the fast interval asked for again, bulk lost",
+          bkm.asks == asks + 2 && bkm.last_min == 6 && bll.interval == 6 && ble_bulk_state(&rf, &rb) == 5 && rb < rf);
+    asks = bkm.asks;
+    bk_run(2000, 1);                           /* 15 s */
+    check("... not tried again within a minute", bkm.asks == asks && ble_bulk_state(&rf, &rb) == 5);
+    now_us += BLE_BULK_RETRY_US;
+    bk_run(2, 1);
+    check("... after a minute: measured again", ble_bulk_state(&rf, &rb) == 1);
+    /* a central that refuses */
+    bkm.accept = 0, bkm.slow_len = 251, bkm.slow_cap = 4;
+    asks = bkm.asks;
+    bk_run(300, 1);
+    check("bulk: refused: the fast link stays, bulk lost", bkm.asks == asks + 1 && bll.interval == 6 &&
+          ble_bulk_state(&rf, &rb) == 5);
+    /* Bluetooth audio wins */
+    bhs.bk.st = 0;
+    bkm.accept = 1;
+    bhs.audio = 1;
+    asks = bkm.asks;
+    bk_run(300, 1);
+    check("bulk: nothing while Bluetooth audio streams", bkm.asks == asks && ble_bulk_state(&rf, &rb) == 0);
+    bhs.audio = 0;
+    /* a stream that fits: never full, nothing asked */
+    bkm.fast_len = 251, bkm.fast_cap = 32;
+    bk_model_apply();
+    asks = bkm.asks;
+    bk_run(1000, 1);
+    check("bulk: a link never full (the stream fits): nothing asked", bkm.asks == asks && ble_bulk_state(&rf, &rb) == 1);
+    bk_run(1, 0);
+    C.cap = 0;
+    bll.max_tx = 251;
+    bll.interval = 12;
+    C.interval = 12;
+    bhs.bk.st = 0;
+    c_frames_done();
+}
+#endif
 
 static void test_l2cap(void)
 {
@@ -1496,6 +1648,9 @@ int main(void)
     test_stream();
 #endif
     test_audio_interval();
+#if BLE_BULK
+    test_bulk();
+#endif
     test_l2cap();
     test_endings();
     test_blell();

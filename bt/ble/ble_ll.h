@@ -55,6 +55,12 @@ BLE_API uint16_t ble_ll_peer_len(uint32_t i);             /* the central's last 
  * bit 1: the central's is random (TxAdd) */
 BLE_API uint8_t ble_ll_addrs(uint8_t own[6], uint8_t peer[6]);
 BLE_API int ble_ll_encrypted(void);                       /* the link is encrypted both ways (0 without BLE_LL_ENC) */
+/* the link's rate: octets acknowledged in connection events that ended with data still waiting (the link full), and those
+ * events' time (us); both free-running totals since the connection started, the caller takes differences */
+BLE_API void ble_ll_rate(uint32_t *octets, uint32_t *us);
+/* the data length asked for again (LL_LENGTH_REQ, when the central has the feature): after an interval change, a central
+ * whose controller caps the packet time by the interval may now allow longer packets */
+BLE_API void ble_ll_length_again(void);
 #if BLE_CENTRAL
 /* scan instead of advertising while on (the DEVICES list is open), when enabled and not connected; a connection
  * that ends while on goes back to scanning. Off: advertising again (when enabled). Called like ble_ll_enable */
@@ -82,6 +88,12 @@ BLE_API void ble_ll_start_enc(const uint8_t ltk[16], const uint8_t rand[8], uint
 BLE_API void ble_host_connected(void);
 BLE_API void ble_host_disconnected(uint8_t reason);
 BLE_API int ble_host_audio(void);              /* Bluetooth audio streams: a central's faster interval refused */
+/* the shortest interval the host takes now (x 1.25 ms, 0: any): a central's faster CONNECTION_PARAM_REQ is refused */
+BLE_API uint16_t ble_host_min_interval(void);
+#if BLE_LL_REFILL
+/* while a packet is loaded and little is queued: the host may queue frames now (the RX interrupt's context) */
+BLE_API void ble_host_tx_low(void);
+#endif
 /* a data PDU's payload: start = 1 for the start of an L2CAP frame (LLID 10b), 0 for a continuation */
 BLE_API void ble_host_rx(const uint8_t *p, uint8_t len, uint8_t start);
 /* once per connection event, after the link layer's own work: the host may queue frames */

@@ -294,7 +294,7 @@ def errors():
     dev = FakeFM1(image, name="My Interface")
     rc, out, err = cli(["--info", "--port", "my int"], dev)
     ok(rc == 0 and "FM-1_015" in out, "--port picks a port the default match skips")
-    for name in ("Optimist", "SLOOP 2.4", "Melodee", "LOOM-8"):   # (a firmware's own port name, alone)
+    for name in ("FM1-1A2B",):   # (a firmware's own port name, alone: Optimist's since 2026-10-29; the others by their HELLO answer, tests/ports_test.py)
         rc, out, err = cli(["--info"], FakeFM1(image, name=name))
         ok(rc == 0 and "FM-1_015" in out, f"a firmware's own port name, {name}: found without --port")
     for name in ("Launchkey Mini MK3", "SMK-25 II"):             # (other gear is never probed)

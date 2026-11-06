@@ -12,6 +12,7 @@ a few register and RAM ranges). Needs mido with python-rtmidi.
 --port: the FM-1's MIDI port (part of its name); else a port named after the FM-1 or X0X, or one that answers the
 screen reader's HELLO (tools/fm1ports.py).
 """
+import re
 import sys
 import time
 

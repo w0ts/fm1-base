@@ -131,7 +131,7 @@ ram_code_allow = [
     "dual_run", "dual_job",
     # drums_mix: the drums' block (their engines, sends and inserts through FAR / a table), inlined into its caller by
     # JieLi's compiler, a function of its own with pi32v2-llvm ("?"; seen 2026-10-29 on the user's builder.config)
-    "drums_mix?", "drums_pre",      # drums_pre (2026-11-05, the drums split over both cores): the block's gains and send tables through FAR
+    "drums_mix?", "drums_pre?",     # drums_pre (2026-11-05, the drums split over both cores): the block's gains and send tables through FAR ("?": XIP when DRUMS=0)
 ]
 # what the start copies into RAM (.data, the RAM code: 56 KB) stored LZMA-packed in the image and unpacked at the start
 # (fm1-base's boot_pack, tools/boot_pack.py, device/boot_lzma.h; Optimist's own LZB coder used before the merge of 2026-11-02)

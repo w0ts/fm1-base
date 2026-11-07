@@ -400,6 +400,7 @@ static void con_sd_irq(const char *p)                /* sd irq [0|1]: the interr
         con_kv(N[i], (int32_t)c[i]);
 }
 
+#if FELUCCA_SD_STREAM                                /* (sst_st and its counters: sd_stream.c, only built with SD_STREAM) */
 static void con_sd_stats(const char *p)              /* sd stats [reset]: the streams' counters since the last reset (sd_stream.c sst_st) */
 {
     uint32_t ms = (uint32_t)(SD_NOW() - sst_st.t0) / SD_TICKS_MS;
@@ -425,6 +426,7 @@ static void con_sd_stats(const char *p)              /* sd stats [reset]: the st
     con_kv("cut", (int32_t)sst_cut);
     con_kv("irq", (int32_t)plat_sd_irq(-1, 0));
 }
+#endif
 
 static void con_sd_cmd(const char *p)
 {
@@ -442,10 +444,12 @@ static void con_sd_cmd(const char *p)
         con_sd_irq(p);
         return;
     }
+#if FELUCCA_SD_STREAM
     if (con_word(&p, "stats")) {
         con_sd_stats(p);
         return;
     }
+#endif
     if (con_word(&p, "clock")) {                         /* the fastest step at or under MHZ; anything else: auto */
         plat_sd_clock_t c;
         uint32_t mhz = con_num(&p, &ok), k, pick = 0;

@@ -39,17 +39,60 @@
  * opt_ui_frame). */
 #pragma once
 
-#if FELUCCA_CDC
+/* Over USB MIDI too (FELUCCA_CON_MIDI, the builder's USB_CONSOLE; with USB audio as well, the user 2026-11-08: "no need
+ * to choose between serial and usb audio"): Optimist's console.c protocol. A line in: F0 7D 46 43 'l' <ASCII> F7 (app.c
+ * app_sysex -> opt_con_frame); the reply out as F0 7D 46 43 'o' <ASCII> F7 frames (plat_sysex_send), then
+ * F0 7D 46 43 'e' F7 when the command is done (tools/fm1_console.py --midi). The reply goes back the way its line came */
+#ifndef FELUCCA_CON_MIDI
+#define FELUCCA_CON_MIDI 0
+#endif
+#if FELUCCA_CDC || FELUCCA_CON_MIDI
+#ifndef OPT_CON_EXTRA
+#define OPT_CON_EXTRA 0                         /* keylog, flr, tabbench (below) */
+#endif
 #define CON_LINE 64u
 #include "io/console_parse.h"                   /* con_word, con_num, con_run_parse (Optimist's, pure) */
+#if FELUCCA_CON_MIDI
+#define CON_SX_N 120u                           /* text bytes in a reply frame */
+#endif
 static struct {
     char line[CON_LINE];
     uint32_t len;
     uint8_t dtr_seen, stalled;                  /* stalled: the computer stopped reading, the rest of the reply dropped */
+#if FELUCCA_CON_MIDI
+    uint8_t via_sx;                             /* this command came as SysEx: its reply goes there */
+    uint8_t sx_n;                               /* text bytes waiting in sx[] */
+    uint8_t sx[5u + CON_SX_N + 1u];             /* F0 7D 46 43 'o' <text> F7 */
+#endif
 } con;
+static uint32_t con_reboot_ms;                  /* `reboot`: when it was asked (0: not); opt_con_task restarts */
+
+#if FELUCCA_CON_MIDI
+static void con_sx_flush(void)                  /* the waiting text as one 'o' frame */
+{
+    if (con.sx_n && !con.stalled) {
+        con.sx[0] = 0xF0, con.sx[1] = 0x7D, con.sx[2] = 0x46, con.sx[3] = 0x43, con.sx[4] = 'o';
+        con.sx[5u + con.sx_n] = 0xF7;
+        if (plat_sysex_send(con.sx, 6u + con.sx_n))
+            con.stalled = 1;                    /* no computer, or it stopped reading: the rest of the reply dropped */
+    }
+    con.sx_n = 0;
+}
+#endif
 
 static void con_putc(char c)                    /* (console.c's: a full ring waits for the computer, briefly) */
 {
+#if FELUCCA_CON_MIDI
+    if (con.via_sx) {
+        if (con.stalled)
+            return;
+        con.sx[5u + con.sx_n++] = (uint8_t)(c & 0x7F);
+        if (con.sx_n >= CON_SX_N)
+            con_sx_flush();
+        return;
+    }
+#endif
+#if FELUCCA_CDC
     uint32_t t0 = plat_ms();
     while (!con.stalled && !plat_console_write(&c, 1)) {
         if (!plat_console_open() || plat_ms() - t0 > 20u) {
@@ -58,6 +101,9 @@ static void con_putc(char c)                    /* (console.c's: a full ring wai
         }
         plat_yield();
     }
+#else
+    (void)c;
+#endif
 }
 static void con_puts(const char *s)
 {
@@ -195,6 +241,7 @@ static void con_dbg(void)
     con_kv("bta_state", plat_bta_state());
 #endif
 }
+#if OPT_CON_EXTRA                               /* (status has cpu1_up, why, jobs, posts) */
 static void con_cpu1(void)
 {
     con_kv("cpu1_on", plat_cpu2_on());
@@ -226,6 +273,7 @@ static void con_cpu1(void)
     }
 #endif
 }
+#endif
 static void con_keys(void)
 {
     con_kx("buttons", plat_buttons());
@@ -236,6 +284,9 @@ static void con_keys(void)
     con_kx("matrix_buttons", fm1_in.buttons);               /* (the ids Optimist's UI sees: opt_panel.h) */
     con_kx("matrix_keys", oin_keys);
 }
+/* keylog, flr, tabbench: the developer's extras, off in the release console (OPT_CON_EXTRA 0: about 1.5 KB of flash; the
+ * user 2026-11-08: the console must fit beside USB audio in sd-card-mots) */
+#if OPT_CON_EXTRA
 static void con_keylog(void)
 {
     uint32_t n = fm1_klog_n, i, from = n > FM1_KLOG_N ? n - FM1_KLOG_N : 0u, prev = 0;
@@ -328,9 +379,17 @@ static void con_tabbench(void)
     con_dec(sum);
     con_puts(")\r\n");
 }
+#endif
 #if FELUCCA_SDCARD
+/* the card's clock steps (plat_sd_clock, _set, _try): fm1-base's device/sd.c has them on the sd-clock topic only (7169307),
+ * not yet on this line: without it a console build with the card did not link (2026-11-08). 1 once sd-clock is merged */
+#ifndef OPT_CON_SD_CLOCK
+#define OPT_CON_SD_CLOCK 0
+#endif
+#if OPT_CON_SD_CLOCK
 static const char *const CON_SD_RES[6] = {"not tried", "pass", "CRC failed", "data differs from the floor's",
                                           "timeout or refused", "skipped (no high speed)"};
+#endif
 static void con_sd_mhz(uint32_t khz)                    /* " 15 MHz", " 8.6 MHz" (to a tenth); 0: " -" */
 {
     uint32_t t = (khz + 50u) / 100u;
@@ -347,6 +406,7 @@ static void con_sd_mhz(uint32_t khz)                    /* " 15 MHz", " 8.6 MHz"
     con_puts(" MHz");
 }
 
+#if OPT_CON_SD_CLOCK
 /* "clock 20 MHz (auto: fastest passed 30 MHz, probe N ms) crc fails N steps down N", then a line per step */
 static void con_sd_clock(void)
 {
@@ -400,6 +460,7 @@ static void con_sd_speed(void)
     }
     con_puts("sd speed: done, the clock as it was\r\n");
 }
+#endif
 
 static void con_sd_irq(const char *p)                /* sd irq [0|1]: the interrupt reader and its numbers */
 {
@@ -448,6 +509,7 @@ static void con_sd_cmd(const char *p)
 {
     static const char *const ST[] = {"unmounted", "no card", "no FAT16 / FAT32 filesystem", "ready"};
     int ok;
+#if OPT_CON_SD_CLOCK
     if (con_word(&p, "diag")) {
         con_sd_clock();
         return;
@@ -456,6 +518,7 @@ static void con_sd_cmd(const char *p)
         con_sd_speed();
         return;
     }
+#endif
     if (con_word(&p, "irq")) {
         con_sd_irq(p);
         return;
@@ -466,6 +529,7 @@ static void con_sd_cmd(const char *p)
         return;
     }
 #endif
+#if OPT_CON_SD_CLOCK
     if (con_word(&p, "clock")) {                         /* the fastest step at or under MHZ; anything else: auto */
         plat_sd_clock_t c;
         uint32_t mhz = con_num(&p, &ok), k, pick = 0;
@@ -478,6 +542,8 @@ static void con_sd_cmd(const char *p)
         plat_sd_clock_set(pick);
         p = "";                                          /* (then the mount again, below) */
     }
+#endif
+#if OPT_CON_EXTRA
     if (con_word(&p, "raw")) {                           /* a sector, through plat_sd_read */
         static uint8_t blk[512];
         uint32_t s = con_num(&p, &ok);
@@ -488,6 +554,7 @@ static void con_sd_cmd(const char *p)
         con_bytes("sector", blk, 64u);
         return;
     }
+#endif
     {
         uint32_t st = sd_mount();
         int sub = *p != 0;                                   /* (a folder or a file: the state only when it is not ready) */
@@ -547,10 +614,16 @@ static void con_exec(const char *p)
     if (con_run(p))
         return;
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  cpu1  keys  keylog"
-                 "  flr OFFSET [LEN]  tabbench"
+        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  keys"
+#if OPT_CON_EXTRA
+                 "  cpu1  keylog  flr OFFSET [LEN]  tabbench"
+#endif
 #if FELUCCA_SDCARD
-                 "  sd [ls [DIR] | cat FILE | raw SECTOR | diag | speed | clock MHZ|auto | irq [N] | stats [reset]]"
+#if OPT_CON_SD_CLOCK
+                 "  sd [ls [DIR] | cat FILE | diag | speed | clock MHZ|auto | irq [N] | stats [reset]]"
+#else
+                 "  sd [ls [DIR] | cat FILE | irq [N] | stats [reset]]"
+#endif
 #endif
 #if FELUCCA_BLE || FELUCCA_BT_AUDIO
                  "  btlog [N]"
@@ -562,16 +635,20 @@ static void con_exec(const char *p)
         con_params();
     else if (con_word(&p, "dbg"))
         con_dbg();
+#if OPT_CON_EXTRA
     else if (con_word(&p, "cpu1"))
         con_cpu1();
+#endif
     else if (con_word(&p, "keys"))
         con_keys();
+#if OPT_CON_EXTRA
     else if (con_word(&p, "keylog"))
         con_keylog();
     else if (con_word(&p, "flr"))
         con_flr(p);
     else if (con_word(&p, "tabbench"))
         con_tabbench();
+#endif
 #if FELUCCA_SDCARD
     else if (con_word(&p, "sd"))
         con_sd_cmd(p);
@@ -582,14 +659,48 @@ static void con_exec(const char *p)
 #endif
     else if (con_word(&p, "reboot")) {
         con_puts("rebooting\r\n");
-        plat_restart();
+        con_reboot_ms = plat_ms() | 1u;         /* (opt_con_task: the reply out first, the project saved, then the restart) */
     } else if (*p)
         con_puts("? (help)\r\n");
 }
 
-/* every main loop pass: the prompt when a computer opens the port, the line typed (console.c cdc_task) */
+#if FELUCCA_CON_MIDI
+/* app.c app_sysex: a frame from USB (the bytes between F0 and F7); 1 = a console line, run and answered here */
+int opt_con_frame(const uint8_t *p, uint32_t n)
+{
+    char line[CON_LINE];
+    uint32_t i, k = 0;
+    if (n < 4u || p[0] != 0x7D || p[1] != 0x46 || p[2] != 0x43)
+        return 0;
+    if (p[3] != 'l')
+        return 1;                               /* (ours, not a line: an echo of a reply) */
+    for (i = 4; i < n && k + 1u < CON_LINE; i++)
+        if (p[i] >= ' ' && p[i] < 0x7F)
+            line[k++] = (char)p[i];
+    line[k] = 0;
+    con.via_sx = 1;
+    con.stalled = 0;
+    con.sx_n = 0;
+    con_exec(line);
+    con_sx_flush();
+    {
+        static const uint8_t END[6] = {0xF0, 0x7D, 0x46, 0x43, 'e', 0xF7};
+        (void)plat_sysex_send(END, sizeof END);
+    }
+    con.via_sx = 0;
+    return 1;
+}
+#endif
+
+/* every main loop pass: the prompt when a computer opens the port, the line typed (console.c cdc_task); a `reboot`
+ * 150 ms after its reply (the reply out, over either port), the working project saved first */
 static void opt_con_task(void)
 {
+    if (con_reboot_ms && plat_ms() - con_reboot_ms > 150u) {
+        persist_flush_now();
+        plat_restart();
+    }
+#if FELUCCA_CDC
     int c;
     if (plat_console_open() && !con.dtr_seen) {
         con.stalled = 0;
@@ -618,15 +729,21 @@ static void opt_con_task(void)
             con_putc((char)c);
         }
     }
+#endif
 }
 /* at power-on: the console presented from this start, before fm1-base starts USB (app_init: no re-enumeration), as
  * usb.c's usb_start sets usb_cdc_on (always: the console comes with the build, no switch since 2026-11-05) */
 static void opt_con_boot(void)
 {
+#if FELUCCA_CDC
     usb_cdc_on = 1;
     plat_console_present(1);
+#endif
 }
 #else
 static void opt_con_task(void) {}
 static void opt_con_boot(void) {}
+#endif
+#if !FELUCCA_CON_MIDI
+int opt_con_frame(const uint8_t *p, uint32_t n) { (void)p, (void)n; return 0; }
 #endif

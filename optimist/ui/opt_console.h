@@ -31,7 +31,7 @@
  *                Optimist's sd speed reads the CSD alone at each clock), the clock kept as it was
  *   sd irq [N]   the read run's blocks in SPI1's interrupt (fm1-base's plat_sd_irq: 1, the default) or by the main loop's polls
  *                (0, a comparison); and its numbers. RAM only
- *   sd stats [reset]   the streams' counters since the last reset: KB/s, runs, blocks, stalls, dry voices (sd_stream.c sst_st)
+ *   sd stats [reset]   the streams' counters since the last reset: KB/s, runs, blocks, stalls, dry voices (sd_stream.c sst_st); first the ring size and the plan (SD CARD > SMPL RING)
  * What stays with fm1-base, which owns that hardware (its own tools read it: tools/fm1_debug.py, fm1_remote.py): memory reads (memr: raw addresses, the platform's alone to read), the crash
  * and boot records (crash, boot), the second core's set-up and rails (dualcfg), the radio's calibration, link layer and
  * Bluetooth Classic diagnostics (blevm, bletrim, blell, btclk, btinq, btscan, btrx, btpage, bttrace), the SD bus modes
@@ -487,6 +487,10 @@ static void con_sd_stats(const char *p)              /* sd stats [reset]: the st
         con_puts("sd stats: reset\r\n");
         return;
     }
+    con_kv("ring KB", (int32_t)(sst_k / 2u));        /* (SYSTEM > SD CARD > SMPL RING once placed: sd_stream_plan.c) */
+    con_kv("plan", sstp.state);                      /* 0 none, 1 letting go, 2 placed, 3 refused */
+    con_kv("rings", sstp.nring);
+    con_kv("need B", (int32_t)sstp.need);
     con_kv("ms", (int32_t)ms);
     con_kv("KB/s", (int32_t)(ms ? (uint32_t)((uint64_t)sst_st.blocks * 512u / ms) : 0u));
     con_kv("runs", (int32_t)sst_st.runs);

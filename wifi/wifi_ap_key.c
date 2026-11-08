@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only OR MPL-2.0 */
 /* Copyright (C) 2026 Henri David */
 /* The default password of an Optimist access point (wifi_ap.h wifi_ap_default_key): in wifi_ap.c with MODE AP, and on its own
- * in a station-only build, whose MODE JAM joins such an access point with it (device/wifi_own.c). Included once. */
+ * in a station-only build, whose MODE JANK joins such an access point with it (device/wifi_own.c). Included once. */
 #ifndef WIFI_AP_KEY_C
 #define WIFI_AP_KEY_C
 #include "wifi_ap.h"

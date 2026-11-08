@@ -81,7 +81,7 @@ int32_t opt_ui_oc(void);                                     /* the last render'
                                                               * none, 1 SPK LOWCUT, 2 BASS+, 3 HP BASS +3 dB, 4 +6 dB) */
 void opt_ui_lights_set(uint32_t v);                          /* the host: that level set, as the menu's step does */
 void opt_ui_link_set(uint32_t v);                            /* the host: SYNC > LINK's stored value (0 OFF, 1 ON, 2 ON+S/S) */
-int32_t opt_ui_link(int eff);                                /* the host: the LINK in force (eff 1; MODE JAM turns OFF to ON) or the stored one (eff 0); -1 not built */
+int32_t opt_ui_link(int eff);                                /* the host: the LINK in force (eff 1; MODE JANK turns OFF to ON) or the stored one (eff 0); -1 not built */
 int32_t opt_ui_usbh(void);                                   /* SYSTEM > USB's MODE (0 DEVICE, 1 HOST; -1 not built: USB_HOST) */
 void opt_ui_usbh_reboot(void);                               /* the host: a reboot, MODE DEVICE again (as RAM is cleared) */
 #endif

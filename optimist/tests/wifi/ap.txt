@@ -16,7 +16,7 @@ tap GLO
 wait 100
 spin SELECT 3                                           # (BT MIDI, BT AUDIO, then WI-FI: Bluetooth and Wi-Fi first since 2026-11-03, General after)
 wait 100
-# MODE AP AUTO (OFF, MAN, AUTO, JAM, AP MAN, AP AUTO; the last turn stops at the end): no typed key
+# MODE AP AUTO (OFF, MAN, AUTO, JANK, AP MAN, AP AUTO; the last turn stops at the end): no typed key
 spin K1 1
 wait 100
 spin K1 1
@@ -129,17 +129,17 @@ expect ap_key 0
 expect ap_key_default 1
 expect ap_key_sum 777
 expect ap_state 3
-# MODE JAM: no access point at all: the air (wifi/wifi_jam.h), Link in force whatever SYNC > LINK says, SAVE no password to show
+# MODE JANK: no access point at all: the air (wifi/wifi_jank.h), Link in force whatever SYNC > LINK says, SAVE no password to show
 spin K1 -1
 wait 3500
 cells
 expect wifi_mode 7
 expect ap_state 0
-expect wifi_jam 0
+expect wifi_jank 0
 expect wifi_ch 1
 expect wifi_ip_first 169
 expect link_eff >0
-# MODE AUTO again (JAM, AUTO): the air off, the station manager back
+# MODE AUTO again (JANK, AUTO): the air off, the station manager back
 spin K1 -1
 wait 500
 expect wifi_mode 1

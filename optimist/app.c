@@ -314,9 +314,9 @@ int app_expect(const char *what, int *got)
         *got = (int)opt_ui_batt();
     else if (!strcmp(what, "lights"))          /* SYSTEM > LIGHTS' level (0 OFF .. 3 HIGH; -1 not built) */
         *got = (int)opt_ui_lights();
-    else if (!strcmp(what, "link_eff"))        /* SYNC > LINK in force (MODE JAM turns OFF into ON) */
+    else if (!strcmp(what, "link_eff"))        /* SYNC > LINK in force (MODE JANK turns OFF into ON) */
         *got = (int)opt_ui_link(1);
-    else if (!strcmp(what, "link_stored"))     /* SYNC > LINK as stored (JAM never touches it) */
+    else if (!strcmp(what, "link_stored"))     /* SYNC > LINK as stored (JANK never touches it) */
         *got = (int)opt_ui_link(0);
     else if (!strcmp(what, "hp"))              /* the headphone jack as the UI read it (1 in; the script's "jack") */
         *got = (int)opt_ui_hp();

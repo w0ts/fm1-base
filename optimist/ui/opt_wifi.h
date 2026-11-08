@@ -282,7 +282,7 @@ static void opt_wifi_poll(void)
         wlk.own_playing = song.playing;
         plat_link_set_tempo(wlk.own_mpb);       /* (the tempo a session of its own starts with) */
     }
-    link_jam = wn_st.mode == WN_MODE_JAM_AUTO;   /* (MODE JAM: Link on whatever SYNC > LINK
+    link_jank = wn_st.mode == WN_MODE_JANK_AUTO;   /* (MODE JANK: Link on whatever SYNC > LINK
                                                  * says; leaving it gives the setting back) */
     plat_link_enable(link_eff() != LINK_OFF);    /* (LINK OFF on the MIDI page: no session; once on, nothing: wanted at every pass, so a restart of the stack finds it) */
     opt_wifi_sync();

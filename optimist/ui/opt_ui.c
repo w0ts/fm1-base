@@ -420,7 +420,7 @@ int32_t opt_ui_oc(void) { return oc_last; }                        /* the output
 void opt_ui_lights_set(uint32_t v) { (void)v; }                   /* (as above: no levels to set) */
 #if FELUCCA_LINK || (defined(FELUCCA_WIFI) && FELUCCA_WIFI)
 void opt_ui_link_set(uint32_t v) { link_mode = (uint8_t)(v % 3u); }   /* SYNC > LINK as the menu's step sets it (the stored value) */
-int32_t opt_ui_link(int eff) { return eff ? (int32_t)link_eff() : (int32_t)link_mode; }   /* the LINK in force (MODE JAM: OFF reads ON) / the stored one */
+int32_t opt_ui_link(int eff) { return eff ? (int32_t)link_eff() : (int32_t)link_mode; }   /* the LINK in force (MODE JANK: OFF reads ON) / the stored one */
 #else
 void opt_ui_link_set(uint32_t v) { (void)v; }
 int32_t opt_ui_link(int eff) { (void)eff; return -1; }

@@ -1055,11 +1055,11 @@ static int wifi_frame(const uint8_t *p, uint32_t n)
         wifi_cat(q, plat_wifi_why(), e);
         wifi_line(b);
 #if FM1B_WIFI_OWN
-        {   /* MODE JAM: its air, then each unit heard: frames received from it, its signal, how long ago */
-            static const char *const JW[2][4] = {{"jam ch ", " tx ", " err ", " kept "}, {"peer ", " data ", " -dbm ", " ago "}};
+        {   /* MODE JANK: its air, then each unit heard: frames received from it, its signal, how long ago */
+            static const char *const JW[2][4] = {{"jank ch ", " tx ", " err ", " kept "}, {"peer ", " data ", " -dbm ", " ago "}};
             uint32_t v[4];
             int k;
-            for (k = 0; plat_wifi_jam_stat(k, v); k++) {
+            for (k = 0; plat_wifi_jank_stat(k, v); k++) {
                 q = b;
                 for (i = 0; i < 4; i++) {
                     q = wifi_cat(q, JW[k != 0][i], e);

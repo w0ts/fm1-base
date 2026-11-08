@@ -97,7 +97,7 @@ run_wifi() {                        # the dev profile with Wi-Fi + Link (profile
     OPT_HOST_BT=1 OPT_HOST_WIFI=1 X0X_FONTSET=terminus "$PY" tools/build.py optimist --host
     $H/optimist_host optimist/tests/note.txt $H
     $H/optimist_host optimist/tests/wifi/wifi.txt $H
-    $H/optimist_host optimist/tests/wifi/jam.txt $H     # MODE JAM: another FM-1 heard with no access point, Link forced on
+    $H/optimist_host optimist/tests/wifi/jank.txt $H     # MODE JANK: another FM-1 heard with no access point, Link forced on
     unset OPT_PROFILE
 }
 

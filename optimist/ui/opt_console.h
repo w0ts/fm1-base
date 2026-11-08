@@ -9,7 +9,7 @@
  *   params       the selected track's parameters (console.c con_params)
  *   btlog [N]    fm1-base's Bluetooth log, the newest N lines (plat_ble_log_line: its stack's own lines, what
  *                Optimist's blell / btinq / bttrace print from its own stack on its console; BLE or BT_AUDIO builds)
- *   reboot       a restart (plat_restart)
+ *   reboot       a restart (plat_restart), the project saved first; reboot cut: without saving, as a power cut (an autosave test)
  * and Optimist's console commands that read its HAL, on what fm1-base's platform gives (plat.h):
  *   dbg          the platform's counters: late renders (plat_xruns), erases that held the sound (plat_flash_held), the
  *                messages and their age on each MIDI port (plat_midi_count, plat_midi_ago), the USB session, the battery's
@@ -67,6 +67,7 @@ static struct {
 #endif
 } con;
 static uint32_t con_reboot_ms;                  /* `reboot`: when it was asked (0: not); opt_con_task restarts */
+static uint8_t con_reboot_cut;                  /* `reboot cut`: nothing saved first (tools/fm1_autosave_test.py) */
 
 #if FELUCCA_CON_MIDI
 static void con_sx_flush(void)                  /* the waiting text as one 'o' frame */
@@ -633,7 +634,7 @@ static void con_exec(const char *p)
 #if FELUCCA_BLE || FELUCCA_BT_AUDIO
                  "  btlog [N]"
 #endif
-                 "  reboot\r\n");
+                 "  reboot [cut]\r\n");
     else if (con_word(&p, "status"))
         con_status();
     else if (con_word(&p, "params"))
@@ -663,7 +664,8 @@ static void con_exec(const char *p)
         con_btlog(p);
 #endif
     else if (con_word(&p, "reboot")) {
-        con_puts("rebooting\r\n");
+        con_reboot_cut = (uint8_t)con_word(&p, "cut");
+        con_puts(con_reboot_cut ? "rebooting, nothing saved\r\n" : "rebooting\r\n");
         con_reboot_ms = plat_ms() | 1u;         /* (opt_con_task: the reply out first, the project saved, then the restart) */
     } else if (*p)
         con_puts("? (help)\r\n");
@@ -702,7 +704,8 @@ int opt_con_frame(const uint8_t *p, uint32_t n)
 static void opt_con_task(void)
 {
     if (con_reboot_ms && plat_ms() - con_reboot_ms > 150u) {
-        persist_flush_now();
+        if (!con_reboot_cut)
+            persist_flush_now();                /* (reboot cut: none, as a power cut) */
         plat_restart();
     }
 #if FELUCCA_CDC

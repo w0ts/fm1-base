@@ -7,7 +7,7 @@
 
 static const uint8_t OIN_PANEL_ID[14] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0, 1};   /* (ui/panel.c PANEL_DEFAULT) */
 
-#if (FELUCCA_CDC || (defined(FELUCCA_CON_MIDI) && FELUCCA_CON_MIDI)) && defined(OPT_CON_EXTRA) && OPT_CON_EXTRA   /* (the console's keylog: ui/opt_console.h) */
+#if FELUCCA_CDC                                   /* (the console's keylog, with the serial port: ui/opt_console.h OPT_CON_EXTRA) */
 /* the console's keylog (ui/opt_console.h): the last 32 button and key edges this scan saw, id (0..13 buttons by matrix id,
  * 14..40 keys + 14) with bit 7 set for a release, and the time (plat_ticks24) */
 #define FM1_KLOG_N 32u
@@ -31,7 +31,7 @@ static void opt_in_scan(void)
     for (l = 0; l < 14u; l++)
         if ((ch >> l) & 1u)
             fm1_btn_t[(m >> l) & 1u ? 0u : 1u][l] = now;
-#if (FELUCCA_CDC || (defined(FELUCCA_CON_MIDI) && FELUCCA_CON_MIDI)) && defined(OPT_CON_EXTRA) && OPT_CON_EXTRA   /* (the console's keylog: ui/opt_console.h) */
+#if FELUCCA_CDC                                   /* (the console's keylog, with the serial port: ui/opt_console.h OPT_CON_EXTRA) */
     for (l = 0; l < 14u; l++)
         if ((ch >> l) & 1u)
             opt_klog(l, (m >> l) & 1u, now);

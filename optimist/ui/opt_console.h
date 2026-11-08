@@ -48,7 +48,8 @@
 #endif
 #if FELUCCA_CDC || FELUCCA_CON_MIDI
 #ifndef OPT_CON_EXTRA
-#define OPT_CON_EXTRA 0                         /* keylog, flr, tabbench (below) */
+#define OPT_CON_EXTRA FELUCCA_CDC               /* cpu1, keylog, flr, tabbench, sd raw (below): with the serial port, as before;
+                                                 * off when the console is over MIDI alone (USB audio: room is tight) */
 #endif
 #define CON_LINE 64u
 #include "io/console_parse.h"                   /* con_word, con_num, con_run_parse (Optimist's, pure) */
@@ -284,8 +285,8 @@ static void con_keys(void)
     con_kx("matrix_buttons", fm1_in.buttons);               /* (the ids Optimist's UI sees: opt_panel.h) */
     con_kx("matrix_keys", oin_keys);
 }
-/* keylog, flr, tabbench: the developer's extras, off in the release console (OPT_CON_EXTRA 0: about 1.5 KB of flash; the
- * user 2026-11-08: the console must fit beside USB audio in sd-card-mots) */
+/* keylog, flr, tabbench: the developer's extras, off when the console runs over MIDI alone (OPT_CON_EXTRA 0: about 1.8 KB
+ * of flash with cpu1 and sd raw; the user 2026-11-08: the console must fit beside USB audio in sd-card-mots) */
 #if OPT_CON_EXTRA
 static void con_keylog(void)
 {

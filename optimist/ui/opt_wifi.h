@@ -236,6 +236,18 @@ static void wl_clock(int64_t now)               /* Link's session as MIDI clock 
     }
 }
 static int32_t wl_mpb_now(void) { return 60000000 / (song.g[G_BPM] > 20 ? song.g[G_BPM] : 20); }
+/* a START waiting for the session's bar line (wl_clock: 96 ticks, the quantum): PLAY while following Link (link_hop), or the
+ * session started by a peer while stopped (ON+S/S): the beats left, 4 .. 1; 0 none (Optimist's op_wifi.c wf_link_count says
+ * LINK START IN n; as its wifi_link.c wl_wait_beats) */
+static uint32_t wl_wait_beats(void)
+{
+    uint32_t d;
+    int wait = link_hop || (link_eff() == LINK_ONSS && plat_link_playing() && !wlk.started);
+    if (song.playing || !wlk.feed || !wait)
+        return 0;
+    d = (96u - wlk.k % 96u) % 96u;
+    return d ? (d + 23u) / 24u : 1u;
+}
 static void wl_push_own(void)                   /* the FM-1's own PLAY / STOP and tempo, to the Link session */
 {
     int32_t mpb;

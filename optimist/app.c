@@ -185,7 +185,7 @@ void app_splash(void)
     opt_splash();
 }
 void app_ui_init(void) { opt_ui_init(); }
-int app_sysex(const uint8_t *p, uint32_t n) { return opt_ed_frame(p, n); }
+int app_sysex(const uint8_t *p, uint32_t n) { return opt_con_frame(p, n) || opt_ed_frame(p, n); }
 void app_sysex_byte(uint8_t b) { opt_sysex_byte(b); }
 void app_loop(void)
 {

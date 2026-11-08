@@ -47,6 +47,9 @@
 #define FELUCCA_CON_MIDI 0
 #endif
 #if FELUCCA_CDC || FELUCCA_CON_MIDI
+#ifndef OPT_CON_EXTRA
+#define OPT_CON_EXTRA 0                         /* keylog, flr, tabbench (below) */
+#endif
 #define CON_LINE 64u
 #include "io/console_parse.h"                   /* con_word, con_num, con_run_parse (Optimist's, pure) */
 #if FELUCCA_CON_MIDI
@@ -238,6 +241,7 @@ static void con_dbg(void)
     con_kv("bta_state", plat_bta_state());
 #endif
 }
+#if OPT_CON_EXTRA                               /* (status has cpu1_up, why, jobs, posts) */
 static void con_cpu1(void)
 {
     con_kv("cpu1_on", plat_cpu2_on());
@@ -269,6 +273,7 @@ static void con_cpu1(void)
     }
 #endif
 }
+#endif
 static void con_keys(void)
 {
     con_kx("buttons", plat_buttons());
@@ -279,6 +284,9 @@ static void con_keys(void)
     con_kx("matrix_buttons", fm1_in.buttons);               /* (the ids Optimist's UI sees: opt_panel.h) */
     con_kx("matrix_keys", oin_keys);
 }
+/* keylog, flr, tabbench: the developer's extras, off in the release console (OPT_CON_EXTRA 0: about 1.5 KB of flash; the
+ * user 2026-11-08: the console must fit beside USB audio in sd-card-mots) */
+#if OPT_CON_EXTRA
 static void con_keylog(void)
 {
     uint32_t n = fm1_klog_n, i, from = n > FM1_KLOG_N ? n - FM1_KLOG_N : 0u, prev = 0;
@@ -371,6 +379,7 @@ static void con_tabbench(void)
     con_dec(sum);
     con_puts(")\r\n");
 }
+#endif
 #if FELUCCA_SDCARD
 /* the card's clock steps (plat_sd_clock, _set, _try): fm1-base's device/sd.c has them on the sd-clock topic only (7169307),
  * not yet on this line: without it a console build with the card did not link (2026-11-08). 1 once sd-clock is merged */
@@ -534,6 +543,7 @@ static void con_sd_cmd(const char *p)
         p = "";                                          /* (then the mount again, below) */
     }
 #endif
+#if OPT_CON_EXTRA
     if (con_word(&p, "raw")) {                           /* a sector, through plat_sd_read */
         static uint8_t blk[512];
         uint32_t s = con_num(&p, &ok);
@@ -544,6 +554,7 @@ static void con_sd_cmd(const char *p)
         con_bytes("sector", blk, 64u);
         return;
     }
+#endif
     {
         uint32_t st = sd_mount();
         int sub = *p != 0;                                   /* (a folder or a file: the state only when it is not ready) */
@@ -603,13 +614,15 @@ static void con_exec(const char *p)
     if (con_run(p))
         return;
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  cpu1  keys  keylog"
-                 "  flr OFFSET [LEN]  tabbench"
+        con_puts("play  pause  stop  rec on|off  proj load N  heavy [NOTES]  status  params  dbg  keys"
+#if OPT_CON_EXTRA
+                 "  cpu1  keylog  flr OFFSET [LEN]  tabbench"
+#endif
 #if FELUCCA_SDCARD
 #if OPT_CON_SD_CLOCK
-                 "  sd [ls [DIR] | cat FILE | raw SECTOR | diag | speed | clock MHZ|auto | irq [N] | stats [reset]]"
+                 "  sd [ls [DIR] | cat FILE | diag | speed | clock MHZ|auto | irq [N] | stats [reset]]"
 #else
-                 "  sd [ls [DIR] | cat FILE | raw SECTOR | irq [N] | stats [reset]]"
+                 "  sd [ls [DIR] | cat FILE | irq [N] | stats [reset]]"
 #endif
 #endif
 #if FELUCCA_BLE || FELUCCA_BT_AUDIO
@@ -622,16 +635,20 @@ static void con_exec(const char *p)
         con_params();
     else if (con_word(&p, "dbg"))
         con_dbg();
+#if OPT_CON_EXTRA
     else if (con_word(&p, "cpu1"))
         con_cpu1();
+#endif
     else if (con_word(&p, "keys"))
         con_keys();
+#if OPT_CON_EXTRA
     else if (con_word(&p, "keylog"))
         con_keylog();
     else if (con_word(&p, "flr"))
         con_flr(p);
     else if (con_word(&p, "tabbench"))
         con_tabbench();
+#endif
 #if FELUCCA_SDCARD
     else if (con_word(&p, "sd"))
         con_sd_cmd(p);

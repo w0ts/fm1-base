@@ -32,6 +32,7 @@
  *   sd irq [N]   the read run's blocks in SPI1's interrupt (fm1-base's plat_sd_irq: 1, the default) or by the main loop's polls
  *                (0, a comparison); and its numbers. RAM only
  *   sd stats [reset]   the streams' counters since the last reset: KB/s, runs, blocks, stalls, dry voices (sd_stream.c sst_st); first the ring size and the plan (SD CARD > SMPL RING)
+ *   sd index           the sample index's pass: how far, resumed from, the time in the walk / reads / records, KB/s (sd_index.c sxs)
  * What stays with fm1-base, which owns that hardware (its own tools read it: tools/fm1_debug.py, fm1_remote.py): memory reads (memr: raw addresses, the platform's alone to read), the crash
  * and boot records (crash, boot), the second core's set-up and rails (dualcfg), the radio's calibration, link layer and
  * Bluetooth Classic diagnostics (blevm, bletrim, blell, btclk, btinq, btscan, btrx, btpage, bttrace), the SD bus modes
@@ -529,6 +530,31 @@ static void con_sd_cmd(const char *p)
         con_sd_irq(p);
         return;
     }
+#if FELUCCA_SD_FATFS && defined(SDX_STATS) && SDX_STATS
+    if (con_word(&p, "index")) {                         /* the sample index's pass: how far, where its time goes (sd_index.c sxs) */
+        uint32_t wall = (uint32_t)(SD_NOW() - sxs.t0) / SD_TICKS_MS, busy = 0, i;
+        static const char *const B[SXS_N] = {"walk us", "read us", "put us", "other us"};
+        con_kv("pass", sdxp.st);                         /* 0 none, 9 hashing (sd_index.c SDXP_*) */
+        con_kv("pct", (int32_t)sdx_pass_pct());
+        con_kv("records", (int32_t)sdxp.k);
+        con_kv("of", (int32_t)sdxp.cap);
+        con_kv("hashed", (int32_t)sdx.hashed);
+        con_kv("kept", (int32_t)sdx.kept);
+        con_kv("resumed from", (int32_t)sdxp.partn);     /* (index.prt's records: a cut pass's) */
+        con_kv("wall ms", (int32_t)wall);
+        con_kv("slices", (int32_t)sxs.slices);
+        for (i = 0; i < SXS_N; i++) {
+            con_kv(B[i], (int32_t)sxs.us[i]);
+            busy += sxs.us[i] / 1000u;
+        }
+        con_kv("open us", (int32_t)sxs.open_us);         /* (inside walk) */
+        con_kv("busy ms", (int32_t)busy);
+        con_kv("KB read", (int32_t)(sxs.bytes / 1024u));
+        con_kv("read KB/s", (int32_t)(sxs.us[SXS_READ] ? (uint32_t)((uint64_t)sxs.bytes * 1000u / sxs.us[SXS_READ]) : 0u));
+        con_kv("pass KB/s", (int32_t)(wall ? sxs.bytes / wall : 0u));   /* (bytes / ms = KB/s) */
+        return;
+    }
+#endif
 #if FELUCCA_SD_STREAM
     if (con_word(&p, "stats")) {
         con_sd_stats(p);
@@ -626,9 +652,9 @@ static void con_exec(const char *p)
 #endif
 #if FELUCCA_SDCARD
 #if OPT_CON_SD_CLOCK
-                 "  sd [ls [DIR] | cat FILE | diag | speed | clock MHZ|auto | irq [N] | stats [reset]]"
+                 "  sd [ls [DIR] | cat FILE | diag | speed | clock MHZ|auto | irq [N] | stats [reset] | index]"
 #else
-                 "  sd [ls [DIR] | cat FILE | irq [N] | stats [reset]]"
+                 "  sd [ls [DIR] | cat FILE | irq [N] | stats [reset] | index]"
 #endif
 #endif
 #if FELUCCA_BLE || FELUCCA_BT_AUDIO

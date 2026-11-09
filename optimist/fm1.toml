@@ -153,4 +153,11 @@ tagline = "a modular firmware for the M-VAVE FM-1"
 repo = "https://github.com/w0ts/optimist"
 licence = "GPL-3.0-only"
 credits = "Optimist (GPL-3.0-only), from SLOOP and Felucca, on fm1-base (MPL-2.0)"
+# the firmware hubs' listing (docs/FIRMWARE-JSON.md; a release refuses without it). screenshot: relative to this folder;
+# Optimist's repository has the same file at the same path (the hubs fetch it from repo at the release's tag)
+author = "Henri David"
+description = "Optimist turns the FM-1 into a groovebox: three synth tracks, a drum track, patterns and scenes, effects, Ableton Link, JANK and SD card support. Build your own in the web builder."
+tags = ["groovebox", "synth", "drum-machine", "sequencer", "sampler"]
+install = "https://w0ts.github.io/optimist/webapp/editor/#install"
+screenshot = "assets/screens/device-mixer.png"
 # crk_diag = true             the crackle hunt's counters (FM1B_CRK_DIAG=1 in the environment too): crk lines in the log; off in the release

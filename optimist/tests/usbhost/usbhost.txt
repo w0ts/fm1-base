@@ -16,13 +16,13 @@ expect voices >0
 midi 80 3C 00
 wait 600
 expect voices 0
-# SYSTEM > USB (GLO twice; INFO, BT MIDI, BT AUDIO, WI-FI, General, then USB: Bluetooth and Wi-Fi first since 2026-11-03):
+# SYSTEM > USB (GLO twice; INFO, BT MIDI, BT AUDIO, WI-FI, then USB: with the connections since 2026-11-09):
 # MODE DEVICE, DEVICE NONE
 tap GLO
 wait 100
 tap GLO
 wait 100
-spin SELECT 5
+spin SELECT 4
 wait 100
 cells
 # MODE HOST (KNOB 1): the port a host, nothing plugged in

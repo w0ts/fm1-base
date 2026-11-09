@@ -145,12 +145,11 @@ wait 500
 expect peak_db_min -40
 key 7 up
 wait 800
-# DIG_TONE: DIGITAL's ALG past 8 is T1..T8 (the TONE routings), a note plays on the last
+# DIG_TONE: DIGITAL's ALG past 8 is T1..T8 (the TONE routings), a note plays on the last. EDIT opens on its first page
+# (DIGITAL has two pages of its own: no MAIN since 2026-11-09), ALG on KNOB 1
 engine 0 DIGITAL
 tap EDIT
 wait 100
-turn SELECT 1
-wait 50
 expect gv1 4
 turn K1 4
 wait 50

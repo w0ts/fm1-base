@@ -543,6 +543,11 @@ static HOT void mix_block(int32_t *out, uint32_t n)
 #if FELUCCA_USB_AUDIO
     ut_mix(n);                                     /* the USB input, a track (fx.c) */
 #endif
+#if FELUCCA_SD_STREAM && FELUCCA_SD_UI
+    sst_pv_mix(n);                                 /* the card's sample preview (Optimist's storage/sd/sd_preview.h, as its
+                                                    * system/dual.c: missing here, no preview ever sounded on an FM-1,
+                                                    * found 2026-11-09 with the console's sd stats: no stream run) */
+#endif
     mix_finish(out, n);
 #if FELUCCA_MACROS
     FAR(mac_post)();

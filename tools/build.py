@@ -22,7 +22,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_name_fn = "fn"         the name of the app's function `const char *fn(void)` the USB product name is asked of each time a
                              host reads it (FELUCCA_USB_NAME_FN; usb_product is the fallback, the audio devices' names follow it
                              unless usb_audio_in_name / usb_audio_out_name are set): a name with something of this FM-1 in it
-                             (plat.h plat_dev_id, plat_dev_name: "FM1-XXXX"); the manufacturer stays usb_manufacturer's
+                             (plat.h plat_dev_id, plat_dev_name: "FM1-XXXX"); the manufacturer stays usb_manufacturer's.
+                             It also gives the device a USB serial number from the chip's ID, so a computer tells two FM-1s
+                             apart whichever port they are in (macOS's MIDI setup otherwise names a device by its port)
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -1009,6 +1011,7 @@ def build_app():
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", fn):
             raise SystemExit(f"build: usb_name_fn = {fn!r}: a C function name")
         flags.append(f"-DFELUCCA_USB_NAME_FN={fn}")
+        flags.append("-DFELUCCA_USB_SERIAL_FN=fm1_usb_serial")   # (and a serial number of this FM-1: device/plat_fm1.c)
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)

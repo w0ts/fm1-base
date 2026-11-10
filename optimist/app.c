@@ -189,8 +189,15 @@ void app_splash(void)
 void app_ui_init(void) { opt_ui_init(); }
 int app_sysex(const uint8_t *p, uint32_t n) { return opt_con_frame(p, n) || opt_ed_frame(p, n); }
 void app_sysex_byte(uint8_t b) { opt_sysex_byte(b); }
+/* the screen reader (fm1-reader; fm1-base's device/announce.c): Optimist's UI says its screen (ui/optimist/op_speak.c) */
+int opt_ann_on(void) { return ann_on(); }
+int opt_ann_where(void) { return ann_where(); }
+void opt_ann_say(const char *t, uint32_t flags) { ann_say(t, 0, flags); }
+void opt_ann_later(const char *t) { ann_later(t, ANN_NOW, 150u, plat_ms()); }   /* (a knob's turn: once it rests 150 ms) */
+
 void app_loop(void)
 {
+    ann_tick(plat_ms());                         /* the reader's turn-rest and its going quiet (announce.c) */
     opt_ed_poll();
     opt_wifi_loop();                             /* Wi-Fi: the page's mirrors of fm1-base's manager, Link's MIDI clock */
 }

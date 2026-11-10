@@ -136,6 +136,7 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
  * fm1-base's has none): its height instead, as nonzero once copied (fm1-base's FONT_L has lower case with fm1.toml
  * font_full = ["L"], so the range it is given is its own) */
 #define HPJ_PLAT plat_headphones                 /* (system/hpjack.h: the jack read and debounced by fm1-base) */
+#define OPT_SPEAK 1                              /* the screen in words for a screen reader (op_speak.c; app.c opt_ann_*) */
 #define scale h
 #include "ui/optimist/optimist.c"
 #undef scale

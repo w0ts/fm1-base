@@ -64,7 +64,8 @@ void app_sysex_byte(uint8_t b);
 #define APP_LOOP
 void app_loop(void);
 #define APP_RESTART                      /* plat_restart: a restore done, the mirror's test session */
-#define APP_TICK                         /* 1 kHz, the timer interrupt: the MIDI in, CLOCK OUT (core/opt_core.c) */
+#define APP_TICK                         /* 1 kHz, the timer interrupt: the MIDI in (core/opt_core.c) */
+#define APP_TICK_FAST                    /* 10 kHz, the timer interrupt: CLOCK OUT's ticks to USB on time (plat_midi_rt) */
 /* Bluetooth (fm1.toml ble_stack = "own": Optimist's own stack, fm1-base's): what it keeps lives in Optimist's settings
  * record, as Optimist keeps it (APP_BLE_STORE: app.c app_ble_load / app_ble_save, ui/opt_bt.h), so no OBJ_BLE; it
  * starts at power-on when SYSTEM > BT MIDI was left on (Optimist's: off by default); it advertises as Optimist does,
@@ -96,6 +97,7 @@ struct plat_ble_keys;
 void opt_ble_device_keys(const struct plat_ble_keys *k);
 #endif
 void app_tick(void);
+void app_tick_fast(void);
 #if OPT_DIM_LEVELS
 #define APP_DIM_LEVELS                   /* plat_dim_ns: LIGHTS's LOW / MID / HIGH as the dim layer's brightness (ui/opt_panel.h) */
 #endif

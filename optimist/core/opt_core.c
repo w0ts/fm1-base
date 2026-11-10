@@ -413,9 +413,7 @@ void opt_core_midi(uint32_t pkt, int port)
  * fm1_timer5_irq) that the trial has: the MIDI in from fm1-base's queue into Optimist's, stamped where it
  * arrived: the platform's stamp (plat_midi_in_t24: a 10 kHz look at the endpoint and the jack's ring, within 0.05 ms, as
  * Optimist's own usb_rx_peek / uart_midi_peek; the stamp taken here instead was late by up to the render's 5.8 ms half
- * before this, which threw the clock follower's tempo filter off); and CLOCK OUT's packets (io/midi/clock_out.c, rt_out_*: each due when its audio
- * leaves) sent at the tick nearest their time, ahead of the notes as usb.c ep1_tx sends them (within half a
- * millisecond: a USB frame is one) */
+ * before this, which threw the clock follower's tempo filter off). CLOCK OUT's packets to USB: opt_core_tick_fast */
 #define OPT_TICK_HALF (500u * FM1_TICKS_PER_US)
 void opt_core_tick(void)
 {
@@ -424,21 +422,27 @@ void opt_core_tick(void)
     usbh_tick_lost(fm1_ticks());                    /* a USB session ended: its notes off first (ui/opt_usbh.h) */
     while (plat_midi_in(&pkt, &port))
         opt_core_midi(pkt, port);
-#if USB_RT_OUT
-    {
-        uint32_t now = fm1_ticks() + OPT_TICK_HALF - SYNC_PEEK_HALF;   /* (rt_out_ready: due within SYNC_PEEK_HALF) */
-        while (rt_out_ready(now)) {
-            pkt = rt_out_pkt[rt_r % RTQ];
-            RING_PUBLISH();
-            rt_r++;
-            plat_midi_send(pkt, TO_USB);
-        }
-    }
-#endif
 #if FELUCCA_BLE
     opt_ble_tick(fm1_ticks() + OPT_TICK_HALF);      /* Bluetooth: the events and CLOCK OUT to the computer's link */
 #endif
     opt_link_tick();                                 /* Link's session as MIDI clock (ui/opt_wifi.h: nothing without WIFI_LINK) */
+}
+
+/* fm1-base's 10 kHz tick (APP_TICK_FAST: the timer interrupt, inside the render too), as Optimist's own TIMER5 sends them:
+ * CLOCK OUT's packets (io/midi/clock_out.c, rt_out_*: each due when its audio leaves) at the tick nearest their time,
+ * straight into the USB endpoint (plat_midi_rt). Measured on a Mac before, sent by the 1 kHz tick through the 2 kHz poll:
+ * 418 us sd around their own line, up to 1.5 ms */
+void opt_core_tick_fast(void)
+{
+#if USB_RT_OUT
+    uint32_t now = fm1_ticks();                     /* (rt_out_ready: due within SYNC_PEEK_HALF, half a tick) */
+    while (rt_out_ready(now)) {
+        uint32_t pkt = rt_out_pkt[rt_r % RTQ];
+        RING_PUBLISH();
+        rt_r++;
+        (void)plat_midi_rt(pkt);
+    }
+#endif
 }
 
 void opt_core_panic(void)

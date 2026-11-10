@@ -253,6 +253,10 @@ void fm1_timer5_irq(void)
         uart_midi_poll();                           /* the TRS jack: same context, same queue */
 #endif
     }
+#ifdef APP_TICK_FAST
+    app_tick_fast();                                /* 10 kHz, nested in the render or not (plat_midi_rt) */
+#endif
+    usb_midi_rt_kick();                             /* what plat_midi_rt left while EP1 was busy (felucca-bsp usb.c) */
 #ifdef APP_TICK
     if (sub == 0u) {                                /* 1 kHz: the app's tick (a clock, a sequencer) */
         in_tick = 1;

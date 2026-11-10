@@ -468,6 +468,11 @@ void plat_midi_send(uint32_t pkt, uint32_t to)    /* the main loop's and the tic
         plat_unlock(f);
 }
 void plat_midi_out(uint32_t pkt) { plat_midi_send(pkt, TO_USB); }
+int plat_midi_rt(uint32_t pkt)                    /* the TIMER5 tick only (app_tick_fast): EP1 at once (felucca-bsp usb_midi_rt) */
+{
+    midi_counted(PORT_USB, 1, pkt);
+    return usb_midi_rt(pkt);
+}
 
 #if FELUCCA_USB_HOST                              /* (felucca-bsp's UH_MSG_* are USBH_MSG_*, in order) */
 void plat_usb_host(int on) { usb_host_switch((uint32_t)(on != 0)); }

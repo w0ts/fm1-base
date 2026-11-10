@@ -25,8 +25,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 }
 
 /* the 1 kHz tick (APP_TICK, the timer interrupt): the MIDI in, USB, TRS (and Bluetooth), into Optimist's queue (its
- * checks, its sources, its arrival times); CLOCK OUT's packets when due (core/opt_core.c opt_core_tick) */
+ * checks, its sources, its arrival times) (core/opt_core.c opt_core_tick) */
 void app_tick(void) { opt_core_tick(); }
+/* the 10 kHz tick (APP_TICK_FAST): CLOCK OUT's packets to USB at their time (core/opt_core.c opt_core_tick_fast) */
+void app_tick_fast(void) { opt_core_tick_fast(); }
 
 void app_panic(void) { opt_core_panic(); }
 void app_update_begin(void) { opt_update_begin(); }   /* (before app_panic: the transport stops cleanly first) */

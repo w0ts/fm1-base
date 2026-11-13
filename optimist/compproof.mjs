@@ -46,7 +46,7 @@ drain();
 const c = new Companion(input, output, { timeout: 300, tries: 1 });
 const t0 = performance.now();
 const h = await c.hello();
-check(h.name === "OPTIMIST" && h.identity === "FM-1_7900" && h.extras.editor === "optimist", "the capability query", h);
+check(h.name === "OPTIMIST" && h.identity === "FM-1_70900" && h.extras.editor === "optimist", "the capability query", h);
 const fs = await c.files();
 const names = fs.map((f) => f.name);
 check(names[0] === "SETT" && names.includes("PJ01") && names.includes("USR3") && names.slice(-2).join() === "BKINFO,BKCTL",

@@ -3,7 +3,8 @@
 # canvas and panel). Optimist's code: GPL-3.0-only,
 # never offered upstream as MPL. optimist/run.sh (tools/build.py optimist --host with Terminus, then the tests)
 name = "Optimist"             # (shown: the site, the installer, the emulator page; the build's files are lower case: optimist-X.Y.fwsc)
-id_prefix = "FM-1_79"          # a trial identity (dev FM-1_7900), not Optimist's FM-1_700
+id_prefix = "FM-1_709"         # Optimist's own (dev FM-1_70900, release X.Y FM-1_709 + 6 digits; 0.3 and before FM-1_79):
+                               # free on The Firmware Hub, unlike FM-1_79 (2026-11-13)
 usb_manufacturer = "Optimist"    # (the maker, fixed: not a device name)
 usb_product = "FM1-0000"         # (only if app_usb_name gives none)
 usb_name_fn = "app_usb_name"     # "FM1-XXXX": the MIDI device and its ports and "FM1-XXXX In" / "Out" (app.c: XXXX = Bluetooth's); tools find

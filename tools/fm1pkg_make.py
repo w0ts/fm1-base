@@ -11,11 +11,16 @@
              app area 0x4000..: app_area_head, app.bin, the SDK cfg_tool.bin and
              eq_cfg_hw.bin, the region descriptors; SFC-encrypted with the chip key
   ota.bin    the Felucca update loader (firmware/loader)
+  res.bin    with --res: the app's resource region (device/res.c: its commit record, then the payload), padded to
+             whole sectors, an entry of type 101 (as Melodee's) with the region's flash address at byte 0x14; the
+             update loader writes it after the app (felucca-bsp loader/ldr_core.c ldr_res), so an install by any
+             host that serves the package brings it
 
 The SDK files come from the JieLi AC79 SDK (AC79_SDK, or --sdk).
 All integrity checks in the format are CRC16 (poly 0x1021, init 0).
 
   fm1pkg_make.py APP.bin OTA.bin OUT.fwsc [--product FM-1_9XY] [--sdk DIR] [--app-end 0xCE000]
+                 [--res RES.bin --res-base ADDR]
 """
 import argparse
 import os
@@ -31,6 +36,8 @@ KEY = 0x980F
 # fs_ver 0x10, PID "AC791N_STORY"), plain, without its CRC
 FLASH_HDR = bytes.fromhex("20022f104cc900f00f001010a4ff4e5d0b41e0cd781dc856417fb367cf9f")
 UFW_CHIP = b"AC791N"
+RES_TYPE = 101                                       # res.bin (felucca-bsp loader/ldr_core.c LDR_RES_TYPE)
+RES_AT = 0x14                                        # its entry: the region's flash address (LDR_RES_AT)
 SDK = None
 
 
@@ -121,7 +128,12 @@ def flash_image(app, key, app_hi=FLASH_SIZE):
     spl_off = 0xA0
     isd_off = spl_off + len(spl)
     assert isd_off + len(isd) <= 0x4000
-    f[spl_off:spl_off + len(spl)] = spl
+    # the SPL as an FM-1's flash holds it: its 16-byte container header ENC 0xFFFF, the rest ENC 0xFFFF again (the
+    # entry's CRC stays the plain file's); felucca-bsp chip/ota.c refuses a writer whose boot area is not so
+    spl_enc = bytearray(spl)
+    enc(spl_enc, 0, 16)
+    enc(spl_enc, 16, len(spl) - 16)
+    f[spl_off:spl_off + len(spl)] = spl_enc
     f[isd_off:isd_off + len(isd)] = isd
     top = (entry(crc16(spl), spl_off, len(spl), 0x00, 0x00, 0, "uboot.boot") +
            entry(crc16(isd), isd_off, len(isd), 0x02, 0x80, 0, "isd_config.ini") +
@@ -162,13 +174,22 @@ def flash_image(app, key, app_hi=FLASH_SIZE):
     return bytes(f)
 
 
-def ufw(flash, ota, product):
+def ufw(flash, ota, product, res=None, res_base=0):
     files = [(0, "flash.bin", flash), (100, "ota.bin", ota)]
+    if res:                                          # the loader reads it a sector at a time
+        if res_base & 0xFFF or not 0x97000 <= res_base < 0xE0000:
+            raise SystemExit(f"res.bin at {res_base:#x}: whole sectors of the data area [0x97000, 0xE0000) only")
+        res = res + b"\xFF" * (-len(res) % 0x1000)
+        if res_base + len(res) > 0xE0000:
+            raise SystemExit(f"res.bin: {len(res):#x} B at {res_base:#x} go past the data area (0xE0000)")
+        files.append((RES_TYPE, "res.bin", res))
     off, ents, data = 0x400, [], bytearray()
     for i, (typ, name, d) in enumerate(files):
         off = (off + 0xFF) & ~0xFF
         e = bytearray(0x50)
         struct.pack_into("<HHHHIII", e, 0, typ, i, crc16(d), 0, off, len(d), (len(d) + 31) & ~31)
+        if typ == RES_TYPE:
+            struct.pack_into("<I", e, RES_AT, res_base)
         e[0x40:0x40 + len(name)] = name.encode()
         ents.append((e, off, d))
         off += len(d)
@@ -212,10 +233,15 @@ def main():
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     ap.add_argument("--app-end", type=lambda s: int(s, 0), default=FLASH_SIZE,
                     help="the app area's end (a bigger slot: tools/build.py app_end; default 0x93000)")
+    ap.add_argument("--res", type=Path, help="the app's resource region (build/NAME-res.bin), for the loader to write")
+    ap.add_argument("--res-base", type=lambda s: int(s, 0), default=0, help="its flash address (app.h APP_RES_BASE)")
     a = ap.parse_args()
     global SDK
     SDK = a.sdk
-    pkg = ufw(flash_image(a.app.read_bytes(), a.key, a.app_end), a.ota.read_bytes(), a.product)
+    if a.res and not a.res_base:
+        ap.error("--res needs --res-base (app.h APP_RES_BASE)")
+    pkg = ufw(flash_image(a.app.read_bytes(), a.key, a.app_end), a.ota.read_bytes(), a.product,
+              a.res.read_bytes() if a.res else None, a.res_base)
     a.out.write_bytes(pkg)
     print(f"package {a.out}: {len(pkg)} B, identity {a.product}, chip key {a.key:#06x}")
 

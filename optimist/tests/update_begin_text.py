@@ -12,5 +12,9 @@ u = (ROOT / "optimist/ui/opt_update.h").read_text()
 assert "#define APP_UPDATE_BEGIN\nvoid app_update_begin(void);" in h
 assert "void app_update_begin(void) { opt_update_begin(); }" in ac
 assert ui.index('#include "opt_in.h"') < ui.index('#include "opt_update.h"')
-assert u.index('#include "system/stop_first.h"') < u.index("void opt_update_begin(void) { stop_first(); }")
-print("Optimist: APP_UPDATE_BEGIN -> stop_first()     ok")
+assert ui.index('#include "opt_editor.h"') < ui.index('#include "opt_update.h"')   # (opt_sx_letgo)
+body = u[u.index("void opt_update_begin(void)\n{"):]
+body = body[:body.index("\n}")]
+assert u.index('#include "system/stop_first.h"') < u.index("void opt_update_begin(void)")
+assert body.index("opt_sx_letgo();") < body.index("stop_first();")   # (a mirror frame left open ended first)
+print("Optimist: APP_UPDATE_BEGIN -> opt_sx_letgo(), stop_first()     ok")

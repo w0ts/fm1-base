@@ -107,6 +107,15 @@ static int ota_wire_send(const uint8_t *p, uint32_t n)   /* a whole reply (ed_se
     }
     return plat_sysex_send(p, n);
 }
+/* an update begins (ui/opt_update.h): a mirror frame left open is ended, else fm1-base's ring stays held (sx_busy) and
+ * the update's own requests never leave while the app's loop waits (2026-11-16, black: one request, then silence) */
+static void opt_sx_letgo(void)
+{
+    if (opt_sx_open) {
+        (void)plat_sysex_end();
+        opt_sx_open = 0;
+    }
+}
 
 /* ---- the editor's sample slot writes (io/editor/ed_user.c, cmds 11..14: Optimist's driver, fl_erase4k_quiet /
  * fl_write; nothing else in the unit calls them) on st_erase / st_prog: the store's allow-list and plat.h's windows,
@@ -259,6 +268,7 @@ void opt_ed_poll(void)
 }
 #else
 static void opt_ed_forget(void) {}
+static void opt_sx_letgo(void) {}
 int opt_ed_frame(const uint8_t *p, uint32_t n) { (void)p, (void)n; return 0; }
 void opt_ed_poll(void) { fm1_ms = plat_ms(); fm6_service(); }
 #endif

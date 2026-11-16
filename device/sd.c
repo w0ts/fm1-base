@@ -272,6 +272,10 @@ static int sd_start(void)                            /* in a session at the star
     fm1_sd_hw_desel();
     for (i = 0; i < 10u; i++)
         (void)sd_rx();                               /* 80 clocks, deselected: the card's power-up */
+    fm1_sd_hw_sel();                                 /* a read left open by the firmware before (a restart doesn't */
+    (void)sd_cmd(SD_CMD12, 0);                       /* reset the card): stopped first, else CMD0 gets 0x00 */
+    (void)sd_wait_ready(100);
+    sd_release();
     if (sd_cmd(SD_CMD0, 0) != 1u)
         return PLAT_SD_NOCARD;
     sd.v2 = v2 = sd_cmd(SD_CMD8, 0x1AAu) == 1u;

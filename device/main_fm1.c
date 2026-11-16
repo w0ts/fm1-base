@@ -1324,12 +1324,23 @@ static void update_begin(void)
     app_update_begin();
     fm1_wdt_feed();
 #endif
+#ifdef APP_SYSEX
+    if (sxs.on)
+        (void)plat_sysex_end();                     /* an app's stream left open: ended, else the ring stays held (sx_busy)
+                                                     * and the update's own requests never leave */
+#endif
+#if FM1B_SD
+    (void)plat_sd_close();                          /* the card's open read ended: the next firmware finds it idle */
+#endif
 }
 
 static void enter_uboot(const char *why)
 {
     fm1_clock_restore();                            /* (the chip's update mode at the stock clock) */
     fm1_audio_stop();
+#if FM1B_SD
+    (void)plat_sd_close();                          /* (as before an update: REC held, safe mode) */
+#endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sys_box(0, 110, 240, SYS_S, why, C_WHITE, 1);
     fm1_delay_ms(20);

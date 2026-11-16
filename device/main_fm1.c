@@ -1239,6 +1239,14 @@ static void update_begin(void)
     app_update_begin();
     fm1_wdt_feed();
 #endif
+#ifdef APP_SYSEX
+    if (sxs.on)
+        (void)plat_sysex_end();                     /* an app's stream left open: ended, else the ring stays held (sx_busy)
+                                                     * and the update's own requests never leave */
+#endif
+#if FM1B_SD
+    (void)plat_sd_close();                          /* the card's open read ended: the next firmware finds it idle */
+#endif
 }
 
 static void enter_uboot(const char *why)

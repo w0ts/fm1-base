@@ -1435,11 +1435,12 @@ const uint8_t *plat_res(uint32_t *len)
 }
 #endif
 /* a stream (plat_sysex_begin .. end): its bytes kept as they are put, its packets into the ring as the device's */
+static uint32_t hsx_hold, hsx_held;              /* ms since the open stream's last put; streams let go (expect sx_held) */
 int plat_sysex_begin(void)
 {
     if (!hsx_session || hsx_streaming)
         return -1;
-    hsx_streaming = 1, hsx_scut = 0, hsx_sk = 0;
+    hsx_streaming = 1, hsx_scut = 0, hsx_sk = 0, hsx_hold = 0;
     return 0;
 }
 int plat_sysex_put(const uint8_t *p, uint32_t n)
@@ -1447,6 +1448,7 @@ int plat_sysex_put(const uint8_t *p, uint32_t n)
     uint32_t i;
     if (!hsx_streaming || hsx_scut || !hsx_session)
         return -1;
+    hsx_hold = 0;
     for (i = 0; i < n; i++) {
         if (hsx_sk == 3u) {                     /* (a full packet goes when the next byte comes) */
             if (hsx_stalled && hsx_q >= HSX_RING) {
@@ -1471,6 +1473,14 @@ int plat_sysex_end(void)
         hsx_q++;
     hsx_streaming = 0, hsx_sk = 0;
     return rc;
+}
+static void hsx_hold_ms(void)                   /* each ms: a stream with no put for PLAT_SYSEX_HOLD_MS let go */
+{
+    if (hsx_streaming && ++hsx_hold >= PLAT_SYSEX_HOLD_MS) {
+        hsx_scut = 1;                           /* (its frame cut: no last packet) */
+        (void)plat_sysex_end();
+        hsx_held++;
+    }
 }
 /* the crash history (device/crashlog.c) over the simulated flash's staging sectors (data_area holds the gap between
  * the windows: plat_data refuses it, as on the device). The device's .noinit crash record simulated: "crash" fills it
@@ -2605,6 +2615,7 @@ static void sim_ms_end(int frame)
     comp_step();
 #endif
     hsx_ms();
+    hsx_hold_ms();                              /* (a stream left open: let go, as the device's main loop does) */
 #ifdef APP_HOST_MS
     app_host_ms();
 #endif
@@ -2802,6 +2813,8 @@ static int expect(const char *what, const char *val)
         got = p ? (int)*p : -1;
     } else if (!strcmp(what, "data_rc"))           /* the last data_erase / data_write: 0 done, -1 refused, -2 no bytes */
         got = data_cmd_rc;
+    else if (!strcmp(what, "sx_held"))             /* streams left open, let go after PLAT_SYSEX_HOLD_MS */
+        got = (int)hsx_held;
 #ifdef APP_BATTERY_RAW
     else if (!strcmp(what, "battery_raw"))          /* plat_battery_raw: the battery's reading (the host's: full) */
         got = (int)plat_battery_raw();

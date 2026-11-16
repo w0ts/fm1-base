@@ -7,4 +7,8 @@
  * at once. Main loop, the render running meanwhile (fm1_delay_ms waits on plat_ms, fm1_wdt_feed yields: ui/opt_in.h;
  * the platform feeds the watchdog around it) */
 #include "system/stop_first.h"
-void opt_update_begin(void) { stop_first(); }
+void opt_update_begin(void)
+{
+    opt_sx_letgo();                             /* (a mirror frame left open: ended, so the update's requests go out) */
+    stop_first();                               /* (the card's open read: ended by device/main_fm1.c update_begin after) */
+}

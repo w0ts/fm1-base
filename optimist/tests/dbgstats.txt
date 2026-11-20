@@ -1,0 +1,65 @@
+# SYSTEM > General > DEBUG STATS (its third card: KNOB COLORS, HPHN BASS before it, METERS after it where it fits (GL_JOIN); the DEBUG page gone since fm1-next c6aef4ee; Optimist's core/dbgstats.h on fm1-base's plat_stats_enable, device/dbgstats.c): OFF
+# at a first start; ON from General (SYSTEM's fourth page here: INFO, INTERNALS, USB STATS before it), kept in the settings record (rsv_pj[1]) across a restart; a
+# snapshot at the 5th minute of uptime, written at once with the transport stopped; playing, the 10th minute's waits
+# for the stop; the readout's end; OFF again: none more. optimist/run.sh runs it in the none profile (tests/dev/dbgstats.txt: the dev one)
+wait 500
+expect stats_on 0
+expect stats 0
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 3
+wait 100
+cells
+expect gv3 0
+turn K3 1
+wait 100
+expect gv3 1
+expect stats_on 1
+# HOME: SYSTEM left, the settings record saved; a restart reads it: on again before the app's first frame
+tap HOME
+wait 300
+reboot
+wait 500
+expect stats_on 1
+# the 5th minute: stopped, written at once
+wait 300000
+expect stats 1
+expect stats_pending 0
+# playing through the 10th minute: queued, not written; the stop writes it
+tap PLAY
+wait 300000
+expect playing 1
+expect stats 1
+expect stats_pending 1
+tap PLAY
+wait 200
+expect playing 0
+expect stats 2
+expect stats_pending 0
+sysex F0 7D 4C 53 F7
+wait 50
+# "end 2"
+expect_sysex F0 7D 4C 53 65 6E 64 20 32 F7
+# OFF again (saved), five minutes more: no snapshot (SYSTEM keeps its line: to the top, INFO, then General)
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT -30
+wait 100
+spin SELECT 3
+wait 100
+turn K3 -1
+wait 100
+expect gv3 0
+expect stats_on 0
+tap HOME
+wait 300
+wait 300000
+expect stats 2
+expect stats_pending 0
+reboot
+wait 500
+expect stats_on 0

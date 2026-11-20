@@ -113,6 +113,10 @@
  *   quit
  *   listen                       a screen reader starts listening (HELLO, again every 2 s): each SAY is printed
  *                                ("said: ..."; "said!:" cuts off what was being said)
+ *   console LINE                 a line typed on the USB serial console (plat_console_*; the port opens at the first), the
+ *                                app's reply kept
+ *   expect_console TEXT          the last "console" line's reply has TEXT in it: else a failure
+ *   unexpect_console TEXT        it has not
  *   where                        the reader asks for everything on the screen
  *   said TEXT                    some SAY since the last "said" (or "listen") has TEXT in it: else a failure
  *   unsaid TEXT                  no SAY since the last "said" has TEXT in it: else a failure
@@ -271,6 +275,9 @@ int plat_battery(void) { return 3; }   /* (the host simulator: full) */
 #ifdef APP_BATTERY_RAW
 int32_t plat_battery_raw(void) { return 620; }   /* (full: over the third bar's 591, as plat_battery's 3) */
 #endif
+#endif
+#ifdef APP_BATTERY_RAW
+int plat_battery_charging(void) { return 0; }   /* (the host and the emulator: on the cell) */
 #endif
 #ifdef APP_DIM_LEVELS
 static uint32_t dim_ns_app, dim_glow;   /* plat_dim_ns's pulse (0: the glow's); the glow plat_lights last got */
@@ -1083,6 +1090,12 @@ const uint8_t *plat_data(uint32_t off)
     data_init();
     return PLAT_DATA_OK(off, 1u) ? &data_area[off - DATA_BASE] : 0;
 }
+int plat_boot_read(uint32_t off, void *dst, uint32_t n)   /* (no boot area on the host: a bootloader not known) */
+{
+    (void)off, (void)dst, (void)n;
+    return -1;
+}
+uint32_t plat_flash_held(void) { return 0; }   /* (no erase holds anything here) */
 int plat_data_erase(uint32_t off)
 {
     data_init();
@@ -1149,6 +1162,62 @@ int plat_sysex_send(const uint8_t *frame, uint32_t n)
     hsx_keep(frame, n);
     return 0;
 }
+/* the USB serial console (plat.h plat_console_*): not open until a script types a line ("console LINE": the line and a CR
+ * go in, the app's reply is kept for "expect_console TEXT"); presented unless the app says not (plat_console_present) */
+#define CON_IN 256u
+#define CON_OUT 32768u
+static char con_in[CON_IN], con_out[CON_OUT];
+static uint32_t con_in_r, con_in_w, con_out_n;
+static int con_open, con_presented = 1;
+int plat_console_open(void) { return con_open && con_presented; }
+int plat_console_read(void) { return con_in_r == con_in_w ? -1 : (unsigned char)con_in[con_in_r++ % CON_IN]; }
+uint32_t plat_console_room(void) { return plat_console_open() ? 4096u : 0u; }
+uint32_t plat_console_write(const void *p, uint32_t n)
+{
+    uint32_t i;
+    if (!plat_console_open())
+        return 0;
+    for (i = 0; i < n && con_out_n + 1u < CON_OUT; i++)
+        con_out[con_out_n++] = ((const char *)p)[i];
+    con_out[con_out_n] = 0;
+    return n;
+}
+void plat_console_present(int on) { con_presented = on != 0; }
+static void run_ms(uint32_t ms);
+static void console_line(const char *t)         /* the line typed, the reply kept (the earlier reply and the banner dropped) */
+{
+    uint32_t i;
+    con_open = 1;
+    run_ms(60);                                 /* (the app's banner, once the port is open) */
+    con_out_n = 0;
+    con_out[0] = 0;
+    for (i = 0; t[i] && con_in_w - con_in_r < CON_IN - 1u; i++)
+        con_in[con_in_w++ % CON_IN] = t[i];
+    con_in[con_in_w++ % CON_IN] = '\r';
+    run_ms(60);
+    {                                           /* the reply, as the terminal shows it */
+        int at_line = 1;
+        for (i = 0; i < con_out_n; i++) {
+            if (con_out[i] == '\r')
+                continue;
+            if (at_line)
+                printf("  console< ");
+            putchar(con_out[i]);
+            at_line = con_out[i] == '\n';
+        }
+        if (!at_line)
+            putchar('\n');
+    }
+}
+static int expect_console(const char *t, int unwanted)   /* 0: the reply has T in it (unwanted: has not) */
+{
+    int bad = (strstr(con_out, t) == 0) != unwanted;
+    if (bad)
+        printf("FAIL %s \"%s\" (the reply: %s)\n", unwanted ? "unexpect_console" : "expect_console", t, con_out_n ? con_out : "nothing\n");
+    else
+        printf("  ok %s \"%s\"\n", unwanted ? "unexpect_console" : "expect_console", t);
+    return bad;
+}
 #if FM1B_RES
 #include "fm1_res_data.h"                             /* fm1b_res_data: the build's resources (build.py, from the file) */
 static int res_there = 1;                             /* (script "res 0": an FM-1 without them) */
@@ -1199,12 +1268,6 @@ int plat_sysex_end(void)
     hsx_streaming = 0, hsx_sk = 0;
     return rc;
 }
-/* no USB serial console on the host (plat.h: never open) */
-int plat_console_open(void) { return 0; }
-int plat_console_read(void) { return -1; }
-uint32_t plat_console_room(void) { return 0; }
-uint32_t plat_console_write(const void *p, uint32_t n) { (void)p, (void)n; return 0; }
-void plat_console_present(int on) { (void)on; }
 static void hsx_hold_ms(void)                   /* each ms: a stream with no put for PLAT_SYSEX_HOLD_MS let go */
 {
     if (hsx_streaming && ++hsx_hold >= PLAT_SYSEX_HOLD_MS) {
@@ -2134,6 +2197,9 @@ static void wifi_tick(void)
     wifi_poll();
 }
 #endif
+#ifdef APP_SPLASH
+static uint16_t splash_fb[240 * 240];   /* the screen as the app's splash left it, the last boot's (boot) */
+#endif
 static void boot(void)
 {
     hcr_boot();                                     /* a crash before this boot into the flash history (main_fm1.c) */
@@ -2141,6 +2207,10 @@ static void boot(void)
     palette_set(APP_PALETTE);                       /* as the device does at boot */
 #if FM1B_WIFI_OWN
     wifi_own_forget();                              /* (a reboot: the Wi-Fi stack's RAM as after a restart) */
+#endif
+#ifdef APP_SPLASH
+    app_splash();                                   /* the app's boot screen, before app_init as main_fm1.c draws it */
+    memcpy(splash_fb, fb, sizeof fb);               /* (kept: expect splash_lit.Y0.Y1, splashshot) */
 #endif
     app_init();
     lcd_fill(0, 0, 240, 240, 0);
@@ -2258,6 +2328,20 @@ static void sim_ms_end(int frame)
 #ifdef APP_HOST_MS
     app_host_ms();
 #endif
+    if (restart_req) {                          /* (as "reboot": the flash kept, the app's RAM forgotten) */
+        restart_req = 0;
+        restarts++;
+#if FM1B_EMU_REBOOT                             /* (no printf: the browser's stdout takes nothing, it never returns) */
+        web_down = 1;                           /* (the page starts the app again from a fresh wasm: the app's RAM
+                                                 * forgotten as the FM-1's, the saved data kept) */
+#else
+        printf("  restart (plat_restart) at %u ms\n", now_ms);
+#ifdef APP_HOST_REBOOT
+        app_host_reboot();
+#endif
+        boot();
+#endif
+    }
 }
 
 static void run_ms(uint32_t ms)
@@ -2437,6 +2521,16 @@ static int expect(const char *what, const char *val)
 #ifdef APP_DIM_LEVELS
     else if (!strcmp(what, "dim_ns"))               /* the dim pulse (plat_dim_ns, else the glow's), ns */
         got = (int)dim_pulse();
+#endif
+#ifdef APP_SPLASH
+    else if (!strncmp(what, "splash_lit.", 11)) {   /* splash_lit.Y0.Y1: the boot screen's (APP_SPLASH) pixels that are
+                                                     * not black in rows Y0..Y1 (a text in black on black: none) */
+        char *e;
+        long y0 = strtol(what + 11, &e, 10), y1 = *e == '.' ? strtol(e + 1, 0, 10) : y0, y, x;
+        for (got = 0, y = y0 < 0 ? 0 : y0; y <= y1 && y < 240; y++)
+            for (x = 0; x < 240; x++)
+                got += splash_fb[y * 240 + x] != 0;
+    }
 #endif
     else if (!strcmp(what, "clocks_out"))
         got = (int)clock_out_count;
@@ -2687,11 +2781,13 @@ static int hsx_in(const char *hex)
     }
     for (i = 1, ok = 1; i + 1u < n; i++)
         ok &= raw[i] < 0x80u;
+    if (!hsx_session)
+        return 0;                                 /* (no computer: nothing comes in) */
 #ifdef APP_SYSEX_BYTE
     for (i = 0; i < n && (i == 0 || i + 1u == n || raw[i] < 0x80u); i++)
         app_sysex_byte(raw[i]);                   /* (as the USB interrupt hands them over: to a status inside) */
 #endif
-    if (!ok || n - 2u > HOST_SX_MAX || !hsx_session)
+    if (!ok || n - 2u > HOST_SX_MAX)
         return 0;                                 /* (a status byte inside, or too long: the device drops it) */
     if (cl_request(raw + 1, n - 2u) || ds_request(raw + 1, n - 2u))
         return 0;                                 /* (the crash history, the stats: the platform's, before the app's) */
@@ -2956,6 +3052,15 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "shot")) {
             snprintf(out, sizeof out, "%s/%s", dir, a);
             png_write(out);
+#ifdef APP_SPLASH
+        } else if (!strcmp(cmd, "splashshot")) {   /* splashshot FILE: the last boot's splash screen as a PNG */
+            static uint16_t now[240 * 240];
+            snprintf(out, sizeof out, "%s/%s", dir, a);
+            memcpy(now, fb, sizeof fb);
+            memcpy(fb, splash_fb, sizeof fb);
+            png_write(out);
+            memcpy(fb, now, sizeof fb);
+#endif
         } else if (!strcmp(cmd, "leds")) {
             int i;
             printf("  leds: buttons");
@@ -3061,6 +3166,17 @@ int main(int argc, char **argv)
 #else
             printf("speakdump: this app has none (app_speak_dump)\n");
 #endif
+        } else if (!strcmp(cmd, "console") || !strcmp(cmd, "expect_console") || !strcmp(cmd, "unexpect_console")) {
+            char *t = line + strlen(cmd), *e;
+            while (*t == ' ')
+                t++;
+            e = t + strlen(t);
+            while (e > t && (e[-1] == '\n' || e[-1] == '\r' || e[-1] == ' '))
+                *--e = 0;
+            if (cmd[0] == 'c')
+                console_line(t);
+            else
+                fails += expect_console(t, cmd[0] == 'u');
         } else if (!strcmp(cmd, "where")) {
             static const uint8_t WHERE[] = {ANN_H0, ANN_H1, ANN_H2, ANN_WHERE};
             ann_frame(WHERE, sizeof WHERE, now_ms);
@@ -3178,7 +3294,10 @@ int main(int argc, char **argv)
             }
 #endif
         } else if (!strcmp(cmd, "sysex")) {
-            fails += hsx_in(strstr(line, "sysex") + 5);
+            if (usbh_port())                    /* (a USB host: no computer to send it) */
+                printf("  sysex: the port is a USB host, no computer: dropped\n");
+            else
+                fails += hsx_in(strstr(line, "sysex") + 5);
             run_ms(1);
         } else if (!strcmp(cmd, "sysex_out"))
             hsx_print();

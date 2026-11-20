@@ -104,11 +104,12 @@
  *                                (expect wifi_state, wifi_step, wifi_fail, wifi_ip_last, wifi_found, wifi_saved, wifi_mode,
  *                                link_peers, link_bpm_x10, link_playing, link_phase_us, peer_peers, peer_bpm_x10, ...)
  * FILE "out:NAME" for backup, restore, backup_damage and mirror: NAME in OUTDIR (fbdump: always there).
- * NAME_host --serve [OUTDIR] (FM1B_MIRROR): driven over stdin by a tool, as an FM-1 over USB:
- *   sx HEX      one SysEx message from the host (F0 .. F7, hex): the mirror's requests (cmd 0x50, 0x54)
+ * NAME_host --serve [OUTDIR] (FM1B_MIRROR, FM1B_COMPANION): driven over stdin by a tool, as an FM-1 over USB:
+ *   sx HEX      one SysEx message from the host (F0 .. F7, hex): the mirror's requests (cmd 0x50, 0x54), the companion's (0x60..)
  *   run MS      MS milliseconds of the device; then what it sent meanwhile, a line "sx HEX" a message, and "ok NOW"
  *   shot FILE, fbdump FILE   the screen as a PNG, as raw pixels
  *   expect WHAT VALUE   as in a script: its line, "  ok ..." or "FAIL ..."
+ *   buttons MASK, key K VEL[,PRESS] (VEL 0: up), turn ROLE N, midi PKT (hex)   the player's hands, the computer's MIDI
  *   quit
  *   listen                       a screen reader starts listening (HELLO, again every 2 s): each SAY is printed
  *                                ("said: ..."; "said!:" cuts off what was being said)
@@ -136,6 +137,9 @@
 #endif
 #ifndef FM1B_CPU2
 #define FM1B_CPU2 0                             /* fm1.toml cpu2 = true */
+#endif
+#ifndef FM1B_COMPANION
+#define FM1B_COMPANION 0                        /* fm1.toml companion = true */
 #endif
 #ifdef __linux__
 #define _GNU_SOURCE                             /* (open_memstream: --serve) */
@@ -496,6 +500,9 @@ int plat_midi_in(uint32_t *pkt, int *port)       /* the script's "midi" (BLE-DEV
     *pkt = q & ~0xF0u;
     if (p >= 0 && p < NPORTS)
         midi_counted(p, 0, *pkt);
+#if FM1B_MIRROR
+    mirror_midi_tap(*pkt);                        /* (the events mirror: the viewer's MIDI) */
+#endif
     return 1;
 }
 void plat_midi_send(uint32_t pkt, uint32_t to)
@@ -1744,6 +1751,26 @@ static int ann_wire_send(const uint8_t *p, uint32_t n)
 #endif
 #include "app.c"
 
+#if FM1B_COMPANION
+/* the companion services (device/companion.c): the computer's requests from "sysex" (and --serve's "sx"), the answers
+ * as the app's SysEx (plat_sysex_send: sysex_out, expect_sysex) */
+#include "companion.c"
+static int cp_send(const uint8_t *p, uint32_t n) { return plat_sysex_send(p, n); }
+static int cp_room(uint32_t n) { return plat_sysex_room() >= n; }
+static uint32_t cp_link(void) { return plat_usb_session(); }
+static int cp_held(void) { return 0; }
+#ifdef APP_FILE_OBJS
+static int cp_obj_read(uint32_t obj, uint32_t off, uint8_t *dst, uint32_t n)
+{
+    store_ready();
+    if (obj >= OBJ_NOBJ || store_len[obj] < 0 || off > (uint32_t)store_len[obj] || n > (uint32_t)store_len[obj] - off)
+        return -1;
+    memcpy(dst, store[obj] + off, n);
+    return 0;
+}
+#endif
+#endif
+
 #if FM1B_MIRROR
 /* ------------------------------------------------- mirroring over USB --- */
 /* the device's mirror ring, drained at USB's pace (mr_rate bytes a millisecond; 48: one 64-byte packet of USB-MIDI
@@ -1760,6 +1787,7 @@ static void mr_put(const uint8_t *p, uint32_t n)
     hmr_w += n;
 }
 static int mr_link(void) { return mr_out ? (int)mr_link_n : -1; }
+static void mr_pump(void) {}                           /* (the simulator's link goes at mr_rate) */
 static int mr_busy(void) { return !mr_out; }
 static int mr_ctl_send(const uint8_t *p, uint32_t n)
 {
@@ -2193,6 +2221,9 @@ static void sim_ms_end(int frame)
     mirror_step();
     host_mirror_ms();
 #endif
+#if FM1B_COMPANION
+    comp_step();
+#endif
     hsx_ms();
     hsx_hold_ms();                              /* (a stream left open: let go, as the device's main loop does) */
 #ifdef APP_HOST_MS
@@ -2443,7 +2474,7 @@ static void out_path(char *out, size_t n, const char *dir, const char *a)
     else
         snprintf(out, n, "%s", a);
 }
-#if FM1B_MIRROR
+#if FM1B_MIRROR || FM1B_COMPANION
 /* --serve: the simulator driven over stdin (see the top) */
 static uint32_t sv_unpack7(const uint8_t *in, uint32_t n, uint8_t *out)
 {
@@ -2463,11 +2494,13 @@ static int serve(const char *dir)
 {
     static char line[8192];
     static uint8_t raw[4096], dec[4096];
+#if FM1B_MIRROR
     char *buf = 0;
     size_t blen = 0;
     FILE *ms = open_memstream(&buf, &blen);
     mr_out = ms;
     mr_keep = 0;
+#endif
     setvbuf(stdout, 0, _IOLBF, 0);
     while (fgets(line, sizeof line, stdin)) {
         char cmd[16] = {0}, a[4096] = {0}, b[64] = {0};
@@ -2490,6 +2523,14 @@ static int serve(const char *dir)
                 continue;
             if (cl_request(raw + 1, n - 2u) || ds_request(raw + 1, n - 2u))
                 continue;                            /* (the crash history, the stats: the platform's, before the app's) */
+#if FM1B_COMPANION
+#ifdef APP_SYSEX
+            if (n - 2u <= 640u && app_sysex(raw + 1, n - 2u))
+                continue;                            /* (as "sysex": the app's first, then the companion's) */
+#endif
+            if (comp_sysex(raw, n))
+                continue;
+#endif
             d = sv_unpack7(raw + 1, n - 2, dec);
             if (d >= 7 && dec[0] == 0 && dec[1] == 0x59 && (uint32_t)(dec[3] | dec[4] << 8 | dec[5] << 16) + 7u == d) {
                 uint32_t sum = 0;
@@ -2497,15 +2538,18 @@ static int serve(const char *dir)
                     sum += dec[i];
                 if ((uint8_t)~sum != dec[d - 1])
                     continue;
+#if FM1B_MIRROR
                 if (d == 8 && dec[2] == MR_REQ)
                     mirror_cmd(dec[6]);
                 else if (d == 12 && dec[2] == MR_REMOTE)
                     mirror_remote(dec + 6);
+#endif
             }
         } else if (!strcmp(cmd, "run")) {
             static uint8_t part[1 << 16];             /* a message cut at the end of a run: its start */
             static size_t pn;
             run_ms((uint32_t)atoi(a));
+#if FM1B_MIRROR
             fflush(ms);
             for (size_t i = 0; i < blen; i++) {
                 uint8_t v = (uint8_t)buf[i];
@@ -2523,6 +2567,23 @@ static int serve(const char *dir)
             }
             rewind(ms);
             blen = 0;
+#endif
+#if FM1B_COMPANION
+            for (uint32_t i = 0; i < hsx_n; i++) {    /* the SysEx ring's frames (the companion's answers) */
+                if (hsx_out[i] == 0xF0u)
+                    pn = 0;
+                if (pn < sizeof part)
+                    part[pn++] = hsx_out[i];
+                if (hsx_out[i] == 0xF7u && part[0] == 0xF0u) {
+                    fputs("sx ", stdout);
+                    for (size_t k = 0; k < pn; k++)
+                        printf("%02X", part[k]);
+                    putchar('\n');
+                    pn = 0;
+                }
+            }
+            hsx_n = hsx_lost = 0;
+#endif
             printf("ok %u\n", now_ms);
         } else if (!strcmp(cmd, "shot") || !strcmp(cmd, "fbdump")) {
             char out[4200];
@@ -2537,9 +2598,30 @@ static int serve(const char *dir)
                 }
             }
             printf("ok\n");
-        } else if (!strcmp(cmd, "expect"))
+        } else if (!strcmp(cmd, "expect")) {
             expect(a, b);                            /* (its line: "  ok ..." or "FAIL ...", notes before it) */
-        else
+        } else if (!strcmp(cmd, "buttons")) {        /* the player's hands on the panel (tests of the events mirror) */
+            held_btn = (uint32_t)strtoul(a, 0, 0);
+            printf("ok\n");
+        } else if (!strcmp(cmd, "key")) {            /* key K VEL[,PRESS]: 0 up */
+            uint32_t k = (uint32_t)atoi(a), vel = (uint32_t)atoi(b), press = strchr(b, ',') ? (uint32_t)atoi(strchr(b, ',') + 1) : 0u;
+            if (k < NKEYS) {
+#ifdef APP_KEY_SENSE
+                app_host_key(k, vel, press);
+#endif
+                held_keys = vel ? held_keys | 1u << k : held_keys & ~(1u << k);
+            }
+            printf("ok\n");
+        } else if (!strcmp(cmd, "turn")) {           /* turn ROLE N */
+            int e = atoi(a);
+            if (e >= 0 && e < NE)
+                enc_acc[e] += atoi(b);
+            printf("ok\n");
+        } else if (!strcmp(cmd, "midi")) {           /* midi PKT: a USB-MIDI packet (hex, cable 0) from the computer */
+            min_q[mi_w % MQ] = (uint32_t)strtoul(a, 0, 16) & ~0xF0u;
+            min_port[mi_w++ % MQ] = PORT_USB;
+            printf("ok\n");
+        } else
             printf("fail ?\n");
     }
     return 0;
@@ -2585,7 +2667,11 @@ static int hsx_in(const char *hex)
     if (cl_request(raw + 1, n - 2u) || ds_request(raw + 1, n - 2u))
         return 0;                                 /* (the crash history, the stats: the platform's, before the app's) */
 #ifdef APP_SYSEX
-    (void)app_sysex(raw + 1, n - 2u);
+    if (app_sysex(raw + 1, n - 2u))
+        return 0;                                 /* (the app's first, as the device's main loop offers it) */
+#endif
+#if FM1B_COMPANION
+    (void)comp_sysex(raw, n);                     /* (then the update's framing: the companion's commands) */
 #endif
     return 0;
 }
@@ -2635,7 +2721,7 @@ int main(int argc, char **argv)
     int lineno = 0, fails = 0;
     plat_host_dir = dir;
     if (argc < 2) {
-        fprintf(stderr, "usage: %s SCRIPT [OUTDIR]%s\n", argv[0], FM1B_MIRROR ? " | --serve [OUTDIR]" : "");
+        fprintf(stderr, "usage: %s SCRIPT [OUTDIR]%s\n", argv[0], FM1B_MIRROR || FM1B_COMPANION ? " | --serve [OUTDIR]" : "");
         return 2;
     }
     if (getenv("FM1B_FLASH") && getenv("FM1B_FLASH")[0]) {   /* a power-on with that flash (a 1 MiB image) */
@@ -2647,7 +2733,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[1], "--serve"))            /* (--serve: stdout is the tool's) */
             printf("  ok   power-on with the flash of %s (%u store objects)\n", getenv("FM1B_FLASH"), (unsigned)k);
     }
-#if FM1B_MIRROR
+#if FM1B_MIRROR || FM1B_COMPANION
     if (!strcmp(argv[1], "--serve")) {
         snprintf(out, sizeof out, "%s/midi_out.txt", dir);
         midi_log = fopen(out, "w");

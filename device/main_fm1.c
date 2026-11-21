@@ -370,6 +370,34 @@ static void crash_keep(void)                        /* the boot: a crash since t
 #else
 int32_t plat_stack_left(int k) { (void)k; return -1; }   /* (fm1.toml crash_history = true measures them) */
 #endif
+#if FM1B_HANG_NOTE
+/* the USB reset request (felucca-bsp usb.c FELUCCA_USB_RESET_REQ), in the USB interrupt: first the note of what the
+ * firmware was doing (hang_note.h, HN_USB_RESET: its words there), RAM only; then the reset's preparation, as
+ * plat_restart's: an asked-for restart is not a failed boot, and the clock back to stock (a soft reset keeps the PLL) */
+static void fm1b_usb_reset_note(uint32_t uboot)
+{
+    uint32_t w[HN_W] = {0};
+    w[0] = (uboot ? 1u : 0u) | (sx_busy ? 2u : 0u) | (tx_deaf ? 16u : 0u) | (usb.ota_req ? 32u : 0u) |
+           (usb.uboot_req ? 64u : 0u) | (usb.sx_on ? 128u : 0u) | (usb.suspended ? 256u : 0u) |
+           (fm1b_dbg.in_audio ? 512u : 0u) | (sx_collect ? 1024u : 0u);
+#ifdef APP_SYSEX
+    w[0] |= (sxs.on ? 4u : 0u) | (sxs.cut ? 8u : 0u);
+    w[2] = sxs.held;
+#endif
+    w[1] = (so_w - so_r) << 16 | ((mo_w - mo_r) & 0xFFFFu);
+#if FELUCCA_MIDI_RT
+    w[3] = rt_qw << 16 | (rt_qr & 0xFFFFu);
+#endif
+    w[4] = (mi_w - mi_r) << 16 | ((sx_made - sx_taken) & 0xFFFFu);
+    w[5] = hn_ota_step | usb.resets << 8;
+    hn_put(HN_USB_RESET, fm1_ms, fm1b_dbg.stage, w);
+}
+static void fm1b_usb_reset_prep(void)
+{
+    bootguard.pending = 0;
+    fm1_clock_restore();
+}
+#endif
 #if FM1B_DBGSTATS
 
 /* the debug stats in flash (dbgstats.c: the staging area's last sector, 0xE4000..0xE4EFF), the snapshots and the
@@ -701,6 +729,14 @@ static int log_frame(const uint8_t *p, uint32_t n)
         *q = 0;
         log_line_send(b);
     }
+#if FM1B_HANG_NOTE
+    {   /* the note of what was stuck the last time the firmware gave up on something (hang_note.h: its three lines) */
+        char h[HN_LINE];
+        uint32_t j;
+        for (j = 0; hn_line(h, j); j++)
+            log_line_send(h);
+    }
+#endif
     for (k = (int)plat_ble_log_total() - 1; k >= 0; k--) {
         if (!plat_ble_log_line(k)[0])
             continue;                                /* (beyond what the log keeps) */
@@ -1248,6 +1284,9 @@ static void safe_main(void)
             usb.ota_req = 0;
             if (flash_ok)
                 ota_session();                      /* an install commits and resets; else back here */
+#if FM1B_HANG_NOTE
+            hn_ota_step = 0;                        /* (out of the session) */
+#endif
         }
         if (usb.uboot_req)
             enter_uboot("UBOOT (USB)");
@@ -1339,6 +1378,10 @@ static void fm1_main(void)
     crash_keep();                                   /* a crash since the last boot into the flash history (crashlog.c):
                                                      * before safe mode, whose crashes at the start matter most; the
                                                      * staging cleaned up above first (ota_boot_cleanup erases it) */
+#if FM1B_HANG_NOTE
+    if (flash_ok)
+        (void)cl_note(&hn, FM1B_BUILD);             /* and a hang note the last run left (hang_note.h), once */
+#endif
 #endif
 #if FM1B_DBGSTATS
     stats_keep();                                   /* the debug stats' queue into the flash, a crash's snapshot
@@ -1523,6 +1566,9 @@ static void fm1_main(void)
 #endif
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
+#if FM1B_HANG_NOTE
+            hn_ota_step = 0;                        /* (out of the session) */
+#endif
 #if FM1B_CPU_396
             {                                       /* (nothing installed: back to cpu_clock's) */
                 uint32_t f = irq_save();

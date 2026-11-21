@@ -204,6 +204,9 @@ For example, `tools/fm1_remote.py listen tap REC wait 3000 screen log`.
 It finds the FM-1 as the web pages do (`tools/fm1ports.py`, the same rules as `web/fm1ports.js`): a port with an
 FM-1's usual name, or else one that answers the screen reader's HELLO, whatever it is called; `--port NAME` picks one.
 `tools/fm1_install.py`, `fm1_backup.py`, `fm1_mirror.py` and `fm1_debug.py` find it the same way.
+`tools/fm1_usb_reboot.py NAME` restarts an FM-1 whose MIDI no longer answers, over a USB control request (pyusb), for a
+firmware built with `usb_reset_request = true` in its fm1.toml; it waits for MIDI to answer again and prints the
+log's note of what was stuck.
 
 The site's installer page (`tools/make_site.py`, from `web/installer.html`) reads the same crash record and log in
 Chrome or Edge: "Report a problem" shows them, ready to copy, so a player can send them without Python. The record

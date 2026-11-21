@@ -21,6 +21,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_product = "..."
   usb_serial = true          a USB serial number from the FM-1's chip ID (felucca-bsp FELUCCA_USB_SERIAL_FN): a computer then tells
                              FM-1s apart whichever port they are in (without one, macOS's MIDI setup names a device by its port)
+  usb_reset_request = true   a USB control request restarts the FM-1 (felucca-bsp FELUCCA_USB_RESET_REQ, answered in the USB
+                             interrupt), for a unit whose MIDI no longer answers: tools/fm1_usb_reboot.py; a note of what was
+                             stuck is kept for the `log` readout (device/hang_note.h). Off by default: the build as before
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -910,6 +913,15 @@ def cache_ram_ways():
 
 
 BOOT_PACKED = None                                # (raw, packed) bytes of the boot-packed load images, or None
+def usb_reset_request_flags():
+    """fm1.toml usb_reset_request: true -> the USB reset request built (felucca-bsp FELUCCA_USB_RESET_REQ, device/unity.c);
+    false or none: no flag, the build as before"""
+    v = CONF.get("usb_reset_request", False)
+    if v is not True and v is not False:
+        raise SystemExit(f"fm1.toml: usb_reset_request is true or false, not {v!r}")
+    return ["-DFELUCCA_USB_RESET_REQ=1"] if v else []
+
+
 def cpu2_stack_flags():
     """fm1.toml cpu2_stack: the second core's job stack, for its entry's unit and the platform's (none: felucca-bsp's
     2816 B, the build as before)"""
@@ -991,6 +1003,7 @@ def build_app():
             flags.append(f'-D{macro}="{CONF[key]}"')
     if CONF.get("usb_serial"):                    # a serial number from the chip's ID (device/plat_fm1.c)
         flags.append("-DFELUCCA_USB_SERIAL_FN=fm1_usb_serial")
+    flags += usb_reset_request_flags()
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)

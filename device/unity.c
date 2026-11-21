@@ -216,6 +216,22 @@ static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIME
 #ifdef APP_SYSEX_BYTE
 #define FELUCCA_SYSEX_BYTE(b) app_sysex_byte(b)   /* the app's, every SysEx byte from USB (plat.h APP_SYSEX_BYTE) */
 #endif
+#if defined FELUCCA_USB_RESET_REQ && FELUCCA_USB_RESET_REQ
+/* fm1.toml usb_reset_request = true: a computer restarts the FM-1 with a USB control request (felucca-bsp usb.c,
+ * tools/fm1_usb_reboot.py), from the USB interrupt, when MIDI no longer answers. First the note of what was stuck
+ * (hang_note.h: the `log` readout, the crash history), then the reset's own preparation (main_fm1.c) */
+#define FM1B_HANG_NOTE 1
+static void fm1b_usb_reset_note(uint32_t uboot);
+static void fm1b_usb_reset_prep(void);
+#define FELUCCA_USB_RESET_NOTE fm1b_usb_reset_note
+#define FELUCCA_USB_RESET_PREP fm1b_usb_reset_prep
+#endif
+#ifndef FM1B_HANG_NOTE
+#define FM1B_HANG_NOTE 0
+#endif
+#if FM1B_HANG_NOTE
+#include "hang_note.h"            /* a note of what was stuck, kept through a restart */
+#endif
 #include "usb.c"
 #include "console.c"              /* the USB serial console's bytes for the app (plat_console_*, FM1B_CDC) */
 #ifndef FM1B_TRS
@@ -284,9 +300,15 @@ static int ota_prog(uint32_t off, const void *p, uint32_t n)
     return fl_write(off, p, n);
 }
 static int ota_fread(uint32_t off, void *p, uint32_t n) { return st_read(off, p, n); }
+#if FM1B_HANG_NOTE
+static uint8_t hn_ota_step;       /* the update's step on the screen (the hang note's w5); 0 out of a session */
+#endif
 static void ota_show(uint32_t step, int32_t code)
 {
     static const char *const STEP[] = {"", "PACKAGE", "CHECK HEAD", "LOADER", "CONFIRM", "RESTART"};
+#if FM1B_HANG_NOTE
+    hn_ota_step = (uint8_t)(step < 255u ? step : 255u);
+#endif
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sys_box(0, 92, 240, SYS_S, "UPDATE", C_WHITE, 1);
     if (step < 9u) {

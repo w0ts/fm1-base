@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The settings record Optimist's own simulator wrote with the profile as an FM-1 runs it (optimist-flash.bin: USB audio
+# built, its routing in the settings record, "UAR3" at 0x2D8, MASTER on 1+2: tests/optsim.mjs write, its copy B the
+# latest), read by the trial at power-on (the routing back: uad.0), a setting changed (KNOB COLORS on again: optsim.mjs write turned it off): the record saved
+# into copy A (0xFC000) keeps the routing (persist_rec.c "PER4": every field at its place), and after a restart too.
+#   OPT_FLASH=optimist/build/host/optimist-flash.bin optimist/build/host/optimist_host optimist/tests/dev/storage_keep.txt optimist/build/host
+wait 1500
+expect w.0xFC2D8 0x33524155
+expect w.0xFD2D8 0x33524155
+expect uad.0 3
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 1
+wait 100
+expect gv1 0
+turn K1 1
+wait 100
+expect gv1 1
+tap HOME
+wait 300
+expect w.0xFC000 0x554C4546
+expect w.0xFC2D8 0x33524155
+reboot
+wait 1500
+expect uad.0 3

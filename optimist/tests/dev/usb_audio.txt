@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial's USB audio in fm1-base's host simulator (usbproof.py: the files, the checks). A computer records the four
+# channels while T1 plays a note (the stems, Optimist's default routing); SYSTEM > USB AUDIO's MASTER (its first line:
+# GENERAL's row, then the next) NONE -> 1+2, its RET C (the reverb's return, the fifth page's third line: Optimist's
+# source 18) NONE -> 3+4; then, the volume knob at half (a quarter's gain), it plays usb-in.wav through the USB input
+# track while it records, the FM-1's own output beside (wav): USB's MASTER at its fixed level, the knob's on the output
+wait 1500
+# headphones in, HP BASS OFF: the codec's output uncorrected (fm1-next 37faaf46: with nothing plugged SPK LOWCUT, ON at
+# first, filters the FM-1's own output and never USB's, so the output would not be the capture at the knob's gain)
+jack in
+wait 300
+expect oc 0
+master 4096
+wait 100
+usb_rec usb-stems.wav
+key w7 down
+wait 300
+key w7 up
+wait 300
+usb_recstop
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 2                                           # (General (METERS on its page: GL_JOIN), then USB AUDIO: no DEBUG page since fm1-next c6aef4ee, no KEYS since b9a394bc)
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+spin K1 1
+wait 100
+expect uad.0 3
+spin SELECT 4                                           # (USB AUDIO's fifth page: RET A B C)
+wait 100
+# (RET C's knob a detent a spin: a line's knob steps its list once a reading, whatever the turn's size, op_project.c
+# ua_dst_step: one spin of 6 was one step, NONE -> 1)
+spin K3 1
+wait 50
+spin K3 1
+wait 50
+spin K3 1
+wait 50
+spin K3 1
+wait 50
+spin K3 1
+wait 50
+spin K3 1
+wait 100
+expect uad.18 6
+tap HOME
+wait 300
+master 2048                                             # (the knob: the FM-1's own output only, never USB's)
+wait 100
+usb_rec usb-master.wav
+wav usb-master-out.wav
+usb_play usb-in.wav
+wait 1200
+expect usb_play_frames 44100
+usb_recstop
+wavstop

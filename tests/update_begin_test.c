@@ -185,7 +185,8 @@ int main(void)
     safe = strstr(m, "static void safe_main(void)");
     assert(loop && safe && loop > safe);
     assert(in_order(loop, "if (usb.ota_req && update_ready()) {", "usb.ota_req = 0;", "app_panic();"));
-    assert(in_order(loop, "update_ready()", "app_panic();", "ota_session();"));
+    assert(in_order(loop, "update_ready()", "app_panic();", "ota_session_noted();"));
+    assert(in_order(strstr(m, "static void ota_session_noted(void)"), "rc = ota_session();", "wait_note(WR_OTA_SESSION", 0));
     printf("main_fm1.c: update: update_ready, app_panic, then ota_session      ok\n");
     ub = strstr(loop, "if (usb.uboot_req && update_ready())");
     assert(ub && in_order(ub, "update_ready()", "enter_uboot(\"UBOOT (USB)\");", 0));

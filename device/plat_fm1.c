@@ -219,6 +219,7 @@ static void plat_sysex_hold(void)              /* main loop: a stream with no pu
 {
     if (sxs.on && fm1_ms - sxs.ms > PLAT_SYSEX_HOLD_MS) {
         sxs.cut = 1;                            /* (its frame cut: no last packet) */
+        wait_note(WR_SYSEX_HOLD, 0, fm1_ms - sxs.ms);   /* (before the end: the record shows it open) */
         (void)plat_sysex_end();
         sxs.held++;
     }
@@ -229,8 +230,12 @@ static int sxs_pkt(uint32_t cin)               /* the packet in sxs.acc into the
     while (so_w - so_r >= SXQ) {
         if (so_r != r)
             t0 = fm1_ms, r = so_r;
-        if (!usb.config || fm1_ms - t0 > PLAT_SYSEX_STALL_MS)
+        if (!usb.config)
             return -1;
+        if (fm1_ms - t0 > PLAT_SYSEX_STALL_MS) {
+            wait_note(WR_SYSEX_TX, -1, fm1_ms - t0);   /* (the computer took nothing in that time) */
+            return -1;
+        }
         ota_idle();
     }
     sx_out_q[so_w % SXQ] = cin | (uint32_t)sxs.acc[0] << 8 | (uint32_t)sxs.acc[1] << 16 | (uint32_t)sxs.acc[2] << 24;

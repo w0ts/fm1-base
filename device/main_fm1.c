@@ -46,6 +46,13 @@ static int dev_frame(const uint8_t *p, uint32_t n);   /* bt_own_central.c */
 #endif
 #include "uac_mix.h"                                /* the USB recording, the computer's audio, in that order */
 #include "update_begin.h"                          /* the app's stop before an update, PLAT_UPDATE_BEGIN_MS at most */
+#include "main_watch.h"                           /* the main thread watched from TIMER5 (FM1B_MAIN_STUCK_MS) */
+#ifndef FM1B_MAIN_STUCK_MS
+#define FM1B_MAIN_STUCK_MS 0u                       /* 0: off; a diagnostic build: 30000 (a record, then the restart) */
+#endif
+#ifndef FM1B_MAIN_STUCK_RESET
+#define FM1B_MAIN_STUCK_RESET 0
+#endif
 #include "fm1_flash_ok.h"                          /* the flash parts the storage may use (FM1B_FLASH_JEDEC_OK) */
 #if FM1B_BT_AUDIO
 static volatile uint8_t bta_streamed;               /* the last render went to Bluetooth (plat_bta_streams) */
@@ -306,6 +313,19 @@ void fm1_timer5_irq(void)
             fm1_ms++;
         }
     }
+#if FM1B_MAIN_STUCK_MS
+    {   /* the main thread held FM1B_MAIN_STUCK_MS (main_watch.h): recorded; with FM1B_MAIN_STUCK_RESET, a restart */
+        static main_watch_t mw;
+        if (main_watch_due(&mw, main_beat, fm1_ms, FM1B_MAIN_STUCK_MS)) {
+            wait_note(WR_MAIN_STUCK, 0, FM1B_MAIN_STUCK_MS);
+#if FM1B_MAIN_STUCK_RESET
+            bootguard.pending = 0;                  /* (a restart of ours: not a failed boot) */
+            fm1_clock_restore();
+            fm1_reboot();
+#endif
+        }
+    }
+#endif
 }
 extern void isr_timer5(void);
 
@@ -586,6 +606,68 @@ static void log_line_send(const char *t)
     f[n++] = 0xF7;
     ota_wire_send(f, n);
 }
+
+/* ---- the waits that gave up (device/wait_rec.h): the record a restart keeps, `log` reads it */
+wr_rec_t fm1b_wait_rec __attribute__((section(".noinit")));   /* (not static: .noinit, as fm1_crash) */
+static void wait_snap(uint32_t *s)
+{
+#ifdef FM1_IRQ_ENABLED_DEFINED                      /* (felucca-bsp's fm1_irq_enabled; an older one: 0xF00, not known) */
+    uint32_t irq = fm1_irq_enabled(FM1_IRQ_TIMER5) | fm1_irq_enabled(FM1_IRQ_ALNK0) << 1 | fm1_irq_enabled(FM1_IRQ_SPI1) << 2;
+#else
+    uint32_t irq = 0xF00u;                          /* (bits 0..2 not known) */
+#endif
+    irq |= (fm1_icfg() >> 9 & 1u) << 3;             /* this context's interrupts on (icfg bit 9: plat_lock.c's LOCK_IE) */
+    uint32_t fl = (uint32_t)sx_busy | (uint32_t)(tx_deaf != 0) << 2 | (uint32_t)(usb.config != 0) << 3 |
+                  (uint32_t)(usb.suspended != 0) << 4 | (uint32_t)(usb.ota_req != 0) << 5 |
+                  (uint32_t)(usb.uboot_req != 0) << 6 | (uint32_t)(usb.up != 0) << 7;
+    uint32_t held = 0;
+#ifdef APP_SYSEX
+    fl |= (uint32_t)(sxs.on != 0) << 1;
+    held = sxs.held;
+#endif
+#if FM1B_SD && FM1B_SD_AHEAD
+    fl |= (uint32_t)(sd_ahead_on() != 0) << 8;
+#endif
+    s[0] = fm1b_dbg.timer_irqs, s[1] = fm1b_dbg.in_audio, s[2] = usb.setups, s[3] = usb.resets;
+    s[4] = usb.rx_pkts, s[5] = usb.tx_pkts, s[6] = so_w - so_r, s[7] = sx_made - sx_taken;
+    s[8] = fl, s[9] = held, s[10] = irq;
+}
+static void wait_note(uint32_t id, int32_t rc, uint32_t elapsed_ms)   /* a wait gave up: RAM only, any context */
+{
+    uint32_t s[WR_SNAP];
+    wait_snap(s);
+    wr_note(&fm1b_wait_rec, id, fm1b_dbg.stage, ota_step, rc, elapsed_ms, fm1_ms, s);
+}
+/* ota_idle.h: an update's wait found fm1_ms standing still (TIMER5 stopped: no USB, no time, its waits endless).
+ * Recorded, then the watchdog's restart (not fed from here on: the interrupts off, nothing else feeds it): the
+ * FM-1 back by itself in its timeout (fm1_wdt_arm 0x0D), the record and "last watchdog reset in an update's wait"
+ * in `log` */
+static void ota_clock_stall(uint32_t stood_ms)
+{
+    wait_note(WR_OTA_CLOCK, 0, stood_ms);
+    fm1b_dbg.stage = 8;
+    (void)irq_save();
+    for (;;)
+        ;
+}
+static void wait_log(void)                          /* `log`: the record's lines (longer than log_line_send's 48) */
+{
+    char b[200];
+    uint8_t f[sizeof b + 6u];
+    uint32_t k, i, n, len;
+    for (k = 0; k <= wr_entries(&fm1b_wait_rec); k++) {
+        len = k < wr_entries(&fm1b_wait_rec) ? wr_line(&fm1b_wait_rec, k, b, sizeof b) : wr_counts(&fm1b_wait_rec, b, sizeof b);
+        if (!len)
+            continue;
+        n = 0;
+        f[n++] = 0xF0; f[n++] = 0x7D; f[n++] = 0x4C; f[n++] = 0x47;
+        for (i = 0; i < len; i++)
+            f[n++] = (uint8_t)(b[i] & 0x7Fu);
+        f[n++] = 0xF7;
+        fm1_wdt_feed();
+        ota_wire_send(f, n);
+    }
+}
 static int log_frame(const uint8_t *p, uint32_t n)
 {
     char b[48], *q;
@@ -733,10 +815,11 @@ static int log_frame(const uint8_t *p, uint32_t n)
     }
     if (wdt_stage) {
 #if FM1B_DBGSTATS
-        static const char *const ST[8] = {"?", "?", "Bluetooth", "the app's loop", "USB", "a frame", "input",
-                                          "the debug stats"};
+        static const char *const ST[9] = {"?", "?", "Bluetooth", "the app's loop", "USB", "a frame", "input",
+                                          "the debug stats", "an update's wait"};
 #else
-        static const char *const ST[7] = {"?", "?", "Bluetooth", "the app's loop", "USB", "a frame", "input"};
+        static const char *const ST[9] = {"?", "?", "Bluetooth", "the app's loop", "USB", "a frame", "input", "?",
+                                          "an update's wait"};
 #endif
         char *q = b;
         const char *t = "last watchdog reset in ";
@@ -919,6 +1002,7 @@ static int log_frame(const uint8_t *p, uint32_t n)
         log_line_send(b);
     }
 #endif
+    wait_log();                                      /* the waits that gave up (wait_rec.h) */
 #ifdef APP_LOG
     app_log(log_line_send);                          /* (the app's own lines) */
 #endif
@@ -1284,9 +1368,12 @@ static int update_ready(void)
 #ifdef APP_UPDATE_BEGIN
     static update_begin_t st;
     int r;
+    uint32_t t0 = st.on ? st.t0 : fm1_ms;
     fm1_wdt_feed();
     r = update_begin_ready(&st, fm1_ms, app_update_begin);
     fm1_wdt_feed();
+    if (r && fm1_ms - t0 >= PLAT_UPDATE_BEGIN_MS)
+        wait_note(WR_UPDATE_BEGIN_CAP, 0, fm1_ms - t0);   /* (the app still stopping: the update went ahead) */
     return r;
 #else
     return 1;                                       /* (no hook: nothing waited for, nothing built) */
@@ -1302,6 +1389,17 @@ static void update_sysex_end(void)
     if (sxs.on)
         (void)plat_sysex_end();
 #endif
+}
+
+/* the session (ota.c), a give-up recorded (wait_rec.h: its rc, the step it reached, how long it took) */
+static void ota_session_noted(void)
+{
+    uint32_t t0 = fm1_ms;
+    int rc;
+    ota_step = 0;
+    rc = ota_session();
+    if (rc < 0)
+        wait_note(WR_OTA_SESSION, rc, fm1_ms - t0);
 }
 
 static void enter_uboot(const char *why)
@@ -1353,6 +1451,7 @@ static void safe_main(void)
     rec = 1u << panel.btn[B_REC];
     t0 = fm1_ms;
     for (;;) {
+        main_beat++;                                /* (main_watch.h) */
         fm1_wdt_feed();
         usb_retry(fm1_ms);
         if (bootguard.pending && fm1_ms - t0 > 10000u)
@@ -1377,7 +1476,7 @@ static void safe_main(void)
         if (usb.ota_req) {
             usb.ota_req = 0;
             if (flash_ok)
-                ota_session();                      /* an install commits and resets; else back here */
+                ota_session_noted();                /* an install commits and resets; else back here */
 #if FM1B_HANG_NOTE
             hn_ota_step = 0;                        /* (out of the session) */
 #endif
@@ -1466,6 +1565,7 @@ static void fm1_main(void)
         memset(&fm1b_dbg, 0, sizeof fm1b_dbg);
         fm1b_dbg.magic = DBG_MAGIC;
     }
+    wr_init(&fm1b_wait_rec);                        /* (the waits' record: kept over a restart, cleared at power-on) */
     fm1b_dbg.in_audio = 0;                          /* (.noinit: a crash inside the render left it set, and safe mode,
                                                      * with no render to clear it, then never polled USB) */
 #if FM1B_CRASHLOG
@@ -1551,6 +1651,7 @@ static void fm1_main(void)
     app_ui_init();
 
     for (;;) {
+        main_beat++;                                /* (main_watch.h: the main thread moves) */
 #if FM1B_HEADPHONES
         plat_hp_read();                             /* the headphone jack, every pass (plat_headphones) */
 #endif
@@ -1660,7 +1761,7 @@ static void fm1_main(void)
                                                      * the card stays started if nothing is installed */
 #endif
             if (flash_ok)
-                ota_session();                      /* returns only if nothing was committed */
+                ota_session_noted();                /* returns only if nothing was committed */
 #if FM1B_HANG_NOTE
             hn_ota_step = 0;                        /* (out of the session) */
 #endif

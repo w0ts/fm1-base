@@ -350,7 +350,18 @@ extern struct bootguard_s bootguard;
  * Firmware Hub's, take a reply with the flash ID for no FM-1 at all: "No FM-1 found", 2026-11-06) */
 #include "ota.c"
 static uint32_t ota_now_ms(void) { return fm1_ms; }
-static void ota_idle(void) { fm1_wdt_feed(); }
+#include "ota_idle.h"             /* what the update's and the SysEx sender's waits do while they wait */
+#include "wait_rec.h"             /* the waits that gave up, kept over a restart (main_fm1.c fm1b_wait_rec, `log`) */
+static void wait_note(uint32_t id, int32_t rc, uint32_t elapsed_ms);   /* (main_fm1.c) */
+static uint8_t ota_step;          /* the session's step on the screen (ota_show): the record's "step" */
+static volatile uint32_t main_beat;   /* the main thread's progress: its loop's passes, the update's waits (main_watch.h) */
+static void ota_idle_feed(void) { fm1_wdt_feed(); }
+static ota_clock_t ota_clk;
+static void ota_idle(void)
+{
+    main_beat++;
+    ota_idle_do(&ota_clk, fm1_ms, fm1_ticks(), 1000u * FM1_TICKS_PER_US);
+}
 static int ota_in_area(uint32_t off, uint32_t n) { return FL_IN(off, n, OTA_AREA, OTA_AREA + OTA_AREA_LEN); }
 static int ota_erase(uint32_t off)
 {
@@ -376,6 +387,8 @@ static void ota_show(uint32_t step, int32_t code)
 #if FM1B_HANG_NOTE
     hn_ota_step = (uint8_t)(step < 255u ? step : 255u);
 #endif
+    if (step < 9u)
+        ota_step = (uint8_t)step;                   /* (9: the result, its step kept for the record) */
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sys_box(0, 92, 240, SYS_S, "UPDATE", C_WHITE, 1);
     if (step < 9u) {

@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial in the host simulator (milestone 3): a power-on in a new process with the flash tests/storage.txt left
+# (OPT_FLASH=optimist/build/host/trial-flash.bin: loaded before anything reads it), or the one Optimist's own simulator
+# wrote doing the same (optimist-flash.bin: optsim.py write, its firmware on a blank flash). Everything saved is found again
+# through the UI: the work as it was left (the autosave: BPM 116, DEC 60), the setting (KNOB COLORS OFF, from the settings
+# record at 0xFC000), project slot 3 loaded over a NEW project, U01 loaded over a changed sound. Then a second autosave
+# (the copy that is not the current one: B, 0xFE000, outside plat.h's windows) with BPM 120, and the flash dumped again
+# (OPT_DUMP) for tests/storage_resume.txt. optimist/run.sh runs it:
+#   OPT_FLASH=optimist/build/host/trial-flash.bin OPT_DUMP=optimist/build/host/trial-flash2.bin optimist/build/host/optimist_host optimist/tests/storage_restart.txt optimist/build/host
+wait 1500
+expect bpm 116
+expect proj.3 1
+expect up.1 1
+expect up.2 0
+expect panel_hits 0
+tap ENV
+wait 100
+expect gv2 60
+# the setting: SYSTEM, GENERAL's KNOB COLORS
+tap GLO
+wait 100
+tap GLO
+wait 100
+spin SELECT 3
+wait 100
+expect gv1 0
+tap HOME
+wait 100
+# a NEW project (PROJECT, card 4, YES, YES): the defaults, BPM 111, DEC 56
+tap SAVE
+wait 200
+expect scr 3
+expect row 0
+turn K4 1
+wait 100
+tap SAVE
+wait 200
+tap SAVE
+wait 500
+expect bpm 111
+tap ENV
+wait 100
+expect gv2 56
+# slot 3 loaded (PROJECT, ACTION LOAD, key 3, YES): BPM 116, DEC 60
+tap SAVE
+wait 200
+key w2 down
+wait 50
+key w2 up
+wait 100
+tap SAVE
+wait 500
+expect bpm 116
+tap ENV
+wait 100
+expect gv2 60
+# the sound changed (DEC 54), then U01 loaded (PROJECT's USER row, ACTION LOAD, key 1, YES): DEC 60
+turn K2 -6
+wait 100
+expect gv2 54
+tap SAVE
+wait 200
+spin SELECT 2
+wait 100
+expect row 2
+key w0 down
+wait 50
+key w0 up
+wait 100
+tap SAVE
+wait 500
+tap ENV
+wait 100
+expect gv2 60
+shot st-loaded.png
+# the tempo 120, hands off: the autosave's second copy, B at 0xFE000 (copy A, 0x9F000, stays the older)
+# (GLO opens the one of GLOBAL / SYSTEM open last, SYSTEM here: GLO twice is GLOBAL; 2026-10-29)
+tap GLO
+wait 100
+tap GLO
+wait 100
+# (the tempo: on the PLAY-held page since 2026-11-01, op_tempo.c; held past SYSTEM HOLD, KNOB 1 is BPM;
+# let go, the screen before comes back, the transport untouched)
+press PLAY
+wait 800
+turn K1 4
+wait 100
+release PLAY
+wait 100
+expect bpm 120
+tap HOME
+wait 12000
+expect w.0xFE000 0x554C4546
+expect w.0x9F000 0x554C4546
+flash_dump $OPT_DUMP

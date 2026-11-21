@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The SD card mode's backup list as the web editor asks it on connect, with the editor's own commands (run.sh's sd run,
+# profiles/sd-live.config: ED_LIVE on, as the release's fm1-next profile has it). LAYOUT 1: the sample slots' flash
+# (0xA0000..) is the app's, outside fm1-base's data windows, so smp_user_xip is NULL there (fm1_compat.h plat_data);
+# USR1..USR3 hold nothing and are never read. Before 2026-10-28 BK_LIST read their header at NULL (ed_backup.c
+# bk_info): connecting the editor was a CPU exception on the FM-1 (the red crash screen), a SIGSEGV here.
+# BK_LIST v3 in its two pages (first 0, first 37: the second holds USR1..USR3 = objects 62..64), then BK_READ of each
+# slot: index, offset 0, CRC 0, no bytes.
+#   optimist/build/host/optimist_host optimist/tests/sd/editor.txt OUT
+wait 600
+sysex_out
+sysex F0 7D 46 4C 2B 03 00 F7
+wait 100
+sysex F0 7D 46 4C 2B 03 25 F7
+wait 100
+sysex_out
+sysex F0 7D 46 4C 2C 3E 00 00 00 F7
+wait 50
+expect_sysex F0 7D 46 4C 2C 3E 00 00 00 00 00 00 00 00 F7
+sysex F0 7D 46 4C 2C 3F 00 00 00 F7
+wait 50
+expect_sysex F0 7D 46 4C 2C 3F 00 00 00 00 00 00 00 00 F7
+sysex F0 7D 46 4C 2C 40 05 01 00 F7
+wait 50
+expect_sysex F0 7D 46 4C 2C 40 05 01 00 00 00 00 00 00 F7
+sysex_out
+# still running: a key plays
+peakreset
+key 7 down
+wait 400
+expect voices >0
+key 7 up
+wait 200

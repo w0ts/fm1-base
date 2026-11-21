@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The trial in the host simulator (milestone 1): boots, renders, a key plays a note through Optimist's engine, MIDI in
+# plays one too. tools/build.py optimist --host, then
+#   optimist/build/host/optimist_host optimist/tests/note.txt optimist/build/host
+wait 600
+shot boot.png
+expect blocks >100
+expect voices 0
+peakreset
+wait 300
+# nothing held: silence (Optimist's drum track is empty at power-on, its patterns too)
+expect peak_db_max -90
+wav key.wav
+key 7 down
+wait 400
+expect keys 128
+expect voices >0
+expect peak_db_min -40
+shot key.png
+key 7 up
+wait 1500
+wavstop
+expect voices 0
+peakreset
+midi 90 3C 64
+wait 300
+expect voices >0
+expect peak_db_min -40
+midi 80 3C 00
+wait 1500
+expect voices 0

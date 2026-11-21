@@ -1,0 +1,6 @@
+SPDX-License-Identifier: GPL-3.0-only
+
+Everything in this directory (optimist/) is Optimist's code or works with it, and is licensed under the GNU General
+Public License, version 3 only (https://www.gnu.org/licenses/gpl-3.0.txt), not under fm1-base's MPL-2.0. It must never
+be offered upstream to fm1-base as MPL-2.0. The audio core it builds comes from Optimist's own tree (GPL-3.0-only,
+from SLOOP and Felucca), referenced by path (gen_optimist.py), not copied here.

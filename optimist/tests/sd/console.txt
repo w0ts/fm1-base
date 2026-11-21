@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# The serial console's card commands (run.sh's sd run: profiles/sd-console.config, USB_CONSOLE on the SD card layout; the card
+# optimist/build/host/sd/card.img): the console from the first start (USB_CONSOLE, no device switch since 2026-11-05), then the card's state, a folder, a file and a raw sector
+# through Optimist's card code and plat_sd_read; sd diag (plat_sd_info: the host's 20 MHz), sd irq (none on the host)
+#   FM1B_SD_IMAGE=optimist/build/host/sd/card.img optimist/build/host/optimist_host optimist/tests/sd/console.txt OUT
+wait 2000
+console help
+expect_console sd [ls
+console sd
+expect_console sd ready
+expect_console fat 32
+expect_console MB 64
+console sd ls /
+expect_console <dir> Optimist
+console sd ls /OPTIMIST/SAMPLES
+expect_console kick.wav 44144
+console sd cat /OPTIMIST/SAMPLES/kick.wav
+expect_console /OPTIMIST/SAMPLES/kick.wav: 52 49 46 46
+console sd cat NOSUCH.TXT
+expect_console no such file
+console sd raw 0
+expect_console sector: EB
+console sd raw 99999999
+expect_console failed
+console sd
+expect_console clock 20 MHz
+console sd diag
+expect_console clock 20 MHz
+expect_console crc errors
+console sd irq
+expect_console slots

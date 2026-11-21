@@ -31,6 +31,7 @@ enum {
     WR_SYSEX_HOLD,                                  /* an app's stream let go after PLAT_SYSEX_HOLD_MS */
     WR_UPDATE_BEGIN_CAP,                            /* the app's stop before an update took PLAT_UPDATE_BEGIN_MS */
     WR_USB_RESET_REQ,                               /* a restart the host asked for over EP0 (reserved) */
+    WR_MAIN_STUCK,                                  /* the main thread held FM1B_MAIN_STUCK_MS, TIMER5 running (main_watch.h) */
     WR_IDS
 };
 #define WR_RING 4u
@@ -51,7 +52,7 @@ typedef struct {
 } wr_rec_t;
 
 static const char *const WR_NAME[WR_IDS] = {"?", "OTA_CLOCK", "OTA_SESSION", "SYSEX_TX", "SYSEX_HOLD",
-                                            "UPDATE_BEGIN_CAP", "USB_RESET_REQ"};
+                                            "UPDATE_BEGIN_CAP", "USB_RESET_REQ", "MAIN_STUCK"};
 static const char *const WR_FIELD[WR_SNAP] = {"t5", "au", "su", "rs", "rx", "tx", "sxq", "sxw", "fl", "held", "irq"};
 #define WR_HEX_FIELDS ((1u << 8) | (1u << 10))      /* fl and irq in hex */
 

@@ -46,6 +46,13 @@ static int dev_frame(const uint8_t *p, uint32_t n);   /* bt_own_central.c */
 #endif
 #include "uac_mix.h"                                /* the USB recording, the computer's audio, in that order */
 #include "update_begin.h"                          /* the app's stop before an update, PLAT_UPDATE_BEGIN_MS at most */
+#include "main_watch.h"                           /* the main thread watched from TIMER5 (FM1B_MAIN_STUCK_MS) */
+#ifndef FM1B_MAIN_STUCK_MS
+#define FM1B_MAIN_STUCK_MS 0u                       /* 0: off; a diagnostic build: 30000 (a record, then the restart) */
+#endif
+#ifndef FM1B_MAIN_STUCK_RESET
+#define FM1B_MAIN_STUCK_RESET 0
+#endif
 #include "fm1_flash_ok.h"                          /* the flash parts the storage may use (FM1B_FLASH_JEDEC_OK) */
 #if FM1B_BT_AUDIO
 static volatile uint8_t bta_streamed;               /* the last render went to Bluetooth (plat_bta_streams) */
@@ -288,6 +295,19 @@ void fm1_timer5_irq(void)
             fm1_ms++;
         }
     }
+#if FM1B_MAIN_STUCK_MS
+    {   /* the main thread held FM1B_MAIN_STUCK_MS (main_watch.h): recorded; with FM1B_MAIN_STUCK_RESET, a restart */
+        static main_watch_t mw;
+        if (main_watch_due(&mw, main_beat, fm1_ms, FM1B_MAIN_STUCK_MS)) {
+            wait_note(WR_MAIN_STUCK, 0, FM1B_MAIN_STUCK_MS);
+#if FM1B_MAIN_STUCK_RESET
+            bootguard.pending = 0;                  /* (a restart of ours: not a failed boot) */
+            fm1_clock_restore();
+            fm1_reboot();
+#endif
+        }
+    }
+#endif
 }
 extern void isr_timer5(void);
 
@@ -1301,6 +1321,7 @@ static void safe_main(void)
     rec = 1u << panel.btn[B_REC];
     t0 = fm1_ms;
     for (;;) {
+        main_beat++;                                /* (main_watch.h) */
         fm1_wdt_feed();
         usb_retry(fm1_ms);
         if (bootguard.pending && fm1_ms - t0 > 10000u)
@@ -1493,6 +1514,7 @@ static void fm1_main(void)
     app_ui_init();
 
     for (;;) {
+        main_beat++;                                /* (main_watch.h: the main thread moves) */
 #if FM1B_HEADPHONES
         plat_hp_read();                             /* the headphone jack, every pass (plat_headphones) */
 #endif

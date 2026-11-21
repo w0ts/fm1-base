@@ -27,6 +27,7 @@
 #define TEST_CAP_MS 3600000u                        /* an hour of the crystal's time in one session: hung */
 #include "../device/ota_idle.h"
 #include "../device/wait_rec.h"
+#include "../device/main_watch.h"
 static wr_rec_t rec;                                /* the firmware's fm1b_wait_rec (.noinit) */
 
 /* ---- the clocks: TIMER4's count always runs; fm1_ms only while TIMER5's interrupt does */
@@ -253,6 +254,28 @@ int main(void)
         wr_counts(&rec, b, sizeof b);
         want("the counts go on past the ring", !strcmp(b, "stalled waits: OTA_CLOCK 2 OTA_SESSION 5"));
         want("a line fits the firmware's 200-byte buffer", wr_line(&rec, 3, b, sizeof b) < 200u);
+    }
+    printf("5. the main thread watched from TIMER5 (device/main_watch.h)\n");
+    {
+        main_watch_t w;
+        uint32_t ms, beat = 0, due = 0, first = 0;
+        memset(&w, 0, sizeof w);
+        for (ms = 0; ms < 120000u; ms++) {          /* the main loop moves every ms for 10 s, then stands still */
+            if (ms < 10000u)
+                beat++;
+            if (main_watch_due(&w, beat, ms, 30000u)) {
+                due++;
+                first = first ? first : ms;
+            }
+        }
+        want("a beat standing still 30 s: due once, 30 s after its last move", due == 1u && first == 9999u + 30000u);
+        memset(&w, 0, sizeof w);
+        for (due = 0, ms = 0; ms < 120000u; ms++) {
+            if (ms % 20000u == 0u)
+                beat++;                             /* (a long step: 20 s between passes) */
+            due += (uint32_t)main_watch_due(&w, beat, ms, 30000u);
+        }
+        want("passes 20 s apart: never due", due == 0u);
     }
     printf(fails ? "FAILED: %d\n" : "all ok\n", fails);
     return fails != 0;

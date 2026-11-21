@@ -271,9 +271,14 @@ static uint32_t ota_now_ms(void) { return fm1_ms; }
 #include "wait_rec.h"             /* the waits that gave up, kept over a restart (main_fm1.c fm1b_wait_rec, `log`) */
 static void wait_note(uint32_t id, int32_t rc, uint32_t elapsed_ms);   /* (main_fm1.c) */
 static uint8_t ota_step;          /* the session's step on the screen (ota_show): the record's "step" */
+static volatile uint32_t main_beat;   /* the main thread's progress: its loop's passes, the update's waits (main_watch.h) */
 static void ota_idle_feed(void) { fm1_wdt_feed(); }
 static ota_clock_t ota_clk;
-static void ota_idle(void) { ota_idle_do(&ota_clk, fm1_ms, fm1_ticks(), 1000u * FM1_TICKS_PER_US); }
+static void ota_idle(void)
+{
+    main_beat++;
+    ota_idle_do(&ota_clk, fm1_ms, fm1_ticks(), 1000u * FM1_TICKS_PER_US);
+}
 static int ota_in_area(uint32_t off, uint32_t n) { return FL_IN(off, n, OTA_AREA, OTA_AREA + OTA_AREA_LEN); }
 static int ota_erase(uint32_t off)
 {

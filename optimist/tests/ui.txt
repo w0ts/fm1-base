@@ -77,18 +77,23 @@ tap PLAY
 wait 100
 expect playing 0
 # an update begins while playing (the upgrade command or the soft key's UBOOT: app.h APP_UPDATE_BEGIN, ui/opt_update.h
-# stop_first): the transport stops as with STOP, MIDI STOP out with CLOCK OUT on; stopped already: nothing more goes out
+# stop_first, polled): the first ask returns 1 (still stopping) and the transport stops as with STOP, MIDI STOP out with
+# CLOCK OUT on; the next ask returns 0; stopped already: 0 at once and nothing more goes out
 clockout 1
 tap PLAY
 wait 500
 expect playing 1
 out
 update_begin
+expect update_rc 1
 wait 50
 expect playing 0
 expect_out USB FC
+update_begin
+expect update_rc 0
 out
 update_begin
+expect update_rc 0
 wait 50
 expect playing 0
 expect_no_out USB FC

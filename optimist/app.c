@@ -31,7 +31,7 @@ void app_tick(void) { opt_core_tick(); }
 void app_tick_fast(void) { opt_core_tick_fast(); }
 
 void app_panic(void) { opt_core_panic(); }
-void app_update_begin(void) { opt_update_begin(); }   /* (before app_panic: the transport stops cleanly first) */
+int app_update_begin(void) { return opt_update_begin(); }   /* (before app_panic: the transport stops cleanly first; polled) */
 /* the frames Bluetooth audio takes from the render (APP_BT_FRAMES): the plain output, or silence for a render corrected
  * for the FM-1's own codec (SPK LOWCUT / HP BASS, Optimist's fx/outcorr.c) */
 const int32_t *app_bt_frames(const int32_t *lr, uint32_t n)
@@ -278,6 +278,7 @@ int opt_glob_write(uint32_t off, const void *src, uint32_t n)
 }
 
 #ifdef PLAT_HOST
+static int update_rc;                          /* the last update_begin command's return (expect update_rc) */
 int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "voices"))
@@ -296,6 +297,8 @@ int app_expect(const char *what, int *got)
         *got = (int)opt_ui_bpm();
     else if (!strcmp(what, "playing"))
         *got = (int)opt_ui_playing();
+    else if (!strcmp(what, "update_rc"))       /* app_update_begin's last return (the script's update_begin): 1 still stopping */
+        *got = update_rc;
     else if (!strcmp(what, "cv_cuts"))           /* the canvases cut short, both units' (CANVAS_STRIP: none, every tall band in passes) */
         *got = (int)(opt_ui_cv_cuts() + cv_cuts);
     else if (!strncmp(what, "gv", 2) && what[2] >= '1' && what[2] <= '4' && !what[3])   /* gvK: the cursor row's card K */
@@ -437,10 +440,10 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         opt_ui_link_set((uint32_t)atoi(a ? a : "0"));
         return 1;
     }
-    if (!strcmp(cmd, "update_begin")) {         /* an update begins (main_fm1.c update_begin): the transport asked to stop; the host's
-                                                 * time stands still inside the app (stop_first gives up waiting), so the
-                                                 * next millisecond's render carries it out */
-        app_update_begin();
+    if (!strcmp(cmd, "update_begin")) {         /* the platform's one ask of the polled hook (main_fm1.c update_ready): the transport
+                                                 * asked to stop; the host's time stands still inside the call, so the next
+                                                 * millisecond's render carries it out; expect update_rc: what it returned */
+        update_rc = app_update_begin();
         return 1;
     }
     if (!strcmp(cmd, "lights")) {                /* lights N: SYSTEM > LIGHTS set to level N (0 OFF .. 3 HIGH) */

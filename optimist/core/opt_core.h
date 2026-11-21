@@ -17,7 +17,7 @@ void opt_core_midi(uint32_t pkt, int port);                  /* a USB-MIDI packe
 void opt_core_tick(void);                                    /* fm1-base's 1 kHz tick: the MIDI in (plat_midi_in), CLOCK OUT */
 void opt_core_tick_fast(void);                               /* fm1-base's 10 kHz tick: CLOCK OUT to USB (plat_midi_rt) */
 void opt_core_panic(void);                                   /* every voice off */
-void opt_update_begin(void);                                 /* an update begins: the transport stopped first (ui/opt_update.h) */
+int opt_update_begin(void);                                  /* an update begins: the transport stopped first, polled: 1 = still stopping (ui/opt_update.h) */
 uint32_t opt_core_voices(void);                              /* voices sounding (a check) */
 const char *opt_core_engine(uint32_t part);                  /* the part's engine's name */
 void opt_core_dual_parts(uint32_t jobs);                     /* the host: a fixed set of jobs for the second core (bit p:

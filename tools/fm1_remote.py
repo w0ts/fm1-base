@@ -76,6 +76,7 @@ import sys
 import time
 
 import fm1ports
+import fm1_usb_reboot                      # (decode_note: a hang note's words, for log and crashes)
 
 BTN = ["FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"]
 ENC = ["SELECT", "ALGO", "PRESET", "K1", "K2", "K3", "K4"]
@@ -246,6 +247,13 @@ class ElfSymbols:
 def format_crash(r, elf=None):
     """one record as lines for a reader"""
     where = (lambda a: f" ({elf.name(a)})") if elf else (lambda a: "")
+    if r["vec"] >> 16 == 0x4E54:                  # a hang note kept by the boot (device/hang_note.h, crashlog.c cl_note)
+        kind = {1: "STALLED_WAIT", 2: "USB_RESET"}.get(r["vec"] & 0xFFFF, "?")
+        note = [f"note {kind} n {r['count'] & 0xFFFFFF} ms {r['ms']} st {r['count'] >> 24}",
+                f"note w0-2 {r['pc']:08X} {r['rets']:08X} {r['sp']:08X}",
+                f"note w3-5 {r['emu']:08X} {r['dbg']:08X} {r['psr']:08X}"]
+        return [f"note {r['i']}/{r['n']}: {kind}, build {r['build']:08X}, seq {r['seq']}"] + \
+            (fm1_usb_reboot.decode_note(note) or ["  " + ln for ln in note])
     lines = [f"crash {r['i']}/{r['n']}: n {r['count']} vec {r['vec']:#x} pc {r['pc']:08X}{where(r['pc'])} "
              f"rets {r['rets']:08X}{where(r['rets'])}",
              f"  sp {r['sp']:08X} at {r['ms']} ms, emu {r['emu']:08X} dbg {r['dbg']:08X} psr {r['psr']:08X}, "
@@ -364,9 +372,13 @@ class FM1:
                 i += 1
             elif c == "log":
                 self.sysex(LG)
+                lines = []
                 for f in self.frames(LG, 2.0, until=lambda f: f == b"end"):
                     if f != b"end":
-                        print("log:", f.decode("latin1", "replace"))
+                        lines.append(f.decode("latin1", "replace"))
+                        print("log:", lines[-1])
+                for ln in fm1_usb_reboot.decode_note(lines):   # a hang note (device/hang_note.h), its words named
+                    print("log:", ln)
                 i += 1
             elif c == "crashes":
                 clear = a == "--clear"

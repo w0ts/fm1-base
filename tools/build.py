@@ -25,6 +25,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              host reads it (FELUCCA_USB_NAME_FN; usb_product is the fallback, the audio devices' names follow it
                              unless usb_audio_in_name / usb_audio_out_name are set): a name with something of this FM-1 in it
                              (plat.h plat_dev_id, plat_dev_name: "FM1-XXXX"); the manufacturer stays usb_manufacturer's
+  usb_reset_request = true   a USB control request restarts the FM-1 (felucca-bsp FELUCCA_USB_RESET_REQ, answered in the USB
+                             interrupt), for a unit whose MIDI no longer answers: tools/fm1_usb_reboot.py; a note of what was
+                             stuck is kept for the `log` readout (device/hang_note.h). Off by default: the build as before
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -1042,6 +1045,15 @@ def cache_ram_ways():
 
 
 BOOT_PACKED = None                                # (raw, packed) bytes of the boot-packed load images, or None
+def usb_reset_request_flags():
+    """fm1.toml usb_reset_request: true -> the USB reset request built (felucca-bsp FELUCCA_USB_RESET_REQ, device/unity.c);
+    false or none: no flag, the build as before"""
+    v = CONF.get("usb_reset_request", False)
+    if v is not True and v is not False:
+        raise SystemExit(f"fm1.toml: usb_reset_request is true or false, not {v!r}")
+    return ["-DFELUCCA_USB_RESET_REQ=1"] if v else []
+
+
 def cpu2_stack_flags():
     """fm1.toml cpu2_stack: the second core's job stack, for its entry's unit and the platform's (none: felucca-bsp's
     2816 B, the build as before)"""
@@ -1160,6 +1172,7 @@ def build_app():
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", fn):
             raise SystemExit(f"build: usb_name_fn = {fn!r}: a C function name")
         flags.append(f"-DFELUCCA_USB_NAME_FN={fn}")
+    flags += usb_reset_request_flags()
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)

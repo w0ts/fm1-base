@@ -186,6 +186,25 @@ static int cl_boot(cl_rec_t *r, uint32_t *kept, uint32_t *busy)
     *busy = 0;
     return rc ? rc : 1;
 }
+#ifdef HN_MAGIC
+/* the boot: a hang note (hang_note.h) into the history, once: a record whose vec is HN_VEC | its type, n its seq |
+ * its stage << 24, pc rets sp its w0 w1 w2, ms its ms, emu dbg psr its w3 w4 w5 (no registers, no stacks). Marked kept
+ * before the append, so an append cut short is not tried again. 1 = appended, 0 = nothing new, < 0 = not kept */
+static int cl_note(hn_t *h, uint32_t build)
+{
+    cl_rec_t r;
+    int rc;
+    if (h->magic != HN_MAGIC || h->kept)
+        return 0;
+    h->kept = 1;
+    memset(&r, 0, sizeof r);
+    r.count = (h->seq & 0xFFFFFFu) | h->stage << 24, r.vec = HN_VEC | h->type;
+    r.pc = h->w[0], r.rets = h->w[1], r.sp = h->w[2], r.uptime_ms = h->ms;
+    r.emu = h->w[3], r.dbg = h->w[4], r.psr = h->w[5], r.build = build;
+    rc = cl_append(&r);
+    return rc ? rc : 1;
+}
+#endif
 
 /* ---------------------------------------------------------- readout --- */
 static char *cl_hex(char *q, uint32_t v)

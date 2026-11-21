@@ -9,6 +9,8 @@ usb_manufacturer = "Optimist"    # (the maker, fixed: not a device name)
 usb_product = "FM1-0000"         # (only if app_usb_name gives none)
 usb_name_fn = "app_usb_name"     # "FM1-XXXX": the MIDI device and its ports and "FM1-XXXX In" / "Out" (app.c: XXXX = Bluetooth's); tools find
                                  # the port "FM1-" and still the old "Optimist" (a device on older firmware)
+usb_serial = true                # a serial number from the chip's ID: macOS's MIDI setup tells the units apart by it, else it gives a
+                                 # unit the name it kept for the port (before 2026-11 build.py set it with usb_name_fn; upstream's does not)
 o2 = ["core/opt_core.c", "core/opt_fpu_*.c", "core/opt_pff.c"]
                                # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
                                # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it); opt_fpu_*: ACID, ANALOG

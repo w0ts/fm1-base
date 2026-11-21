@@ -12,6 +12,8 @@ usb_name_fn = "app_usb_name"     # "FM1-XXXX": the MIDI device and its ports and
 usb_serial = true                # a serial number from the chip's ID: macOS's MIDI setup tells the units apart by it, else it gives a
                                  # unit the name it kept for the port (before 2026-11 build.py set it with usb_name_fn; upstream's does not)
 usb_reset_request = true         # a unit whose MIDI went silent restarts from the computer: tools/fm1_usb_reboot.py NAME (fix/usb-reset-request)
+main_stuck_ms = 60000            # diagnostic: remove or raise after the soak (main thread held 60 s: a MAIN_STUCK record for `log`, then a restart)
+main_stuck_reset = true
 o2 = ["core/opt_core.c", "core/opt_fpu_*.c", "core/opt_pff.c"]
                                # Optimist's audio core and UI (ui/opt_ui.c): a unit of its own (its names never meet
                                # fm1-base's; fm1-base's canvas, device/gfx.c, compiled into it); opt_fpu_*: ACID, ANALOG

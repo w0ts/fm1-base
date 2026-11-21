@@ -386,6 +386,7 @@ run crashlog sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 
 run hang-note sh -c "$CC -std=c99 -Wall -Wextra -Werror -Wno-unused-function -O2 -o $OUT/hang_note_test tests/hang_note_test.c && \
     $OUT/hang_note_test"
 run usb-reset-request "$PY" tests/usb_reset_request_test.py
+run main-stuck-flags "$PY" tests/main_stuck_flags_test.py
 run host-crashlog sh -c "mkdir -p $OUT/crashlog && $H/template_host tests/crashlog.txt $OUT/crashlog && \
     $PY tests/crashlog_host_test.py $H/template_host $OUT/crashlog"
 # the debug stats in flash (device/dbgstats.c): the ring against a simulated NOR (the switch, the 5-minute snapshots,

@@ -28,6 +28,8 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
   usb_reset_request = true   a USB control request restarts the FM-1 (felucca-bsp FELUCCA_USB_RESET_REQ, answered in the USB
                              interrupt), for a unit whose MIDI no longer answers: tools/fm1_usb_reboot.py; a note of what was
                              stuck is kept for the `log` readout (device/hang_note.h). Off by default: the build as before
+  main_stuck_ms = 60000      the main thread watched from TIMER5 (device/main_watch.h): held that long, a MAIN_STUCK record
+                             for `log` (1000..600000; a diagnostic); main_stuck_reset = true: then a restart. Off by default
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -1054,6 +1056,25 @@ def usb_reset_request_flags():
     return ["-DFELUCCA_USB_RESET_REQ=1"] if v else []
 
 
+MAIN_STUCK_MS_RANGE = (1000, 600000)
+
+
+def main_stuck_flags():
+    """fm1.toml main_stuck_ms = N -> the main thread watched from TIMER5 (device/main_watch.h FM1B_MAIN_STUCK_MS: held N ms,
+    a MAIN_STUCK record); main_stuck_reset = true -> then a restart (FM1B_MAIN_STUCK_RESET). Neither: no flag"""
+    ms, reset = CONF.get("main_stuck_ms"), CONF.get("main_stuck_reset", False)
+    lo, hi = MAIN_STUCK_MS_RANGE
+    if reset is not True and reset is not False:
+        raise SystemExit(f"fm1.toml: main_stuck_reset is true or false, not {reset!r}")
+    if ms is None:
+        if reset:
+            raise SystemExit("fm1.toml: main_stuck_reset needs main_stuck_ms (the watch it restarts from)")
+        return []
+    if type(ms) is not int or not lo <= ms <= hi:
+        raise SystemExit(f"fm1.toml: main_stuck_ms is a whole number of ms, {lo}..{hi}, not {ms!r}")
+    return [f"-DFM1B_MAIN_STUCK_MS={ms}u", *(["-DFM1B_MAIN_STUCK_RESET=1"] if reset else [])]
+
+
 def cpu2_stack_flags():
     """fm1.toml cpu2_stack: the second core's job stack, for its entry's unit and the platform's (none: felucca-bsp's
     2816 B, the build as before)"""
@@ -1173,6 +1194,7 @@ def build_app():
             raise SystemExit(f"build: usb_name_fn = {fn!r}: a C function name")
         flags.append(f"-DFELUCCA_USB_NAME_FN={fn}")
     flags += usb_reset_request_flags()
+    flags += main_stuck_flags()
     if VERSION:
         flags.append(f'-DAPP_VERSION="{VERSION}"')
     flags.append(f"-DFM1B_BUILD={build_id():#010x}u")   # (the crash history's records carry it: device/crashlog.c)

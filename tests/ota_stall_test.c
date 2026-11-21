@@ -26,6 +26,8 @@
 #define T24_PER_MS 24000u                           /* TIMER4: 24 MHz */
 #define TEST_CAP_MS 3600000u                        /* an hour of the crystal's time in one session: hung */
 #include "../device/ota_idle.h"
+#include "../device/wait_rec.h"
+static wr_rec_t rec;                                /* the firmware's fm1b_wait_rec (.noinit) */
 
 /* ---- the clocks: TIMER4's count always runs; fm1_ms only while TIMER5's interrupt does */
 static uint32_t t24, fm1_ms, ms_frac;
@@ -89,7 +91,9 @@ static uint32_t stall_ms;
 static void ota_idle_feed(void) { feeds++; }
 static void ota_clock_stall(uint32_t stood_ms)      /* the FM-1: a record, then the watchdog's restart */
 {
+    static const uint32_t snap[WR_SNAP] = {12345u, 0u, 7u, 1u, 40u, 52u, 3u, 0u, 0xACu, 0u, 6u};   /* TIMER5 off */
     stall_ms = stood_ms;
+    wr_note(&rec, WR_OTA_CLOCK, 4u, 1u, 0, stood_ms, fm1_ms, snap);   /* (main_fm1.c ota_clock_stall: stage 4 USB) */
     longjmp(out, 2);
 }
 static void ota_idle(void)
@@ -220,6 +224,35 @@ int main(void)
             stalled = 1;
         }
         want("400 ms of fm1_ms standing still (a flash erase): no stall", !stalled);
+    }
+    printf("4. the record (device/wait_rec.h): what `fm1_remote.py log` prints\n");
+    {
+        char b[220];
+        uint32_t i;
+        memset(&rec, 0xA5, sizeof rec);             /* (power-on RAM) */
+        wr_init(&rec);
+        want("power-on: no entries, no counts line", wr_entries(&rec) == 0u && wr_counts(&rec, b, sizeof b) == 0u);
+        r = session(1000u, 1u, 10u, 0, &rc, &took);
+        wr_line(&rec, 0, b, sizeof b);
+        printf("     %s\n", b);
+        want("a stall writes one entry: its id, the time fm1_ms stood, the stage, the step, the snapshot",
+             r == 2 && wr_entries(&rec) == 1u &&
+             !strncmp(b, "stalled wait: OTA_CLOCK after 2000 ms at stage 4 step 1 rc 0 (ms ", 64) &&
+             strstr(b, " t5 12345 au 0 su 7 rs 1 rx 40 tx 52 sxq 3 sxw 0 fl 0xAC held 0 irq 0x6)") != NULL);
+        wr_counts(&rec, b, sizeof b);
+        want("the counts line: OTA_CLOCK 1", !strcmp(b, "stalled waits: OTA_CLOCK 1"));
+        wr_init(&rec);                              /* a restart (the watchdog's): the record kept */
+        r = session(1000u, 1u, 10u, 0, &rc, &took);
+        wr_counts(&rec, b, sizeof b);
+        want("kept over a restart; the next stall counts 2", wr_entries(&rec) == 2u && !strcmp(b, "stalled waits: OTA_CLOCK 2"));
+        for (i = 0; i < 5u; i++)
+            wr_note(&rec, WR_OTA_SESSION, 4u, 1u, -1, 15000u + i, 100u, NULL);
+        wr_line(&rec, 0, b, sizeof b);
+        want("the ring keeps the last WR_RING, the oldest first", wr_entries(&rec) == WR_RING &&
+             strstr(b, "OTA_SESSION after 15001 ms") != NULL && strstr(b, "rc -1") != NULL);
+        wr_counts(&rec, b, sizeof b);
+        want("the counts go on past the ring", !strcmp(b, "stalled waits: OTA_CLOCK 2 OTA_SESSION 5"));
+        want("a line fits the firmware's 200-byte buffer", wr_line(&rec, 3, b, sizeof b) < 200u);
     }
     printf(fails ? "FAILED: %d\n" : "all ok\n", fails);
     return fails != 0;

@@ -268,6 +268,9 @@ extern struct bootguard_s bootguard;
 #include "ota.c"
 static uint32_t ota_now_ms(void) { return fm1_ms; }
 #include "ota_idle.h"             /* what the update's and the SysEx sender's waits do while they wait */
+#include "wait_rec.h"             /* the waits that gave up, kept over a restart (main_fm1.c fm1b_wait_rec, `log`) */
+static void wait_note(uint32_t id, int32_t rc, uint32_t elapsed_ms);   /* (main_fm1.c) */
+static uint8_t ota_step;          /* the session's step on the screen (ota_show): the record's "step" */
 static void ota_idle_feed(void) { fm1_wdt_feed(); }
 static ota_clock_t ota_clk;
 static void ota_idle(void) { ota_idle_do(&ota_clk, fm1_ms, fm1_ticks(), 1000u * FM1_TICKS_PER_US); }
@@ -290,6 +293,8 @@ static int ota_fread(uint32_t off, void *p, uint32_t n) { return st_read(off, p,
 static void ota_show(uint32_t step, int32_t code)
 {
     static const char *const STEP[] = {"", "PACKAGE", "CHECK HEAD", "LOADER", "CONFIRM", "RESTART"};
+    if (step < 9u)
+        ota_step = (uint8_t)step;                   /* (9: the result, its step kept for the record) */
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sys_box(0, 92, 240, SYS_S, "UPDATE", C_WHITE, 1);
     if (step < 9u) {

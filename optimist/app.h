@@ -48,9 +48,10 @@ void app_init(void);
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12);
 void app_panic(void);
 /* an update (the upgrade command) or the soft key's UBOOT from the host begins: the transport stops first (song stop,
- * notes off, MIDI OUT all-notes-off, MIDI STOP with CLOCK OUT on: ui/opt_update.h), then app_panic */
+ * notes off, MIDI OUT all-notes-off, MIDI STOP with CLOCK OUT on: ui/opt_update.h), then app_panic. Polled (plat.h):
+ * called once per main-loop pass, nonzero while it is still stopping, 0 when done (300 ms at most) */
 #define APP_UPDATE_BEGIN
-void app_update_begin(void);
+int app_update_begin(void);
 void app_ui_init(void);
 void app_frame(void);
 void app_input_only(void);

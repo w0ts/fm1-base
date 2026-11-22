@@ -9,7 +9,7 @@
  *          Link still runs
  *   L_AP   the access point's state (plat_wifi_ap_mem), 1.7 KB while a MODE AP is chosen or the access point still runs
  *   L_UAC  USB audio's rings (fm1.toml usb_audio_mem = "app": plat.h plat_usb_audio_mem) and the render's own buffers of
- *          the computer's audio and the capture (opt_core.c opt_play, opt_cap), 22 KB while the computer streams (an alt
+ *          the capture (opt_core.c opt_cap; the computer's audio block is fm1-base's, in its pool), while the computer streams (an alt
  *          set, either way); declined (the question's NO) until it stops
  * Each its size, wanted now, and lent or taken back (the interrupts off): ui/opt_feat.h of_lend_*, after the code they
  * read. Each is a feature of the questions' table too (core/opt_feat_decl.h FMEM_FEATS: its name, its size) */

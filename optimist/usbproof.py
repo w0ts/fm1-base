@@ -11,7 +11,7 @@ tests/dev/usb_audio.txt, the checks here:
      channels 1..4: CH1 has the note, CH2..CH4 silence
   2. SYSTEM > USB AUDIO's MASTER set to 1+2 (the UI: uad.0 3), the volume knob at half (master 2048: APP_GAIN's
      quarter), then the computer plays a second of a stereo signal (usb_play: 1 kHz on L, 441 Hz on R, 16-bit) through
-     Optimist's USB input track (APP_USB_PLAY) while it records: every frame of it taken (usb_play_frames), CH1 / CH2
+     Optimist's USB input track (plat_usb_audio_route) while it records: every frame of it taken (usb_play_frames), CH1 / CH2
      the signal itself through the master as the FM-1's output gives it at full volume (the user, 2026-10-29: the
      volume knob never reaches USB, "same limiter as the output": Optimist's fx.c ua_mst_out, its own DC blocker,
      limiter and knee or LIMIT's lookahead; its gain within 0.1 %, the rest under -40 dB), the FM-1's own output (its

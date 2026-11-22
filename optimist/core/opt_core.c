@@ -146,8 +146,10 @@ static void opt_link_tick(void);               /* (ui/opt_wifi.h: Link's MIDI cl
 /* ---- USB audio (FELUCCA_USB_AUDIO, the profile's): Optimist's USB input track (fx.c ut_mix, ua_take) and its capture
  * routing (io/usb/ua_tap.h in core.h, io/usb/usb_audio_route.c here: SYSTEM > USB AUDIO, the settings record's "UAR3")
  * on fm1-base's USB audio in place of Optimist's io/usb driver (usb_audio_stream.c, usb_audio.c: from Melodee, not in
- * the trial). The computer's audio: plat_usb_audio_play once a render (APP_USB_PLAY: at unity, 24-bit, played as sent
- * with fm1.toml usb_audio_out_feedback), handed to ut_mix a mix block at a time in the mix bus's Q15 (>> 8: the 16 bits
+ * the trial). The computer's audio: plat_usb_audio_route(1) (once, the first render) and plat_usb_audio_in() in each
+ * render (fm1-base's block in its pool, valid during app_render: stereo, 24-bit at full level, silence while nothing
+ * plays; the platform then adds none of it to the output: the USB input track is how it is heard), handed to ut_mix a
+ * mix block at a time in the mix bus's Q15 (>> 8: the 16 bits
  * Optimist's own decoder keeps of a 24-bit sample, ua_decode). The capture: each mix block's four channels as
  * Optimist's ua_route builds them (the stems, or the routing's sources), clipped to Q15 (its ua_clip) and taken to 24
  * bits (<< 8: the 16 bits its PCM24 sends, ua_encode, with felucca-bsp's 24 bits of headroom unused); app_usb_capture
@@ -165,7 +167,8 @@ static struct {
     uint32_t play_underruns, play_overruns, cap_underruns, cap_overruns, bad_packets, rx_packets, tx_packets, missed_frames;
     uint32_t gap_max, gap_n, fill_lo1;
 } ua;
-static uint32_t ua_fb_now;
+static uint32_t ua_fb_now, ua_pk_seen;
+static volatile uint32_t opt_play_t, opt_play_seen;   /* the last pass that saw the computer's packets move (opt_ua_poll) */
 static uint32_t ua_feedback(void) { return ua_fb_now; }   /* (SYSTEM > INFO's feedback rate, 10.14 frames a ms) */
 static void opt_ua_poll(void)
 {
@@ -176,20 +179,24 @@ static void opt_ua_poll(void)
     ua.cap_underruns = s.in_underruns, ua.cap_overruns = s.in_overruns, ua.missed_frames = s.in_missed;
     ua.tx_packets = s.in_packets;
     ua_fb_now = s.out_feedback;
+    if (s.out_alt && s.out_packets != ua_pk_seen) {  /* the computer's audio is arriving: packets moved since the last pass */
+        opt_play_t = fm1_ticks();
+        opt_play_seen = 1;
+    }
+    ua_pk_seen = s.out_packets;
 }
-#define OPT_UA_PLAY_N (2u * HALF_FRAMES)            /* the computer's audio of a render (plat_usb_audio_play), 24-bit */
 #define OPT_UA_CAP_N (UA_CAP_CHANNELS * HALF_FRAMES)  /* a render's capture, 24-bit, four channels a frame */
 #if OPT_LEND_UAC
 /* lent with USB audio's rings while the computer streams (core/opt_lend.h L_UAC, ui/opt_feat.h of_uac_lend: after the
  * rings in the block), 0 while not: no capture, nothing played. A render reads them once, at its start */
-#define OPT_UA_OWN_BYTES ((OPT_UA_PLAY_N + OPT_UA_CAP_N) * 4u)
-static int32_t *volatile opt_play_p, *volatile opt_cap_p;
+#define OPT_UA_OWN_BYTES (OPT_UA_CAP_N * 4u)
+static int32_t *volatile opt_cap_p;
 #else
-static int32_t opt_play_s[OPT_UA_PLAY_N], opt_cap_s[OPT_UA_CAP_N];
-#define opt_play_p opt_play_s
+static int32_t opt_cap_s[OPT_UA_CAP_N];
 #define opt_cap_p opt_cap_s
 #endif
-static int32_t *opt_play, *opt_cap;                 /* this render's (opt_core_render) */
+static const int32_t *opt_play;                     /* this render's: fm1-base's block of the computer's audio (plat_usb_audio_in) */
+static int32_t *opt_cap;                            /* this render's capture (opt_core_render) */
 static uint32_t opt_play_got, opt_play_at;
 static uint8_t opt_cap_on;                         /* the computer records this render (plat_usb_audio_rec) */
 /* the USB input track's next n frames (fx.c ut_mix, from mix_block: RAM code, through FAR), Q15; 0 = none */
@@ -214,9 +221,8 @@ static void opt_cap_block(const int32_t *o, uint32_t f, uint32_t n)
         opt_cap[f * UA_CAP_CHANNELS + i] = clamp(c[i], -32768, 32767) * 256;
 }
 const int32_t *opt_core_capture(uint32_t n) { return opt_cap_on && n <= HALF_FRAMES ? opt_cap : 0; }
-/* the computer is streaming into the FM-1 (its audio in a render of the last 300 ms; now: fm1_ticks()): the flash
- * writes that can wait do (project.c audio_quiet), as usb_audio_stream.c's ua_streaming says */
-static volatile uint32_t opt_play_t, opt_play_seen;
+/* the computer is streaming into the FM-1 (its packets moved within the last 300 ms, seen by opt_ua_poll; now:
+ * fm1_ticks()): the flash writes that can wait do (project.c audio_quiet), as usb_audio_stream.c's ua_streaming says */
 static int ua_streaming(uint32_t now) { return opt_play_seen && now - opt_play_t < 300u * 24000u; }
 #else
 const int32_t *opt_core_capture(uint32_t n) { (void)n; return 0; }
@@ -331,15 +337,18 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
     if (opt_master_q12)                              /* (the mirror's client plays MASTER: ui/opt_editor.h) */
         song.master_q12 = opt_master_q12 - 1u;
 #if FELUCCA_USB_AUDIO
-    opt_play = opt_play_p, opt_cap = opt_cap_p;      /* (lent or not, for the whole render) */
+    {
+        static uint8_t routed;
+        if (!routed) {
+            plat_usb_audio_route(1);                 /* the computer's audio is the USB input track's from the next render on */
+            routed = 1;
+        }
+    }
+    opt_play = plat_usb_audio_in(), opt_cap = opt_cap_p;   /* (the block for this render; the capture lent or not, for the whole render) */
     opt_cap_on = (uint8_t)(opt_cap && plat_usb_audio_rec() != 0);   /* (as audio.c's audio_block at its start: the stems this block) */
     track_capture_on = opt_cap_on;
-    opt_play_got = opt_play ? (uint32_t)plat_usb_audio_play(opt_play, n <= HALF_FRAMES ? n : HALF_FRAMES) : 0u;
+    opt_play_got = opt_play && ua.play_alt && n <= HALF_FRAMES;   /* (the computer's output stream open: its frames, silence while paused) */
     opt_play_at = 0;
-    if (opt_play_got) {
-        opt_play_t = fm1_ticks();
-        opt_play_seen = 1;
-    }
 #endif
 #if FELUCCA_SD_REC
     rec = sdr_recording();                          /* (this render's: the recorder takes the plain output) */

@@ -46,7 +46,7 @@ static uint32_t of_bytes(uint32_t f)
 #if OPT_LEND_UAC
 /* USB audio's block (core/opt_lend.h L_UAC): wanted while the computer streams either way (an alt set), unless its
  * question was answered NO (or it was switched off for room) since the stream started: then not until it stops. Lent:
- * the rings (plat_usb_audio_mem) first, then the render's buffers (core/opt_core.c opt_play_p, opt_cap_p) */
+ * the rings (plat_usb_audio_mem) first, then the render's capture buffer (core/opt_core.c opt_cap_p) */
 static uint8_t of_uac_no;
 static int of_uac_want(void)
 {
@@ -62,8 +62,7 @@ static void of_uac_lend(void *p)                 /* (the interrupts off: arb_set
 {
     uint8_t *b = (uint8_t *)p;
     plat_usb_audio_mem(b);
-    opt_play_p = b ? (int32_t *)(b + plat_usb_audio_mem_bytes()) : 0;
-    opt_cap_p = b ? (int32_t *)(b + plat_usb_audio_mem_bytes()) + OPT_UA_PLAY_N : 0;
+    opt_cap_p = b ? (int32_t *)(b + plat_usb_audio_mem_bytes()) : 0;
 }
 #endif
 #if OPT_LEND_LINK || OPT_LEND_AP

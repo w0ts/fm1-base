@@ -27,7 +27,7 @@ font_full = ["L"]              # the large face with lower case (Optimist's ques
 font_trim = true               # each glyph its lit box only (feat/font-trim): the same pixels, the fonts 26 KB smaller
 font_pack = true               # and its alphas Huffman-coded (feat/slim-font-pack): the same pixels, S, B and L 7.6 KB smaller
 # USB audio as Optimist's own presents it (io/usb, from Melodee): two devices, "FM1-XXXX Out" (the computer plays,
-# the USB input track: APP_USB_PLAY) and "FM1-XXXX In" (it records four channels, CH1..CH4, by SYSTEM > USB AUDIO's
+# the USB input track: plat_usb_audio_route) and "FM1-XXXX In" (it records four channels, CH1..CH4, by SYSTEM > USB AUDIO's
 # routing: APP_USB_CAPTURE), 16- and 24-bit both ways; the input on the computer's clock, the output on the FM-1's
 # (its feedback): fm1-base's USB audio (felucca-bsp's UAC). The two devices, their names and the output's feedback come
 # from conf_gen (gen_optimist.py --conf: usb_audio_split, usb_audio_in_channel_names; their names follow usb_name_fn,

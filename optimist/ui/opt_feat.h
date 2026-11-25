@@ -117,8 +117,8 @@ static int of_lend_want(uint32_t i)
         return mir_lend_want();
 #endif
 #if OPT_LEND_LINK
-    if (i == L_LINK)
-        return of_wl_want(1u, plat_wifi_get_mode() != WIFI_MODE_OFF, plat_link_mem);
+    if (i == L_LINK)                             /* (Wi-Fi on, or Link on the USB network's cable: plat_usb_net_addr) */
+        return of_wl_want(1u, plat_wifi_get_mode() != WIFI_MODE_OFF || plat_usb_net_addr() != 0u, plat_link_mem);
 #endif
 #if OPT_LEND_AP
     if (i == L_AP)

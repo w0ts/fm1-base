@@ -388,6 +388,7 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
 }
 
 #include "../ui/opt_usbh.h"                        /* the USB MIDI host (USB_HOST): MSRC_USBH, a lost session's notes let go */
+#include "../ui/opt_unet.h"                        /* the USB network (USB_NET): SYSTEM > USB's NETWORK and STATE */
 
 /* a USB-MIDI packet from fm1-base (plat_midi_in, from port PORT_*): Optimist's checks (usb.c usb_midi_rx_packet's, the
  * rings' midi_rx_bad / midi_rx_wanted) into its queue, with its source (SYNC USB / TRS / BLE) and arrival time */

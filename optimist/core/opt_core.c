@@ -126,9 +126,10 @@ static void opt_ble_tick(uint32_t now);        /* (ui/opt_bt.h: Bluetooth MIDI o
 #endif
 static void opt_link_tick(void);               /* (ui/opt_wifi.h: Link's MIDI clock ticks whose time has come, MSRC_LINK) */
 #include "io/midi/midi_rings.c"
-#if FELUCCA_EDITOR && FELUCCA_ED_LIVE && !defined(FELUCCA_OTA)
-#define FELUCCA_OTA 1                            /* (felucca.c's, before the sequencer: the notes the live editor plays,
-                                                  * seq/ednote.c EDN_ON; the editor's SysEx is fm1-base's, ui/opt_editor.h) */
+#if FELUCCA_EDITOR && (FELUCCA_ED_LIVE || FELUCCA_LAUNCHPAD) && !defined(FELUCCA_OTA)
+#define FELUCCA_OTA 1                            /* (felucca.c's, before the sequencer: the notes the live editor and the
+                                                  * Launchpad play, seq/ednote.c EDN_ON; the editor's SysEx is fm1-base's,
+                                                  * ui/opt_editor.h) */
 #endif
 #if FELUCCA_ARRANGER
 #include "seq/arranger.c"
@@ -249,6 +250,8 @@ static volatile uint32_t opt_master_q12;
 static int32_t opt_half_pk[2];                   /* the two halves' largest |sample| (the meter's: was a 4 KB copy of them) */
 #define AUDIO_HALF_PEAK(h) opt_half_pk[(h) & 1u]  /* (ui/meters.c meter_tap) */
 static volatile uint32_t audio_halves;
+static volatile uint8_t opt_lp_on;              /* a Launchpad is the USB host's device (ui/opt_launchpad.h): the out ring's
+                                                 * notes and clock are held back from it */
 static uint32_t fm1_audio_free_half(void) { return (audio_halves + 1u) & 1u; }   /* (the half written last) */
 
 /* ---- each half's time, as core/audio.c's fm1_alnk0_irq keeps it around its render: fm1-base renders a half a call
@@ -381,7 +384,8 @@ void opt_core_render(int32_t *lr, uint32_t n, uint32_t master_q12, uint32_t keys
 #endif
     }
     while (mo_r != mo_w) {                           /* the sequencer's and the keys' MIDI out (the out ring) */
-        plat_midi_send(midi_out_q[mo_r % MQ], TO_USB);
+        if (!opt_lp_on)                              /* (a Launchpad on the host hears only its app: ui/opt_launchpad.h) */
+            plat_midi_send(midi_out_q[mo_r % MQ], TO_USB);
         mo_r++;
     }
     opt_half_us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;   /* (into PEAK and the guard at the next render) */

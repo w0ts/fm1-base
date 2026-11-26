@@ -150,6 +150,13 @@ enum { USBH_MSG_NONE, USBH_MSG_ON, USBH_MSG_OFF, USBH_MSG_MIDI, USBH_MSG_NOMIDI,
 void plat_usb_host(int on);
 int plat_usb_host_state(void);
 int plat_usb_host_msg(void);
+/* raw input from the hosted device (main loop): plat_usb_host_raw(1) and its USB-MIDI event packets (cable << 4 | CIN, then
+ * the three bytes, as on the wire: every cable, SysEx too) come to plat_usb_host_rx instead of the MIDI input, for an
+ * app that speaks to the device itself (a Launchpad in Programmer mode); 0 gives them back to the MIDI input. Packets
+ * waiting are dropped at each change. TO_USB still sends what the app writes, any cable and SysEx, unchanged.
+ * plat_usb_host_rx: 1 and the oldest packet, 0 when none. Without FM1B_USB_HOST: nothing comes */
+void plat_usb_host_raw(int on);
+int plat_usb_host_rx(uint32_t *pkt);
 int plat_usb_lost(void);
 /* the connected device's product string, as it names itself ("Launchkey Mini MK3 MIDI"): ASCII, other characters as
  * '?', at most 31; "" while nothing is connected, and for a device without one. Built for an app with

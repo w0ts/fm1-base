@@ -386,7 +386,9 @@ uint32_t plat_midi_out_link(void) { return usb_links; }
 #define TO_USBH_SIM (1u << 5)                  /* (the out log's tag: sent to the host's device, not to a computer) */
 static struct {
     uint8_t want, on, plugged, midi_in, midi_out, conn, msg, lost, said;
-    uint32_t t_plug, in, out, clocks;
+    uint8_t raw;                                /* plat_usb_host_raw: the device's packets to plat_usb_host_rx, unfiltered */
+    uint32_t t_plug, in, out, clocks, sysex;
+    uint32_t raw_q[64], raw_w, raw_r;
     char name[32];
 } uhs;
 static void usbh_step(void)                     /* the mode and the connection, as the host's task moves them */
@@ -451,8 +453,32 @@ const char *plat_usb_host_name(void)
     usbh_step();
     return uhs.conn ? uhs.name : "";
 }
+void plat_usb_host_raw(int on)
+{
+    uhs.raw = (uint8_t)(FM1B_USB_HOST && on);
+    uhs.raw_r = uhs.raw_w;                      /* (what waits is dropped, as felucca-bsp's) */
+}
+int plat_usb_host_rx(uint32_t *pkt)
+{
+    if (uhs.raw_r == uhs.raw_w)
+        return 0;
+    *pkt = uhs.raw_q[uhs.raw_r++ % 64u];
+    return 1;
+}
+static void usbh_in_pkt(uint32_t p)             /* a packet from the device: raw to the app, else the MIDI input (cable 0) */
+{
+    if (uhs.raw) {
+        if (uhs.raw_w - uhs.raw_r < 64u)
+            uhs.raw_q[uhs.raw_w++ % 64u] = p;
+    } else {
+        min_q[mi_w % MQ] = p & ~0xF0u;          /* (the host drops the cable number) */
+        min_port[mi_w++ % MQ] = PORT_USB;
+    }
+    uhs.in++;
+}
 static uint32_t mk_pkt(const char *a, const char *b, const char *c);
-/* the script's usbh: plug NAME [in|out|nomidi] (both ways by default; _ in NAME a space), unplug, midi B0 B1 B2 (from the device) */
+/* the script's usbh: plug NAME [in|out|nomidi] (both ways by default; _ in NAME a space), unplug, midi B0 B1 B2 (from the device),
+ * pkt HHHHHHHH (a USB-MIDI event packet from the device, its four bytes in wire order: cable << 4 | CIN first; SysEx too) */
 static int usbh_cmd(const char *a, const char *b, const char *c, const char *d)
 {
     usbh_step();
@@ -481,17 +507,29 @@ static int usbh_cmd(const char *a, const char *b, const char *c, const char *d)
             printf("  usbh midi: no device connected that sends: dropped\n");
             return 0;
         }
-        min_q[mi_w % MQ] = mk_pkt(b, c, d) & ~0xF0u;     /* (cable 0: the host drops the cable number) */
-        min_port[mi_w++ % MQ] = PORT_USB;
-        uhs.in++;
+        usbh_in_pkt(mk_pkt(b, c, d));
         return 0;
     }
-    printf("FAIL usbh %s: plug NAME [in|out|nomidi], unplug, midi B0 B1 B2\n", a);
+    if (!strcmp(a, "pkt")) {                    /* pkt HHHHHHHH: the four bytes in wire order, "19903C7F" = 19 90 3C 7F */
+        unsigned long w;
+        char *end;
+        (void)c, (void)d;
+        w = strtoul(b, &end, 16);
+        if (!uhs.conn || !uhs.midi_in || strlen(b) != 8u || *end) {
+            printf("  usbh pkt: no device connected that sends, or not 8 hex digits: dropped\n");
+            return 0;
+        }
+        usbh_in_pkt((uint32_t)(w >> 24 & 0xFFu) | (uint32_t)(w >> 16 & 0xFFu) << 8 | (uint32_t)(w >> 8 & 0xFFu) << 16 | (uint32_t)(w & 0xFFu) << 24);
+        return 0;
+    }
+    printf("FAIL usbh %s: plug NAME [in|out|nomidi], unplug, midi B0 B1 B2, pkt HHHHHHHH\n", a);
     return 1;
 }
 static void usbh_sent(uint32_t pkt)             /* plat_midi_send's TO_USB while the port is a host */
 {
-    if (((pkt >> 8) & 0xFFu) == 0xF8u)
+    if ((pkt & 15u) >= 4u && (pkt & 15u) <= 7u)
+        uhs.sysex++;                            /* (a SysEx packet: a Launchpad's mode, its lights) */
+    else if (((pkt >> 8) & 0xFFu) == 0xF8u)
         uhs.clocks++;
     else
         uhs.out++;
@@ -501,6 +539,8 @@ static int usbh_expect(const char *what, int *got)    /* the model's state for e
     usbh_step();
     if (!strcmp(what, "usbh"))
         *got = plat_usb_host_state();
+    else if (!strcmp(what, "usbh_sysex"))      /* SysEx packets sent to the device */
+        *got = (int)uhs.sysex;
     else if (!strcmp(what, "usbh_in"))         /* messages in from the device (real-time too) */
         *got = (int)uhs.in;
     else if (!strcmp(what, "usbh_out"))        /* messages out to it, clocks left out */

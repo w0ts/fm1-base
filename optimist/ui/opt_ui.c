@@ -144,6 +144,7 @@ static void cv_mirror(uint32_t x, uint32_t y) { mir_blit(x, y, cv_w, cv_h, cv_px
 #include "opt_storage.h"                         /* Optimist's storage on fm1-base's flash access (after the UI: felucca.c's order) */
 #include "opt_sd.h"                              /* its SD card on fm1-base's (after the storage: felucca.c's order) */
 #include "opt_editor.h"                          /* Optimist's web editor on fm1-base's SysEx (after the storage: felucca.c's) */
+#include "opt_launchpad.h"                       /* a Launchpad on the USB host plays and edits the FM-1 (LAUNCHPAD: after the UI) */
 #ifdef ED_HAS_WIFI
 #include "io/editor/ed_wifi.c"                    /* cmd 112: the Wi-Fi networks for the web editor (felucca.c's place: after the editor) */
 #endif

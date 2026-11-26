@@ -35,6 +35,7 @@ void opt_ui_frame(void);                                     /* the panel, the L
 int opt_ed_frame(const uint8_t *p, uint32_t n);
 int opt_con_frame(const uint8_t *p, uint32_t n);         /* (ui/opt_console.h: a console line as SysEx; 1 = taken) */
 void opt_ed_poll(void);
+void opt_lp_poll(uint32_t now);               /* a Launchpad on the USB host (ui/opt_launchpad.h; nothing without LAUNCHPAD) */
 void opt_wifi_loop(void);                /* (ui/opt_wifi.h: the Wi-Fi page's mirrors, Link's clock; each main loop pass) */
 uint8_t *opt_wifi_store(void);           /* (ui/opt_wifi.h: the settings record's Wi-Fi field, fm1-base's record) */
 void opt_wifi_dirty(void);

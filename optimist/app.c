@@ -199,6 +199,7 @@ void app_loop(void)
 {
     ann_tick(plat_ms());                         /* the reader's turn-rest and its going quiet (announce.c) */
     opt_ed_poll();
+    opt_lp_poll(plat_ms());                      /* a Launchpad on the USB host (ui/opt_launchpad.h) */
     opt_wifi_loop();                             /* Wi-Fi: the page's mirrors of fm1-base's manager, Link's MIDI clock */
 }
 #ifdef APP_WIFI_STORE

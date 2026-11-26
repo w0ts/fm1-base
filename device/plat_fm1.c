@@ -495,10 +495,14 @@ int plat_midi_rt(uint32_t pkt)                    /* the TIMER5 tick only (app_t
 void plat_usb_host(int on) { usb_host_switch((uint32_t)(on != 0)); }
 int plat_usb_host_state(void) { return !usb_host_active() ? USBH_OFF : usb_host_connected() ? USBH_CONNECTED : USBH_LOOKING; }
 int plat_usb_host_msg(void) { return (int)usb_host_message(); }
+void plat_usb_host_raw(int on) { usb_host_raw((uint32_t)(on != 0)); }
+int plat_usb_host_rx(uint32_t *pkt) { return usb_host_rx(pkt); }
 #else
 void plat_usb_host(int on) { (void)on; }
 int plat_usb_host_state(void) { return USBH_OFF; }
 int plat_usb_host_msg(void) { return USBH_MSG_NONE; }
+void plat_usb_host_raw(int on) { (void)on; }
+int plat_usb_host_rx(uint32_t *pkt) { (void)pkt; return 0; }
 #endif
 int plat_usb_lost(void)
 {

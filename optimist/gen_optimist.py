@@ -416,6 +416,9 @@ def conf():
         print("wifi_jank = true")                       # MODE JANK (SYSTEM > WI-FI): fm1-base builds it only with this
         if flags.get("FELUCCA_WIFI_AP", 0):
             print("wifi_ap = true")                     # MODE AP: fm1-base's (device/wifi_own_ap.c, Optimist's wifi_apd.c moved)
+        if flags.get("FELUCCA_USB_NET", 0):
+            print("usb_net = true")                     # the USB network (USB_NET): Link over the cable, the computer on
+                                                         # MODE JANK's air (plat_usb_net_*, ui/opt_unet.h)
         if flags.get("FELUCCA_ARENA_KB", 0):
             print('wifi_mem = "app"')                 # (Link's node and the access point's state lent by the arena while
                                                          # Wi-Fi is on: core/opt_lend.h L_LINK, L_AP; else static)

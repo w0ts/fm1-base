@@ -194,6 +194,9 @@ void opt_core_init(void)
 #endif
     settings_init();
     opt_con_boot();                              /* USB SERIAL: the console presented from this start (ui/opt_console.h) */
+#ifdef OPT_HAS_UNET
+    unet_boot();                                 /* SYSTEM > USB NETWORK as kept (ui/opt_unet.h), after the console's */
+#endif
     opt_sd_boot();                               /* the card's filesystem (main.c sd_mount_boot, after the settings) */
     panel_init();
     for (i = 0; i < G_COUNT; i++)

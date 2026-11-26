@@ -48,11 +48,13 @@ main_stack = 6656               # CPU0's stacks, from the static check (stack_ch
 irq_stack = 6400                # frames, the interrupts nested at their worst, the fault path on top) and its margin (25 %
                                # or 1 KiB, the larger); were 24,320 and 7,936 (measured high-water 3 KB and 2.3 KB)
 stack_check = true
-stack_bounds = ["f6_width=7", "f6_place=7", "ph_put=7", "sdm_rmdir=2", "sd_streams_end=2", "lcd_sync=2"]
+stack_bounds = ["f6_width=7", "f6_place=7", "ph_put=7", "sdm_rmdir=2", "sd_streams_end=2", "lcd_sync=2", "sd_unpark=2"]
                                # (fm1-base's: device/sd.c's parked write, sd_bus_release > sd_streams_end(0) > sd_unpark >
                                # lcd_sync > sd_bus_lend > sd_streams_end(1), which returns at once: still parked, sd_unpark
                                # clears it after lcd_sync. So sd_streams_end twice at most, lcd_sync once; found with the
                                # SD card profiles' builds, 2026-11-25)
+                               # sd_unpark=2: the same cycle when the compiler inlines sd_streams_end (a build without the
+                               # web editor, 2026-11-26): sd_unpark is on it once, as lcd_sync
                                # Optimist's recursions: op_fm6draw.c (depth
                                # < 6, from 0), ph_blob.c (PH_PAIR's nesting: tools/gen_param_help.py PH_DEPTH_MAX checks
                                # it), sd_mode.c sdm_rmdir (a project's folder and one level in it: its depth argument,
